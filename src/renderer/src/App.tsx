@@ -6,6 +6,8 @@ import { Inicio } from './pages/Inicio'
 import { Contas } from './pages/Contas'
 import { Configuracoes } from './pages/Configuracoes'
 import { EmBreve } from './pages/EmBreve'
+import { Conversas } from './pages/Conversas'
+import { subscribeChatEvents, useChats } from './lib/chatStore'
 
 function Page(): React.JSX.Element {
   const page = useApp((s) => s.page)
@@ -17,13 +19,7 @@ function Page(): React.JSX.Element {
     case 'configuracoes':
       return <Configuracoes />
     case 'conversas':
-      return (
-        <EmBreve
-          title="Conversas"
-          phase={2}
-          description="Todas as conversas do WhatsApp, com histórico sincronizado e envio de qualquer tipo de mídia."
-        />
-      )
+      return <Conversas />
     case 'contatos':
       return (
         <EmBreve
@@ -81,7 +77,18 @@ export default function App(): React.JSX.Element {
   useEffect(() => {
     let cleanup: (() => void) | undefined
     void init().then((c) => (cleanup = c))
-    return () => cleanup?.()
+    const offChats = subscribeChatEvents()
+    const offNav = window.api.on('nav:open-chat', async ({ accountId, jid }) => {
+      useApp.getState().setActive(accountId)
+      useApp.getState().go('conversas')
+      await useChats.getState().setAccount(accountId)
+      await useChats.getState().select(jid)
+    })
+    return () => {
+      cleanup?.()
+      offChats()
+      offNav()
+    }
   }, [init])
 
   return (
@@ -90,11 +97,15 @@ export default function App(): React.JSX.Element {
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="drag h-3 shrink-0" />
         <UpdateBanner />
-        <main className="min-h-0 flex-1 overflow-y-auto">
-          <div key={page} className="mx-auto w-full max-w-[1080px] px-8 pt-6 pb-12">
-            {loaded ? <Page /> : <div className="h-40 animate-pulse rounded-xl bg-sunken" />}
-          </div>
-        </main>
+        {page === 'conversas' ? (
+          <main className="min-h-0 flex-1 border-t border-line">{loaded && <Page />}</main>
+        ) : (
+          <main className="min-h-0 flex-1 overflow-y-auto">
+            <div key={page} className="mx-auto w-full max-w-[1080px] px-8 pt-6 pb-12">
+              {loaded ? <Page /> : <div className="h-40 animate-pulse rounded-xl bg-sunken" />}
+            </div>
+          </main>
+        )}
       </div>
     </div>
   )

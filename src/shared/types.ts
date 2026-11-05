@@ -115,3 +115,94 @@ export interface UpdateStatus {
   checkedAt?: number
   error?: string
 }
+
+// ---------- Conversas ----------
+
+export interface ChatItem {
+  jid: string
+  name: string
+  phone: string | null
+  isGroup: boolean
+  unread: number
+  lastTs: number
+  lastPreview: string | null
+  lastFromMe: boolean
+  archived: boolean
+  pinned: boolean
+  muted: boolean
+  readOnly: boolean
+}
+
+export type MessageType =
+  | 'text'
+  | 'image'
+  | 'video'
+  | 'gif'
+  | 'audio'
+  | 'voice'
+  | 'document'
+  | 'sticker'
+  | 'location'
+  | 'contact'
+  | 'poll'
+  | 'event'
+  | 'call'
+  | 'system'
+  | 'unsupported'
+
+export interface MediaInfo {
+  mimetype?: string
+  fileName?: string
+  size?: number
+  seconds?: number
+  width?: number
+  height?: number
+  thumb?: string // data URL pequeno (miniatura que vem na mensagem)
+  url?: string // dspmedia://… quando já baixado
+  viewOnce?: boolean
+  animated?: boolean
+}
+
+export interface MessageExtra {
+  location?: { lat: number; lng: number; name?: string; address?: string; live?: boolean }
+  contacts?: Array<{ name: string; vcard: string; phones: string[] }>
+  poll?: { name: string; options: string[]; selectable: number; votes?: Record<string, number> }
+  quoted?: { id: string; text: string; type: MessageType; senderName?: string; fromMe: boolean }
+  forwarded?: boolean
+  label?: string // tipos não suportados ou mensagens de sistema
+}
+
+export interface MessageItem {
+  id: string
+  chatJid: string
+  fromMe: boolean
+  sender: string | null
+  senderName: string | null
+  ts: number
+  type: MessageType
+  text: string | null
+  media: MediaInfo | null
+  extra: MessageExtra | null
+  quotedId: string | null
+  status: number // 0 erro, 1 pendente, 2 enviada, 3 entregue, 4 lida, 5 ouvida
+  reactions: Record<string, string> | null // remetente → emoji
+  edited: boolean
+  deleted: boolean
+}
+
+export interface SyncState {
+  accountId: string
+  progress: number | null
+  messages: number
+  chats: number
+  running: boolean
+  finishedAt: number | null
+}
+
+export type ChatFilter = 'all' | 'unread' | 'groups' | 'archived'
+
+export interface OutgoingFile {
+  name: string
+  mime: string
+  data: Uint8Array
+}

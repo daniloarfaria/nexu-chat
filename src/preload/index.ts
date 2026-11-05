@@ -19,3 +19,10 @@ const api: BridgeApi = {
 }
 
 contextBridge.exposeInMainWorld('api', api)
+
+// Informa qual conversa está aberta (para não notificar o que já está na tela)
+contextBridge.exposeInMainWorld('ui', {
+  setFocusedChat(v: { accountId: string; jid: string } | null) {
+    ipcRenderer.send('ui:focused-chat', v ? { accountId: String(v.accountId), jid: String(v.jid) } : null)
+  }
+})

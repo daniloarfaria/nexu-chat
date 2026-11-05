@@ -26,6 +26,74 @@ const MIGRATIONS: string[] = [
     value BLOB NOT NULL,
     PRIMARY KEY (account_id, category, key_id)
   );
+  `,
+  // v2 — conversas, contatos, mensagens e sincronização de histórico
+  `
+  CREATE TABLE contacts (
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    jid TEXT NOT NULL,
+    name TEXT,
+    notify TEXT,
+    verified_name TEXT,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (account_id, jid)
+  );
+  CREATE TABLE lid_map (
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    lid TEXT NOT NULL,
+    pn TEXT NOT NULL,
+    PRIMARY KEY (account_id, lid)
+  );
+  CREATE TABLE chats (
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    jid TEXT NOT NULL,
+    name TEXT,
+    is_group INTEGER NOT NULL DEFAULT 0,
+    unread INTEGER NOT NULL DEFAULT 0,
+    last_ts INTEGER NOT NULL DEFAULT 0,
+    last_preview TEXT,
+    last_from_me INTEGER NOT NULL DEFAULT 0,
+    archived INTEGER NOT NULL DEFAULT 0,
+    pinned INTEGER NOT NULL DEFAULT 0,
+    muted_until INTEGER NOT NULL DEFAULT 0,
+    read_only INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (account_id, jid)
+  );
+  CREATE INDEX chats_recent ON chats (account_id, archived, pinned DESC, last_ts DESC);
+  CREATE TABLE messages (
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    chat_jid TEXT NOT NULL,
+    id TEXT NOT NULL,
+    from_me INTEGER NOT NULL,
+    sender TEXT,
+    sender_name TEXT,
+    ts INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    text TEXT,
+    media TEXT,
+    extra TEXT,
+    quoted_id TEXT,
+    status INTEGER NOT NULL DEFAULT 0,
+    reactions TEXT,
+    edited INTEGER NOT NULL DEFAULT 0,
+    deleted INTEGER NOT NULL DEFAULT 0,
+    raw BLOB,
+    PRIMARY KEY (account_id, chat_jid, id)
+  );
+  CREATE INDEX messages_chat_ts ON messages (account_id, chat_jid, ts);
+  CREATE INDEX messages_id ON messages (account_id, id);
+  CREATE VIRTUAL TABLE messages_fts USING fts5 (
+    text, account_id UNINDEXED, chat_jid UNINDEXED, id UNINDEXED,
+    tokenize = 'unicode61 remove_diacritics 2'
+  );
+  CREATE TABLE sync_state (
+    account_id TEXT PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
+    progress INTEGER,
+    messages INTEGER NOT NULL DEFAULT 0,
+    chats INTEGER NOT NULL DEFAULT 0,
+    started_at INTEGER,
+    finished_at INTEGER
+  );
   `
 ]
 
@@ -38,6 +106,10 @@ export function openDb(path: string): DatabaseSync {
   db = new DatabaseSync(path)
   db.exec(
     'PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 5000;'
+  )
+  // Busca sem acento e sem maiúsculas: unaccent('João') = 'joao'
+  db.function('unaccent', { deterministic: true }, (v) =>
+    typeof v === 'string' ? v.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase() : null
   )
   migrate(db)
   return db

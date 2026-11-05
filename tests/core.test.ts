@@ -1,8 +1,8 @@
-import { test } from 'node:test'
+import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { encryptBackup, decryptBackup, isBackupDue } from '../src/main/backup-core.ts'
-import { parseWaVersion } from '../src/main/wa/version-parse.ts'
-import { maskPhone } from '../src/main/log.ts'
+import { encryptBackup, decryptBackup, isBackupDue } from '../src/main/backup-core'
+import { parseWaVersion } from '../src/main/wa/version-parse'
+import { maskPhone } from '../src/main/log'
 
 const fakeDb = Buffer.concat([Buffer.from('SQLite format 3\0'), Buffer.alloc(2048, 7)])
 

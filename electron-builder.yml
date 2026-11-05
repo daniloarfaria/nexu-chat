@@ -27,6 +27,8 @@ mac:
   hardenedRuntime: false # ligar junto com a notarização quando houver conta Apple Developer
   identity: '-' # assinatura ad-hoc (sem conta Apple Developer ainda)
   entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    NSMicrophoneUsageDescription: O Disparador usa o microfone para gravar mensagens de voz.
   notarize: false
 dmg:
   artifactName: ${productName}-${version}-mac-${arch}.${ext}

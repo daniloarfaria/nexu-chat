@@ -18,6 +18,7 @@ import {
   type LucideIcon
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { useChats } from '../lib/chatStore'
 import type { Modules } from '@shared/types'
 import { useActiveAccount, useApp, type PageId, type Theme } from '../lib/store'
 import { cn } from '../lib/cn'
@@ -161,9 +162,29 @@ const THEMES: Array<{ id: Theme; icon: LucideIcon; label: string }> = [
   { id: 'system', icon: SunMoon, label: 'Automático' }
 ]
 
+function useUnread(accountId: string | undefined): number {
+  const [n, setN] = useState(0)
+  const chats = useChats((s) => s.chats)
+  useEffect(() => {
+    if (!accountId) return
+    let alive = true
+    const load = (): void => {
+      void window.api.invoke('chats:unread-total', { accountId }).then((v) => alive && setN(v))
+    }
+    load()
+    const off = window.api.on('chats:changed', (e) => e.accountId === accountId && load())
+    return () => {
+      alive = false
+      off()
+    }
+  }, [accountId, chats])
+  return accountId ? n : 0
+}
+
 export function Sidebar(): React.JSX.Element {
   const { page, go, theme, setTheme, waVersion } = useApp()
   const active = useActiveAccount()
+  const unread = useUnread(active?.id)
   const isMac = navigator.userAgent.includes('Mac')
 
   return (
@@ -200,7 +221,12 @@ export function Sidebar(): React.JSX.Element {
                         )}
                       >
                         <Icon className={cn('size-[17px]', current ? 'text-accent' : 'text-ink-3')} strokeWidth={1.9} />
-                        {it.label}
+                        <span className="flex-1 text-left">{it.label}</span>
+                        {it.id === 'conversas' && unread > 0 && (
+                          <span className="tabular grid h-5 min-w-5 place-items-center rounded-full bg-accent px-1.5 text-[11px] font-semibold text-on-accent">
+                            {unread > 999 ? '999+' : unread}
+                          </span>
+                        )}
                       </button>
                     </li>
                   )

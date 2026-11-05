@@ -2,6 +2,7 @@
 
 App desktop para **Mac e Windows** que permite a pequenos negócios (óticas e outros) atender, fazer campanhas e gerir grupos pelo WhatsApp. Tem proteção contra bloqueio, banco de dados local e backup criptografado.
 
+- **Manual do usuário:** [docs/MANUAL.md](docs/MANUAL.md). Atualize a cada função nova.
 - Especificação completa e fases: [docs/ESPECIFICACAO.md](docs/ESPECIFICACAO.md)
 - Contexto de produto (para design): [PRODUCT.md](PRODUCT.md)
 - Bot antigo, só como referência: [legacy/](legacy/). Sessão, planilhas e logs dele não vão para o git.
@@ -17,7 +18,7 @@ Os dados ficam no SQLite embutido do Node (`node:sqlite`, sem módulo nativo). A
 ```bash
 npm install          # instala e aplica patches/ (patch-package)
 npm run dev          # abre o app em modo desenvolvimento
-npm test             # testes de unidade
+npm test             # testes (Vitest): backup, versão, conversas, conversor de voz
 npm run typecheck && npm run lint
 npm run build:mac    # gera .dmg (arm64 e x64) em dist/
 ```

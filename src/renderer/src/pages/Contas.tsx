@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { KeyRound, LogOut, Plug, PlugZap, QrCode, Trash2, Smartphone, Plus } from 'lucide-react'
+import { History, KeyRound, LogOut, Plug, PlugZap, QrCode, Trash2, Smartphone, Plus } from 'lucide-react'
 import type { Account, AccountState } from '@shared/types'
 import { useApp } from '../lib/store'
 import { Button, Field, Input, Notice, PageHeader, Switch } from '../components/ui'
@@ -243,6 +243,27 @@ function AccountRow({ account }: { account: Account }): React.JSX.Element {
               onClick={() => void run('conn', () => window.api.invoke('accounts:connect', { id: account.id }))}
             >
               <PlugZap className="size-4" /> Conectar
+            </Button>
+          )}
+          {connected && (
+            <Button
+              size="sm"
+              variant="ghost"
+              title="Desvincula e vincula de novo para receber o histórico completo de conversas"
+              loading={busy === 'hist'}
+              onClick={() => {
+                if (
+                  confirm(
+                    'Para trazer o histórico completo, o WhatsApp precisa ser vinculado de novo. O app vai desconectar e mostrar um novo QR Code. As conversas já salvas são mantidas. Continuar?'
+                  )
+                )
+                  void run('hist', async () => {
+                    await window.api.invoke('accounts:logout', { id: account.id })
+                    await window.api.invoke('accounts:connect', { id: account.id })
+                  })
+              }}
+            >
+              <History className="size-4" /> Reimportar histórico
             </Button>
           )}
           {connected && (

@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, session, Notification } from 'electron'
+import { app, shell, BrowserWindow, session, Notification, ipcMain } from 'electron'
 import { join } from 'node:path'
 import { is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -10,10 +10,17 @@ import { wa } from './wa/manager'
 import { refreshWaVersion } from './wa/version'
 import { applyPendingRestore, getBackupSettings, isBackupDue, runBackup } from './backup'
 import { setupAutoUpdate } from './updater'
+import { handleMediaProtocol, registerMediaScheme } from './wa/media'
+import { getChats, storeEvents, unreadTotal } from './wa/store'
+import { notificationText } from './wa/sync'
+import type { MessageItem, SyncState } from '@shared/types'
 
 const APP_ID = 'br.com.disparador.app'
 const VERSION_RECHECK_MS = 6 * 60 * 60 * 1000
 const BACKUP_CHECK_MS = 30 * 60 * 1000
+
+// Protocolo das mídias precisa ser registrado antes do app ficar pronto
+registerMediaScheme()
 
 // Só uma instância: duas conectando a mesma conta derrubariam uma à outra
 if (!app.requestSingleInstanceLock()) {
@@ -68,6 +75,44 @@ if (!app.requestSingleInstanceLock()) {
     }
   }
 
+  // Conversa aberta na tela (para não notificar o que o usuário já está vendo)
+  let focusedChat: { accountId: string; jid: string } | null = null
+  ipcMain.on('ui:focused-chat', (e, v: unknown) => {
+    const url = e.senderFrame?.url ?? ''
+    const dev = process.env['ELECTRON_RENDERER_URL']
+    if (!url.startsWith('file://') && !(dev && url.startsWith(dev))) return
+    const ok = !!v && typeof v === 'object' && typeof (v as { jid?: unknown }).jid === 'string'
+    focusedChat = ok ? (v as { accountId: string; jid: string }) : null
+  })
+
+  function notify(accountId: string, m: MessageItem): void {
+    if (!Notification.isSupported()) return
+    const win = mainWindow
+    const visible = !!win && win.isFocused() && focusedChat?.accountId === accountId && focusedChat.jid === m.chatJid
+    if (visible) return
+    const chat = getChats(accountId, [m.chatJid])[0]
+    if (!chat || chat.muted || chat.archived) return
+    const { title, body } = notificationText(m, chat.name)
+    const n = new Notification({ title, body: body.slice(0, 200), silent: false })
+    n.on('click', () => {
+      if (!mainWindow) createWindow()
+      mainWindow?.show()
+      mainWindow?.focus()
+      send('nav:open-chat', { accountId, jid: m.chatJid })
+    })
+    n.show()
+  }
+
+  let badgeTimer: NodeJS.Timeout | null = null
+  function updateBadge(): void {
+    if (badgeTimer) return
+    badgeTimer = setTimeout(() => {
+      badgeTimer = null
+      const total = listAccounts().reduce((n, a) => n + unreadTotal(a.id), 0)
+      app.setBadgeCount(total)
+    }, 1000)
+  }
+
   app.on('second-instance', () => {
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore()
@@ -86,7 +131,15 @@ if (!app.requestSingleInstanceLock()) {
     openDb(dbPath)
 
     // Nega permissões que o app não usa (câmera, microfone, localização…)
-    session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === 'notifications'))
+    session.defaultSession.setPermissionRequestHandler((_wc, permission, cb, details) => {
+      if (permission === 'notifications') return cb(true)
+      // Microfone só para gravar mensagem de voz (sem câmera)
+      if (permission === 'media') {
+        const types = (details as { mediaTypes?: string[] }).mediaTypes ?? []
+        return cb(types.length > 0 && types.every((t) => t === 'audio'))
+      }
+      cb(false)
+    })
 
     registerIpc(
       () => mainWindow,
@@ -105,6 +158,22 @@ if (!app.requestSingleInstanceLock()) {
         new Notification({ title: 'WhatsApp desconectado', body: 'Uma conta precisa ler o QR Code de novo.' }).show()
       }
     })
+
+    // Conversas: repassa mudanças do banco para a interface
+    handleMediaProtocol()
+    storeEvents.on('chats', ({ accountId, jids }: { accountId: string; jids: string[] }) => {
+      for (let i = 0; i < jids.length; i += 200) {
+        send('chats:changed', { accountId, chats: getChats(accountId, jids.slice(i, i + 200)) })
+      }
+      updateBadge()
+    })
+    storeEvents.on('messages', (p: unknown) => send('messages:changed', p))
+    storeEvents.on('reload', (p: unknown) => send('messages:reload', p))
+    storeEvents.on('merged', (p: unknown) => send('chats:merged', p))
+    storeEvents.on('sync', (p: SyncState) => send('sync:changed', p))
+    storeEvents.on('incoming', ({ accountId, message }: { accountId: string; message: MessageItem }) =>
+      notify(accountId, message)
+    )
 
     createWindow()
 

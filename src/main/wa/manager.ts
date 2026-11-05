@@ -6,6 +6,9 @@ import { sqliteAuthState } from './auth-store'
 import { refreshWaVersion, versionForSocket } from './version'
 import { log } from '../log'
 import { getDb } from '../db'
+import { attachStore } from './sync'
+import { findRawById, resetAccountData } from './store'
+import { deleteAccountMedia } from './media'
 
 interface Session {
   sock: WASocket | null
@@ -85,14 +88,17 @@ class WhatsAppManager extends EventEmitter {
       // macOS Desktop (DARWIN) é recusado pelo servidor com 428 antes do QR (Baileys #2880).
       browser: Browsers.windows('Desktop'),
       markOnlineOnConnect: false, // mantém as notificações no celular
-      syncFullHistory: true, // histórico completo na primeira vinculação (gravado no banco na fase 2)
-      generateHighQualityLinkPreview: false
+      syncFullHistory: true, // histórico completo na primeira vinculação
+      shouldSyncHistoryMessage: () => true, // o padrão do Baileys descarta o histórico FULL
+      generateHighQualityLinkPreview: false,
+      getMessage: async (key) => (key.id ? findRawById(accountId, key.id) : undefined)
     })
     s.sock = sock
     let pairingRequested = false
     let qrShown = false
 
     sock.ev.on('creds.update', saveCreds)
+    attachStore(accountId, sock)
 
     sock.ev.on('connection.update', async (u) => {
       if (s.sock !== sock) return // socket antigo
@@ -218,6 +224,8 @@ class WhatsAppManager extends EventEmitter {
   remove(accountId: string): void {
     this.disconnect(accountId)
     this.sessions.delete(accountId)
+    resetAccountData(accountId)
+    deleteAccountMedia(accountId)
   }
 
   shutdown(): void {
