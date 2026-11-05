@@ -7,7 +7,12 @@ const shared = { '@shared': resolve('src/shared') }
 
 export default defineConfig({
   main: {
-    resolve: { alias: shared }
+    resolve: { alias: shared },
+    build: {
+      // Processo principal compilado para bytecode do V8 (dificulta ler e alterar a lógica de licença)
+      bytecode: { transformArrowFunctions: true, protectedStrings: ['DSP1', 'Safe Storage'] },
+      rollupOptions: { output: { format: 'cjs', entryFileNames: '[name].cjs' } }
+    }
   },
   preload: {
     resolve: { alias: shared },

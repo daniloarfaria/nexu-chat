@@ -12,6 +12,9 @@ import { getCachedWaVersion, refreshWaVersion } from './wa/version'
 import { log } from './log'
 import { registerChatIpc } from './ipc-chat'
 import { activateLicense, licenseStatus, removeLicense } from './license'
+import { loginOnline, logoutOnline, refreshOnline } from './license-online'
+import { markNovidadesSeen, pendingNovidades } from './novidades'
+import { NEXU_SITE, SITE_PAGES, type SitePage } from '@shared/site'
 import { registerBusinessIpc } from './ipc-business'
 import { checkForUpdates, downloadUpdate, getUpdateStatus, installUpdate } from './updater'
 
@@ -71,6 +74,25 @@ export function registerIpc(getWindow: () => BrowserWindow | null, relaunch: () 
   handle('license:status', null, () => licenseStatus())
   handle('license:activate', z.object({ key: z.string().min(20).max(4000) }).strict(), (a) => activateLicense(a.key))
   handle('license:remove', null, () => removeLicense())
+  handle(
+    'license:login',
+    z.object({ email: z.string().trim().email().max(200), password: z.string().min(1).max(200) }).strict(),
+    (a) => loginOnline(a.email.toLowerCase(), a.password)
+  )
+  handle('license:logout', null, () => logoutOnline())
+  handle('license:refresh', null, async () => {
+    await refreshOnline()
+    return licenseStatus()
+  })
+  handle(
+    'app:open-site',
+    z.object({ page: z.enum(Object.keys(SITE_PAGES) as [SitePage, ...SitePage[]]) }).strict(),
+    async (a) => {
+      await shell.openExternal(`${NEXU_SITE}${SITE_PAGES[a.page]}`)
+    }
+  )
+  handle('novidades:pendentes', null, () => pendingNovidades())
+  handle('novidades:vistas', null, () => markNovidadesSeen())
 
   handle('wa:version', null, () => getCachedWaVersion())
   handle('wa:refresh-version', null, () => refreshWaVersion())

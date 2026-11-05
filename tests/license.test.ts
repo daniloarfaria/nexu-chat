@@ -74,3 +74,45 @@ describe('licença antiga', () => {
     expect(p.modulos).toContain('ia')
   })
 })
+
+describe('licença online (site)', () => {
+  const base = {
+    v: 1 as const,
+    id: 'LIC-ONLINE01',
+    cliente: 'Loja',
+    plano: 'completo' as const,
+    contas: 1,
+    modulos: ['conversas' as const, 'campanhas' as const],
+    emitida: '2026-11-05',
+    online: true,
+    email: 'loja@ex.com',
+    dispositivo: 'a'.repeat(64)
+  }
+  const now = new Date(2026, 10, 10)
+
+  test('chave de outro computador não libera nada', () => {
+    const st = evaluate({ ...base, validade: '2026-11-20', fim: '2026-12-31' }, now, false, 'b'.repeat(64))
+    expect(st.state).toBe('invalid')
+    expect(st.modules).toEqual(['conversas'])
+  })
+
+  test('mesmo computador: ativa e mostra o fim real', () => {
+    const st = evaluate({ ...base, validade: '2026-11-20', fim: '2026-12-31' }, now, false, 'a'.repeat(64))
+    expect(st.state).toBe('active')
+    expect(st.message).toContain('31/12/2026')
+  })
+
+  test('teste que acabou não ganha tolerância offline', () => {
+    const p = { ...base, teste: true, validade: '2026-11-08', fim: '2026-11-08' }
+    const st = evaluate(p, now, false, 'a'.repeat(64))
+    expect(st.state).toBe('expired')
+    expect(st.message).toMatch(/teste grátis terminou/)
+  })
+
+  test('sem internet, janela vencida ainda tem tolerância se o fim real é depois', () => {
+    const p = { ...base, validade: '2026-11-08', fim: '2026-12-31' }
+    const st = evaluate(p, now, false, 'a'.repeat(64))
+    expect(st.state).toBe('grace')
+    expect(st.message).toMatch(/internet/)
+  })
+})

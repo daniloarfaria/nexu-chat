@@ -17,6 +17,7 @@ import { IA } from './pages/IA'
 import { Funis } from './pages/Funis'
 import { subscribeChatEvents, useChats } from './lib/chatStore'
 import { subscribeAvatarEvents } from './lib/avatars'
+import { Novidades } from './components/Novidades'
 
 function Page(): React.JSX.Element {
   const page = useApp((s) => s.page)
@@ -56,6 +57,8 @@ export default function App(): React.JSX.Element {
     void init().then((c) => (cleanup = c))
     const offChats = subscribeChatEvents()
     const offAvatars = subscribeAvatarEvents()
+    // Licença mudou (login, renovação, fim): os módulos liberados mudam junto
+    const offLicense = window.api.on('license:changed', () => void useApp.getState().reloadAccounts())
     const offNav = window.api.on('nav:open-chat', async ({ accountId, jid }) => {
       useApp.getState().setActive(accountId)
       useApp.getState().go('conversas')
@@ -67,6 +70,7 @@ export default function App(): React.JSX.Element {
       offChats()
       offAvatars()
       offNav()
+      offLicense()
     }
   }, [init])
 
@@ -77,6 +81,7 @@ export default function App(): React.JSX.Element {
         <div className="drag h-3 shrink-0" />
         <UpdateBanner />
         <LicenseBanner />
+        {loaded && <Novidades />}
         {page === 'conversas' || page === 'funis' ? (
           <main className="min-h-0 flex-1 border-t border-line">{loaded && <Page />}</main>
         ) : (

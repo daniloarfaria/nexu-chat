@@ -32,20 +32,49 @@ const acc = await win.evaluate(async () => {
     ['Heitor Alves', '11987650008', ['Inativo']]
   ]
   const ids = []
-  for (const [name, phone, tags] of pessoas) ids.push((await api.invoke('people:save', { accountId: a.id, name, phone, tags })).id)
-  await api.invoke('tags:save', { accountId: a.id, name: 'VIP', color: 'amber', previousName: 'VIP', description: 'Compram acima de R$ 1.000' })
+  for (const [name, phone, tags] of pessoas)
+    ids.push((await api.invoke('people:save', { accountId: a.id, name, phone, tags })).id)
+  await api.invoke('tags:save', {
+    accountId: a.id,
+    name: 'VIP',
+    color: 'amber',
+    previousName: 'VIP',
+    description: 'Compram acima de R$ 1.000'
+  })
   const p = await api.invoke('pipelines:create-template', { accountId: a.id, templateId: 'vendas' })
   const st = p.stages
   await api.invoke('pipelines:save', {
-    accountId: a.id, id: p.id, name: p.name, color: 'blue',
-    stages: st.map((s, i) => ({ id: s.id, name: s.name, color: s.color, kind: s.kind, slaDays: s.slaDays, autoTag: i === 2 ? 'Orçamento enviado' : null }))
+    accountId: a.id,
+    id: p.id,
+    name: p.name,
+    color: 'blue',
+    stages: st.map((s, i) => ({
+      id: s.id,
+      name: s.name,
+      color: s.color,
+      kind: s.kind,
+      slaDays: s.slaDays,
+      autoTag: i === 2 ? 'Orçamento enviado' : null
+    }))
   })
-  const put = async (stage, who) => api.invoke('pipelines:add-people', { accountId: a.id, stageId: st[stage].id, personIds: who.map((i) => ids[i]) })
-  await put(0, [0, 5]); await put(1, [1, 6]); await put(2, [2]); await put(3, [3]); await put(4, [4]); await put(5, [7])
+  const put = async (stage, who) =>
+    api.invoke('pipelines:add-people', { accountId: a.id, stageId: st[stage].id, personIds: who.map((i) => ids[i]) })
+  await put(0, [0, 5])
+  await put(1, [1, 6])
+  await put(2, [2])
+  await put(3, [3])
+  await put(4, [4])
+  await put(5, [7])
   const b = await api.invoke('pipelines:board', { accountId: a.id, pipelineId: p.id })
   const vals = { 'Carla Mendes': 89000, 'Diego Rocha': 45990, 'Elisa Prado': 129900, 'Bruno Lima': 32000 }
   for (const c of b.cards) {
-    if (vals[c.name]) await api.invoke('pipelines:update-card', { accountId: a.id, cardId: c.id, valueCents: vals[c.name], note: c.name === 'Carla Mendes' ? 'Quer armação dourada, retorna sexta.' : null })
+    if (vals[c.name])
+      await api.invoke('pipelines:update-card', {
+        accountId: a.id,
+        cardId: c.id,
+        valueCents: vals[c.name],
+        note: c.name === 'Carla Mendes' ? 'Quer armação dourada, retorna sexta.' : null
+      })
   }
   await api.invoke('pipelines:create-template', { accountId: a.id, templateId: 'pedidos' })
   return a.id

@@ -572,6 +572,12 @@ export interface LicensePayload {
   modulos: ModuleKey[]
   emitida: string // AAAA-MM-DD
   validade: string | null // AAAA-MM-DD (último dia válido); null = sem vencimento
+  // Chaves emitidas pelo site (login com e-mail e senha)
+  email?: string
+  dispositivo?: string // hash do computador para o qual a chave foi emitida
+  fim?: string | null // fim real da licença (a validade é uma janela que o app renova)
+  teste?: boolean
+  online?: boolean
 }
 
 export interface LicenseStatus {
@@ -581,6 +587,10 @@ export interface LicenseStatus {
   modules: ModuleKey[] // módulos liberados agora
   maxAccounts: number
   message: string
+  /** Conta do site conectada (login com e-mail e senha) */
+  online?: { email: string } | null
+  /** Aviso da última verificação online (ex.: licença encerrada) */
+  notice?: string | null
 }
 
 // ---------- Etiquetas ----------

@@ -44,6 +44,7 @@ import type {
   TargetStatus,
   WaVersionInfo
 } from './types'
+import type { SitePage } from './site'
 
 // Mapa tipado de todos os canais IPC (interface → processo principal).
 export interface ApiMap {
@@ -52,6 +53,15 @@ export interface ApiMap {
   'license:status': { args: []; ret: LicenseStatus }
   'license:activate': { args: [{ key: string }]; ret: LicenseStatus }
   'license:remove': { args: []; ret: LicenseStatus }
+  'license:login': { args: [{ email: string; password: string }]; ret: LicenseStatus }
+  'license:logout': { args: []; ret: LicenseStatus }
+  'license:refresh': { args: []; ret: LicenseStatus }
+  'app:open-site': { args: [{ page: SitePage }]; ret: void }
+  'novidades:pendentes': {
+    args: []
+    ret: Array<{ versao: string; data: string; titulo: string; resumo: string; destaques: string[]; url: string }>
+  }
+  'novidades:vistas': { args: []; ret: void }
   'update:status': { args: []; ret: UpdateStatus }
   'update:check': { args: []; ret: UpdateStatus }
   'update:download': { args: []; ret: void }
@@ -356,6 +366,7 @@ export type ApiChannel = keyof ApiMap
 
 // Eventos (processo principal → interface)
 export interface EventMap {
+  'license:changed': LicenseStatus
   'account:state': AccountState
   'wa:version': WaVersionInfo
   'backup:done': BackupSettings
@@ -387,6 +398,12 @@ export const API_CHANNELS: ApiChannel[] = [
   'license:status',
   'license:activate',
   'license:remove',
+  'license:login',
+  'license:logout',
+  'license:refresh',
+  'app:open-site',
+  'novidades:pendentes',
+  'novidades:vistas',
   'update:status',
   'update:check',
   'update:download',
@@ -507,6 +524,7 @@ export const API_CHANNELS: ApiChannel[] = [
   'backup:restore'
 ]
 export const EVENT_CHANNELS: EventChannel[] = [
+  'license:changed',
   'account:state',
   'wa:version',
   'backup:done',

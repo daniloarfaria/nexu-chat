@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import makeWASocket, { Browsers, DisconnectReason, makeCacheableSignalKeyStore, type WASocket } from 'baileys'
+import { makeWASocket, Browsers, DisconnectReason, makeCacheableSignalKeyStore, type WASocket } from 'baileys'
 import QRCode from 'qrcode'
 import type { AccountState } from '@shared/types'
 import { sqliteAuthState } from './auth-store'

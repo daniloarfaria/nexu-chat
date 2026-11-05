@@ -1,4 +1,5 @@
 import { PRODUCT_NAME, setupAppMenu } from './identity'
+import { licenseEvents, startLicenseRefresh } from './license-online'
 import { app, shell, BrowserWindow, session, Notification, ipcMain } from 'electron'
 import { join } from 'node:path'
 import { is } from '@electron-toolkit/utils'
@@ -27,6 +28,9 @@ const BACKUP_CHECK_MS = 30 * 60 * 1000
 
 // Protocolo das mídias precisa ser registrado antes do app ficar pronto
 registerMediaScheme()
+
+// App instalado não aceita depuração remota (os fusíveis já bloqueiam o inspetor do Node)
+if (app.isPackaged && process.argv.some((a) => /^--(inspect|remote-debugging|js-flags)/.test(a))) app.exit(1)
 
 // Só uma instância: duas conectando a mesma conta derrubariam uma à outra
 if (!app.requestSingleInstanceLock()) {
@@ -57,11 +61,14 @@ if (!app.requestSingleInstanceLock()) {
         sandbox: true,
         nodeIntegration: false,
         webSecurity: true,
-        spellcheck: true
+        spellcheck: true,
+        // App instalado: sem ferramentas de inspeção
+        devTools: !app.isPackaged
       }
     })
 
     mainWindow.on('ready-to-show', () => mainWindow?.show())
+    if (app.isPackaged) mainWindow.webContents.on('devtools-opened', () => mainWindow?.webContents.closeDevTools())
     mainWindow.on('closed', () => (mainWindow = null))
 
     // Links externos só no navegador, e só http(s)
@@ -136,6 +143,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(async () => {
     setupAppMenu()
+    startLicenseRefresh()
     app.setAppUserModelId(APP_ID)
     const dataDir = app.getPath('userData')
     initLog(join(dataDir, 'logs'))
@@ -189,6 +197,7 @@ if (!app.requestSingleInstanceLock()) {
       updateBadge()
     })
     storeEvents.on('messages', (p: unknown) => send('messages:changed', p))
+    licenseEvents.on('changed', (st: unknown) => send('license:changed', st))
     storeEvents.on('reload', (p: unknown) => send('messages:reload', p))
     storeEvents.on('merged', (p: unknown) => send('chats:merged', p))
     storeEvents.on('sync', (p: SyncState) => send('sync:changed', p))

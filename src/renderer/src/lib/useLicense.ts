@@ -6,8 +6,10 @@ export function useLicense(): [LicenseStatus | null, (s: LicenseStatus) => void]
   useEffect(() => {
     let alive = true
     void window.api.invoke('license:status').then((s) => alive && setSt(s))
+    const off = window.api.on('license:changed', (s) => alive && setSt(s))
     return () => {
       alive = false
+      off()
     }
   }, [])
   return [st, setSt]
