@@ -1,6 +1,6 @@
 # Manual do Disparador
 
-> Versão do app: 0.3.0 · Atualizado em 05/11/2026
+> Versão do app: 0.3.1 · Atualizado em 05/11/2026
 > O nome "Disparador" é provisório.
 
 O Disparador conecta o WhatsApp da sua loja ao computador. Com ele você atende os clientes, guarda todas as conversas no computador e, nas próximas versões, também envia campanhas, gerencia grupos e acompanha as vendas.
@@ -319,6 +319,7 @@ No rodapé do menu: ☀ claro, ☾ escuro ou **automático** (segue o computador
 
 | Problema | O que fazer |
 |---|---|
+| **Mac:** ao abrir uma versão nova aparece "Disparador quer usar informações confidenciais armazenadas em 'Disparador Safe Storage'" | Digite a senha do Mac e clique em **Sempre Permitir**. É o Mac liberando a chave que protege a conexão do WhatsApp. Enquanto a janela não for respondida, o app não conecta. Se ela sumiu atrás de outras janelas, procure no Dock. |
 | QR Code expirou | Clique em **Conectar** para gerar outro. |
 | "Esta conta foi aberta em outro lugar" | Outro computador usou a mesma conexão. Clique em **Conectar** para voltar a usar aqui. |
 | "O WhatsApp recusou a conexão (conta restrita ou banida)" | Verifique o WhatsApp no celular. Se o número foi restrito, aguarde o prazo informado pelo WhatsApp. |

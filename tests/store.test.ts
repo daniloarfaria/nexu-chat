@@ -209,3 +209,34 @@ describe('histórico e mensagens', () => {
     expect(store.unreadTotal(ACC)).toBe(0)
   })
 })
+
+describe('tipos especiais', () => {
+  test('cabeçalho de álbum e aviso de histórico não viram balão; modelo vira texto', () => {
+    store.saveMessages(
+      ACC,
+      [
+        msg({ message: { albumMessage: { expectedImageCount: 3 } } }),
+        msg({ message: { messageHistoryNotice: {} } as never }),
+        msg({
+          message: {
+            templateMessage: { hydratedFourRowTemplate: { hydratedContentText: 'Seu pedido saiu para entrega' } }
+          }
+        })
+      ],
+      { live: false }
+    )
+    const list = store.listMessages(ACC, PN, null, 10)
+    expect(list.map((m) => [m.type, m.text])).toEqual([['text', 'Seu pedido saiu para entrega']])
+  })
+
+  test('reprocessa mensagens antigas não suportadas', () => {
+    store.saveMessages(
+      ACC,
+      [msg({ message: { templateMessage: { hydratedFourRowTemplate: { hydratedContentText: 'Oi' } } } })],
+      { live: false }
+    )
+    getDb().prepare("UPDATE messages SET type = 'unsupported', text = NULL").run()
+    expect(store.reparseUnsupported()).toBe(1)
+    expect(store.listMessages(ACC, PN, null, 10)[0]).toMatchObject({ type: 'text', text: 'Oi' })
+  })
+})

@@ -84,6 +84,8 @@ export function mutationOf(msg: WAMessage): Mutation | null {
   if (m.senderKeyDistributionMessage && Object.keys(m).length <= 2) return { kind: 'ignore' }
   if (m.pollUpdateMessage || m.keepInChatMessage || m.pinInChatMessage || m.encReactionMessage)
     return { kind: 'ignore' }
+  // Cabeçalho de álbum (as fotos chegam como mensagens próprias) e aviso de histórico não viram balão
+  if (m.albumMessage || m.messageHistoryNotice) return { kind: 'ignore' }
   return null
 }
 
@@ -266,8 +268,15 @@ function parseContent(m: proto.IMessage | undefined): Omit<Parsed, 'quotedId'> {
     }
   if (m.call) return { ...r, type: 'call', text: null }
   if (m.buttonsMessage) return { ...r, type: 'text', text: m.buttonsMessage.contentText ?? '' }
-  if (m.templateMessage?.hydratedTemplate)
-    return { ...r, type: 'text', text: m.templateMessage.hydratedTemplate.hydratedContentText ?? '' }
+  if (m.templateMessage) {
+    const t = m.templateMessage
+    const text =
+      t.hydratedTemplate?.hydratedContentText ??
+      t.hydratedFourRowTemplate?.hydratedContentText ??
+      t.interactiveMessageTemplate?.body?.text ??
+      ''
+    if (text) return { ...r, type: 'text', text }
+  }
   if (m.listMessage)
     return { ...r, type: 'text', text: [m.listMessage.title, m.listMessage.description].filter(Boolean).join('\n') }
   if (m.buttonsResponseMessage) return { ...r, type: 'text', text: m.buttonsResponseMessage.selectedDisplayText ?? '' }

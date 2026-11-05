@@ -11,7 +11,7 @@ import { refreshWaVersion } from './wa/version'
 import { applyPendingRestore, getBackupSettings, isBackupDue, runBackup } from './backup'
 import { setupAutoUpdate } from './updater'
 import { handleMediaProtocol, registerMediaScheme } from './wa/media'
-import { getChats, storeEvents, unreadTotal } from './wa/store'
+import { getChats, reparseUnsupported, storeEvents, unreadTotal } from './wa/store'
 import { notificationText } from './wa/sync'
 import type { Campaign, EngineState, MessageItem, SyncState } from '@shared/types'
 import { engine } from './engine'
@@ -133,6 +133,12 @@ if (!app.requestSingleInstanceLock()) {
     const dbPath = join(dataDir, 'dados.sqlite')
     if (applyPendingRestore(dbPath)) log.info('Backup restaurado')
     openDb(dbPath)
+    try {
+      const n = reparseUnsupported()
+      if (n) log.info(`${n} mensagens antigas reprocessadas`)
+    } catch (e) {
+      log.error('Falha ao reprocessar mensagens', e)
+    }
 
     // Nega permissões que o app não usa (câmera, microfone, localização…)
     session.defaultSession.setPermissionRequestHandler((_wc, permission, cb, details) => {

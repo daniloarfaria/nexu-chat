@@ -637,3 +637,51 @@ export function resetAccountData(accountId: string): void {
     db.prepare('DELETE FROM messages_fts WHERE account_id = ?').run(accountId)
   })
 }
+
+/** Reprocessa mensagens antigas marcadas como não suportadas (quando o app aprende um tipo novo). */
+export function reparseUnsupported(): number {
+  const db = getDb()
+  const rows = db
+    .prepare(
+      "SELECT account_id, chat_jid, id, raw FROM messages WHERE type = 'unsupported' AND raw IS NOT NULL LIMIT 5000"
+    )
+    .all() as Array<{ account_id: string; chat_jid: string; id: string; raw: Uint8Array }>
+  let changed = 0
+  transaction(db, () => {
+    for (const r of rows) {
+      const msg = proto.WebMessageInfo.decode(r.raw) as WAMessage
+      const mut = mutationOf(msg)
+      if (mut?.kind === 'ignore') {
+        db.prepare('DELETE FROM messages WHERE account_id = ? AND chat_jid = ? AND id = ?').run(
+          r.account_id,
+          r.chat_jid,
+          r.id
+        )
+        changed++
+        continue
+      }
+      const p = parseMessage(msg)
+      if (p.type === 'unsupported') continue
+      db.prepare(
+        'UPDATE messages SET type = ?, text = ?, media = ?, extra = ? WHERE account_id = ? AND chat_jid = ? AND id = ?'
+      ).run(
+        p.type,
+        p.text,
+        p.media ? JSON.stringify(p.media) : null,
+        p.extra ? JSON.stringify(p.extra) : null,
+        r.account_id,
+        r.chat_jid,
+        r.id
+      )
+      if (p.text)
+        db.prepare('INSERT INTO messages_fts (text, account_id, chat_jid, id) VALUES (?, ?, ?, ?)').run(
+          p.text,
+          r.account_id,
+          r.chat_jid,
+          r.id
+        )
+      changed++
+    }
+  })
+  return changed
+}
