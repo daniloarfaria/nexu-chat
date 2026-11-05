@@ -1,6 +1,6 @@
 # Manual do Nexu Chat
 
-> Versão do app: 0.8.0 · Atualizado em 05/11/2026
+> Versão do app: 0.8.1 · Atualizado em 05/11/2026
 
 O Nexu Chat conecta o WhatsApp da sua loja ao computador. Com ele você atende os clientes, guarda todas as conversas no computador e, nas próximas versões, também envia campanhas, gerencia grupos e acompanha as vendas.
 

@@ -1,5 +1,5 @@
 /** Site do Nexu Chat: licenças, downloads e novidades. */
-export const NEXU_SITE = 'https://nexu-chat.netlify.app'
+export const NEXU_SITE = 'https://nexuchat.agenciaark.com.br'
 
 /** Páginas do site que o app pode abrir no navegador. */
 export const SITE_PAGES = {
