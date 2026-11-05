@@ -1,6 +1,6 @@
 # Especificação — App de Campanhas e Gestão de WhatsApp
 
-> Nome provisório no código: `disparador`. O nome definitivo será escolhido depois.
+> Nome do produto: **Nexu Chat**. Nome interno no código e nos dados: `disparador` (não muda, para preservar dados e sessões).
 > Data: 05/11/2026 · Substitui o bot `Automacao_Otica` (que vai para `legacy/`).
 
 ## 1. Objetivo

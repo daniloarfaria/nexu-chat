@@ -64,6 +64,6 @@
     "vitest": "5.1.0",
     "zustand": "5.0.16"
   },
-  "productName": "Disparador",
+  "productName": "Nexu Chat",
   "type": "module"
 }

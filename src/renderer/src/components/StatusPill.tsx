@@ -2,7 +2,7 @@ import type { ConnectionStatus } from '@shared/types'
 import { cn } from '../lib/cn'
 
 const MAP: Record<ConnectionStatus, { label: string; cls: string; dot: string; pulse?: boolean }> = {
-  connected: { label: 'Conectado', cls: 'bg-ok-soft text-ok', dot: 'bg-ok' },
+  connected: { label: 'Conectado', cls: 'bg-ok-soft text-ok', dot: 'bg-elo' },
   connecting: { label: 'Conectando', cls: 'bg-info-soft text-info', dot: 'bg-info', pulse: true },
   qr: { label: 'Aguardando leitura', cls: 'bg-warn-soft text-warn', dot: 'bg-warn', pulse: true },
   disconnected: { label: 'Desconectado', cls: 'bg-sunken text-ink-2', dot: 'bg-ink-3' },

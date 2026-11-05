@@ -8,7 +8,7 @@ import { log } from './log'
 // No Mac sem assinatura da Apple a troca automática não é permitida pelo sistema,
 // então o botão abre a página de download do novo .dmg.
 
-const RELEASES_URL = 'https://github.com/daniloarfaria/disparador-releases/releases/latest'
+const RELEASES_URL = 'https://github.com/daniloarfaria/nexu-chat-releases/releases/latest'
 const MAC_SIGNED = false
 
 let status: UpdateStatus = { state: 'idle', currentVersion: '' }

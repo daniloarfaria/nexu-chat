@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Emissão de licenças do Disparador (uso interno da agência).
+// Emissão de licenças do Nexu Chat (uso interno da agência).
 //
 //   node scripts/licenca.mjs chaves                      → cria o par de chaves (uma única vez)
 //   node scripts/licenca.mjs emitir --cliente "Ótica X" --plano completo --contas 1 --meses 1

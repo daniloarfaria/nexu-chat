@@ -124,7 +124,7 @@ function defaultHead(channels = 1): Uint8Array {
 }
 
 function tags(): Uint8Array {
-  const vendor = new TextEncoder().encode('Disparador')
+  const vendor = new TextEncoder().encode('Nexu Chat')
   const t = new Uint8Array(8 + 4 + vendor.length + 4)
   t.set(new TextEncoder().encode('OpusTags'), 0)
   new DataView(t.buffer).setUint32(8, vendor.length, true)

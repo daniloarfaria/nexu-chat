@@ -1,7 +1,7 @@
 # Instaladores: Mac (.dmg Apple Silicon e Intel) e Windows (.exe NSIS).
 # appId NÃO pode mudar depois da primeira instalação nos clientes (mesmo que o nome do app mude).
 appId: br.com.disparador.app
-productName: Disparador
+productName: Nexu Chat
 copyright: Copyright © 2026 Agência Ark
 directories:
   output: dist
@@ -38,17 +38,17 @@ mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     LSFileQuarantineEnabled: true
-    NSMicrophoneUsageDescription: O Disparador usa o microfone para gravar mensagens de voz.
+    NSMicrophoneUsageDescription: O Nexu Chat usa o microfone para gravar mensagens de voz.
   notarize: false
 dmg:
-  artifactName: ${productName}-${version}-mac-${arch}.${ext}
+  artifactName: Nexu-Chat-${version}-mac-${arch}.${ext}
 
 win:
   target:
     - target: nsis
       arch: [x64]
-  icon: build/icon.png
-  executableName: Disparador
+  icon: build/icon-win.png
+  executableName: NexuChat
 nsis:
   oneClick: false
   perMachine: false
@@ -58,11 +58,11 @@ nsis:
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   deleteAppDataOnUninstall: false # nunca apaga banco/sessões ao desinstalar
-  artifactName: ${productName}-${version}-windows-setup.${ext}
+  artifactName: Nexu-Chat-${version}-windows-setup.${ext}
 
 # Atualizações: repositório público só com os instaladores
 publish:
   provider: github
   owner: daniloarfaria
-  repo: disparador-releases
+  repo: nexu-chat-releases
   releaseType: release

@@ -22,6 +22,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useChats } from '../lib/chatStore'
 import type { Modules } from '@shared/types'
 import { useActiveAccount, useApp, type PageId, type Theme } from '../lib/store'
+import logoCor from '../assets/brand/logo-horizontal-cor.svg'
+import logoNeg from '../assets/brand/logo-horizontal-negativo.svg'
 import { cn } from '../lib/cn'
 import { StatusDot } from './StatusPill'
 
@@ -192,7 +194,8 @@ export function Sidebar(): React.JSX.Element {
   return (
     <aside className="drag flex h-full w-[248px] shrink-0 flex-col border-r border-line bg-side">
       <div className={cn('flex items-center gap-2 px-4', isMac ? 'h-[52px] pl-[84px]' : 'h-12')}>
-        <span className="text-[14px] font-semibold tracking-[-0.01em] text-ink">Disparador</span>
+        <img src={logoCor} alt="Nexu Chat" draggable={false} className="only-light h-9 w-auto select-none" />
+        <img src={logoNeg} alt="Nexu Chat" draggable={false} className="only-dark h-9 w-auto select-none" />
       </div>
 
       <div className="px-3 pb-3">

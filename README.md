@@ -1,4 +1,6 @@
-# Disparador (nome provisório)
+# Nexu Chat
+
+> Antes chamado Disparador. O nome interno (pasta de dados, Keychain, `appId`) continua `disparador` de propósito: trocar faria os clientes perderem a sessão do WhatsApp ao atualizar.
 
 App desktop para **Mac e Windows** que permite a pequenos negócios (óticas e outros) atender, fazer campanhas e gerir grupos pelo WhatsApp. Tem proteção contra bloqueio, banco de dados local e backup criptografado.
 
@@ -36,7 +38,7 @@ O `.exe` de Windows é gerado pelo GitHub Actions (Actions → Build → *Run wo
 - **Versão do WhatsApp Web:** o app busca a mais recente na [WPPConnect](https://wppconnect.io/pt-BR/whatsapp-versions/) ao abrir e a cada 6 h ([src/main/wa/version.ts](src/main/wa/version.ts)). Se não conseguir, tenta o próprio WhatsApp Web e depois a última que funcionou.
 - **Patch do Baileys** ([patches/](patches/)): a rc14 do npm se identifica como `WIN32`, que o servidor recusa com o erro 428 antes de mostrar o QR. O patch aplica a correção do PR #2741 (`WIN_HYBRID`). Ele pode ser removido quando sair uma versão nova do Baileys com essa correção.
 - **Identidade do navegador:** `Browsers.windows('Desktop')`, a única que hoje permite pedir o histórico completo (veja a issue #2880 do Baileys).
-- **Atualização do app:** o app verifica ao abrir e a cada 6 h, e o usuário escolhe quando baixar. No Windows, baixa e instala sozinho. No Mac sem assinatura da Apple, abre a página do novo `.dmg`. As versões são publicadas no repositório público `daniloarfaria/disparador-releases` ao criar uma tag `vX.Y.Z`, o que exige o segredo `RELEASES_TOKEN`.
+- **Atualização do app:** o app verifica ao abrir e a cada 6 h, e o usuário escolhe quando baixar. No Windows, baixa e instala sozinho. No Mac sem assinatura da Apple, abre a página do novo `.dmg`. As versões são publicadas no repositório público `daniloarfaria/nexu-chat-releases` ao criar uma tag `vX.Y.Z`, o que exige o segredo `RELEASES_TOKEN`.
 - **Mac sem notarização:** na primeira vez, é preciso abrir com clique direito → Abrir.
 - **IA:** provedores gratuitos (formato OpenAI) com troca automática por limite; Claude como reserva paga via SDK oficial (`@anthropic-ai/sdk`, `claude-opus-5-5` por padrão, fallback de recusa ligado). Conversas anonimizadas antes de sair do computador ([src/main/ai/](src/main/ai/)).
 - **Planilhas:** SheetJS 0.20.3 do CDN oficial (a versão do npm tem falhas conhecidas).

@@ -1,21 +1,20 @@
-# Manual do Disparador
+# Manual do Nexu Chat
 
 > Versão do app: 0.7.0 · Atualizado em 05/11/2026
-> O nome "Disparador" é provisório.
 
-O Disparador conecta o WhatsApp da sua loja ao computador. Com ele você atende os clientes, guarda todas as conversas no computador e, nas próximas versões, também envia campanhas, gerencia grupos e acompanha as vendas.
+O Nexu Chat conecta o WhatsApp da sua loja ao computador. Com ele você atende os clientes, guarda todas as conversas no computador e, nas próximas versões, também envia campanhas, gerencia grupos e acompanha as vendas.
 
 ---
 
 ## 1. Instalação
 
 ### Mac
-1. Abra o arquivo `Disparador-…-mac-arm64.dmg` (Macs com chip Apple, M1 ou mais novos) ou `…-mac-x64.dmg` (Macs Intel).
-2. Arraste o Disparador para a pasta **Aplicativos**.
-3. **Na primeira vez**, clique com o botão direito no Disparador e escolha **Abrir**. Depois confirme em **Abrir**. Isso só é preciso uma vez, porque o app ainda não tem a assinatura paga da Apple.
+1. Abra o arquivo `Nexu-Chat-…-mac-arm64.dmg` (Macs com chip Apple, M1 ou mais novos) ou `…-mac-x64.dmg` (Macs Intel).
+2. Arraste o Nexu Chat para a pasta **Aplicativos**.
+3. **Na primeira vez**, clique com o botão direito no Nexu Chat e escolha **Abrir**. Depois confirme em **Abrir**. Isso só é preciso uma vez, porque o app ainda não tem a assinatura paga da Apple.
 
 ### Windows
-1. Abra o arquivo `Disparador-…-windows-setup.exe`.
+1. Abra o arquivo `Nexu-Chat-…-windows-setup.exe`.
 2. Se aparecer "O Windows protegeu o computador", clique em **Mais informações** e depois em **Executar assim mesmo**.
 3. Siga o instalador. O atalho fica na Área de Trabalho e no Menu Iniciar.
 
@@ -370,13 +369,13 @@ No rodapé do menu: ☀ claro, ☾ escuro ou **automático** (segue o computador
 
 | Problema | O que fazer |
 |---|---|
-| **Mac:** ao abrir uma versão nova aparece "Disparador quer usar informações confidenciais armazenadas em 'Disparador Safe Storage'" | Digite a senha do Mac e clique em **Sempre Permitir**. É o Mac liberando a chave que protege a conexão do WhatsApp. Enquanto a janela não for respondida, o app não conecta. Se ela sumiu atrás de outras janelas, procure no Dock. |
+| **Mac:** ao abrir uma versão nova aparece "Nexu Chat quer usar informações confidenciais armazenadas em 'Disparador Safe Storage'" (o nome interno continua Nexu Chat, para não perder a conexão) | Digite a senha do Mac e clique em **Sempre Permitir**. É o Mac liberando a chave que protege a conexão do WhatsApp. Enquanto a janela não for respondida, o app não conecta. Se ela sumiu atrás de outras janelas, procure no Dock. |
 | QR Code expirou | Clique em **Conectar** para gerar outro. |
 | "Esta conta foi aberta em outro lugar" | Outro computador usou a mesma conexão. Clique em **Conectar** para voltar a usar aqui. |
 | "O WhatsApp recusou a conexão (conta restrita ou banida)" | Verifique o WhatsApp no celular. Se o número foi restrito, aguarde o prazo informado pelo WhatsApp. |
 | Conversas antigas não aparecem | Use **Contas → Reimportar histórico**. |
 | Mídia não baixa ("Conecte o WhatsApp…") | A conta precisa estar **Conectada** para baixar mídias que ainda não estão no computador. |
-| Microfone não funciona | Mac: Ajustes do Sistema → Privacidade e Segurança → Microfone → ative o Disparador. Windows: Configurações → Privacidade → Microfone. |
+| Microfone não funciona | Mac: Ajustes do Sistema → Privacidade e Segurança → Microfone → ative o Nexu Chat. Windows: Configurações → Privacidade → Microfone. |
 | Campanha pausada sozinha | Veja o motivo no topo da campanha (falhas seguidas, taxa de resposta baixa). Corrija e clique em **Retomar**. |
 | Campanha parada em "fora do horário" ou "limite diário" | É a proteção funcionando; ela continua sozinha no próximo horário permitido. |
 | Assistente de IA: "Nenhum provedor disponível" | Cadastre uma chave em Assistente de IA → Provedores, ou aguarde a pausa do provedor terminar. |
@@ -386,5 +385,5 @@ No rodapé do menu: ☀ claro, ☾ escuro ou **automático** (segue o computador
 
 ## 18. Avisos importantes
 
-- O Disparador usa uma conexão **não oficial** com o WhatsApp, a mesma usada pelo WhatsApp Web. O WhatsApp pode restringir números que enviam muitas mensagens para quem não responde. A Proteção anti-bloqueio reduz esse risco, mas ele nunca é zero.
+- O Nexu Chat usa uma conexão **não oficial** com o WhatsApp, a mesma usada pelo WhatsApp Web. O WhatsApp pode restringir números que enviam muitas mensagens para quem não responde. A Proteção anti-bloqueio reduz esse risco, mas ele nunca é zero.
 - Mantenha o celular da loja com internet de vez em quando. Se ficar mais de 14 dias desligado, o WhatsApp desconecta os aparelhos vinculados.

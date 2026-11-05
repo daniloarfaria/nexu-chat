@@ -1,3 +1,4 @@
+import { PRODUCT_NAME, setupAppMenu } from './identity'
 import { app, shell, BrowserWindow, session, Notification, ipcMain } from 'electron'
 import { join } from 'node:path'
 import { is } from '@electron-toolkit/utils'
@@ -45,7 +46,7 @@ if (!app.requestSingleInstanceLock()) {
       minWidth: 980,
       minHeight: 640,
       show: false,
-      title: 'Disparador',
+      title: PRODUCT_NAME,
       titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
       backgroundColor: '#0b0d10',
       autoHideMenuBar: true,
@@ -134,6 +135,7 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   app.whenReady().then(async () => {
+    setupAppMenu()
     app.setAppUserModelId(APP_ID)
     const dataDir = app.getPath('userData')
     initLog(join(dataDir, 'logs'))

@@ -223,7 +223,7 @@ export function markDownloaded(path: string): void {
       writeFileSync(path + ':Zone.Identifier', '[ZoneTransfer]\r\nZoneId=3\r\n')
     } else if (process.platform === 'darwin') {
       const ts = Math.floor(Date.now() / 1000).toString(16)
-      execFile('xattr', ['-w', 'com.apple.quarantine', `0081;${ts};Disparador;`, path], () => undefined)
+      execFile('xattr', ['-w', 'com.apple.quarantine', `0081;${ts};Nexu Chat;`, path], () => undefined)
     }
   } catch {
     /* sem a marca o arquivo ainda é salvo */
