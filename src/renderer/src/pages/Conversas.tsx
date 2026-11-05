@@ -200,7 +200,7 @@ export function Conversas(): React.JSX.Element {
     <div className="flex h-full">
       <ChatList />
       {selected ? (
-        <ChatView jid={selected} />
+        <ChatView key={selected} jid={selected} />
       ) : (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-sunken text-center">
           <MessagesSquare className="size-10 text-ink-3" strokeWidth={1.4} />

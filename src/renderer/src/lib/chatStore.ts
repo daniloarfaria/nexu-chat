@@ -48,6 +48,14 @@ function matches(c: ChatItem, filter: ChatFilter, search: string): boolean {
 }
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null
+const loadingOlder = new Set<string>()
+
+/** Junta listas sem repetir mensagem (o mesmo id fica uma vez só, com a versão mais nova) e ordena. */
+function mergeMsgs(...lists: MessageItem[][]): MessageItem[] {
+  const byId = new Map<string, MessageItem>()
+  for (const l of lists) for (const m of l) byId.set(m.id, m)
+  return [...byId.values()].sort((a, b) => a.ts - b.ts || (a.rid ?? 0) - (b.rid ?? 0))
+}
 
 export const useChats = create<ChatState>((set, get) => ({
   accountId: null,
@@ -119,7 +127,7 @@ export const useChats = create<ChatState>((set, get) => ({
       const msgs = await window.api.invoke('messages:list', { accountId, jid, before: null, limit: MSG_PAGE })
       if (get().accountId !== accountId) return // trocou de conta enquanto carregava
       set((s) => ({
-        messages: { ...s.messages, [jid]: msgs },
+        messages: { ...s.messages, [jid]: mergeMsgs(msgs, s.messages[jid] ?? []) },
         hasOlder: { ...s.hasOlder, [jid]: msgs.length === MSG_PAGE }
       }))
     }
@@ -129,24 +137,31 @@ export const useChats = create<ChatState>((set, get) => ({
 
   loadOlder: async (jid) => {
     const { accountId, messages, hasOlder } = get()
-    if (!accountId || hasOlder[jid] === false) return false
-    const cur = messages[jid] ?? []
-    const oldest = cur[0]
-    const older = await window.api.invoke('messages:list', {
-      accountId,
-      jid,
-      before: oldest?.ts ?? null,
-      beforeRid: oldest?.rid ?? null,
-      limit: MSG_PAGE
-    })
-    if (get().accountId !== accountId) return false // trocou de conta enquanto carregava
-    const known = new Set(cur.map((m) => m.id))
-    const fresh = older.filter((m) => !known.has(m.id))
-    set((s) => ({
-      messages: { ...s.messages, [jid]: [...fresh, ...(s.messages[jid] ?? [])] },
-      hasOlder: { ...s.hasOlder, [jid]: older.length === MSG_PAGE }
-    }))
-    return fresh.length > 0
+    const cur = messages[jid]
+    // Só busca antigas depois que a primeira página chegou, e uma busca por vez:
+    // sem isso, a página mais recente era somada de novo e as mensagens apareciam em dobro.
+    if (!accountId || !cur?.length || hasOlder[jid] === false || loadingOlder.has(jid)) return false
+    loadingOlder.add(jid)
+    try {
+      const oldest = cur[0]
+      const older = await window.api.invoke('messages:list', {
+        accountId,
+        jid,
+        before: oldest.ts,
+        beforeRid: oldest.rid ?? null,
+        limit: MSG_PAGE
+      })
+      if (get().accountId !== accountId) return false // trocou de conta enquanto carregava
+      const known = new Set((get().messages[jid] ?? []).map((m) => m.id))
+      const fresh = older.filter((m) => !known.has(m.id))
+      set((s) => ({
+        messages: { ...s.messages, [jid]: mergeMsgs(older, s.messages[jid] ?? []) },
+        hasOlder: { ...s.hasOlder, [jid]: older.length === MSG_PAGE }
+      }))
+      return fresh.length > 0
+    } finally {
+      loadingOlder.delete(jid)
+    }
   },
 
   setReply: (replyTo) => set({ replyTo, editing: null }),
@@ -166,15 +181,7 @@ export const useChats = create<ChatState>((set, get) => ({
   applyMessages: (accountId, chatJid, msgs) => {
     const st = get()
     if (st.accountId !== accountId || !st.messages[chatJid]) return
-    const list = [...st.messages[chatJid]]
-    const idx = new Map(list.map((m, i) => [m.id, i]))
-    for (const m of msgs) {
-      const i = idx.get(m.id)
-      if (i != null) list[i] = m
-      else list.push(m)
-    }
-    list.sort((a, b) => a.ts - b.ts || (a.rid ?? 0) - (b.rid ?? 0))
-    set({ messages: { ...st.messages, [chatJid]: list } })
+    set({ messages: { ...st.messages, [chatJid]: mergeMsgs(st.messages[chatJid], msgs) } })
     if (st.selected === chatJid && msgs.some((m) => !m.fromMe) && document.hasFocus()) {
       void window.api.invoke('chats:read', { accountId, jid: chatJid }).catch(() => undefined)
     }
