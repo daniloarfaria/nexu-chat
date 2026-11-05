@@ -13,7 +13,11 @@ import { setupAutoUpdate } from './updater'
 import { handleMediaProtocol, registerMediaScheme } from './wa/media'
 import { getChats, storeEvents, unreadTotal } from './wa/store'
 import { notificationText } from './wa/sync'
-import type { MessageItem, SyncState } from '@shared/types'
+import type { Campaign, EngineState, MessageItem, SyncState } from '@shared/types'
+import { engine } from './engine'
+import { startAutomation } from './automation'
+import { startReminders } from './reminders'
+import { groupEvents } from './groups'
 
 const APP_ID = 'br.com.disparador.app'
 const VERSION_RECHECK_MS = 6 * 60 * 60 * 1000
@@ -175,6 +179,12 @@ if (!app.requestSingleInstanceLock()) {
       notify(accountId, message)
     )
 
+    // Campanhas, automações, lembretes e grupos
+    engine.on('state', (st: EngineState) => send('engine:changed', st))
+    engine.on('campaign', (c: Campaign) => send('campaign:changed', c))
+    groupEvents.on('create-progress', (p: unknown) => send('groups:progress', p))
+    startAutomation()
+
     createWindow()
 
     // Atualizações do app: verifica ao abrir e avisa a interface
@@ -188,6 +198,10 @@ if (!app.requestSingleInstanceLock()) {
     for (const acc of listAccounts()) {
       if (acc.autoConnect) void wa.connect(acc.id).catch((e) => log.error('Falha ao conectar conta', e))
     }
+    engine.startAll()
+    startReminders()
+    // Ao conectar, retoma campanhas paradas por falta de conexão
+    wa.on('state', (s) => s.status === 'connected' && engine.kick(s.accountId))
 
     // Backup automático
     const checkBackup = (): void => {

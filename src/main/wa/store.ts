@@ -363,6 +363,7 @@ export function updateStatus(accountId: string, remoteJid: string, id: string, s
     .prepare('UPDATE messages SET status = MAX(status, ?) WHERE account_id = ? AND chat_jid = ? AND id = ?')
     .run(status, accountId, chat, id)
   if (r.changes) touch(accountId, chat, id)
+  storeEvents.emit('status', { accountId, id, status })
 }
 
 export function setMediaUrl(accountId: string, chatJid: string, id: string, media: MediaInfo): void {

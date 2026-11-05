@@ -13,8 +13,9 @@ import { Button, Field, Input, Notice, PageHeader, Section, Switch } from '../co
 import { useUpdateStatus } from '../lib/useUpdateStatus'
 import { formatBytes, formatDateTime, timeAgo } from '../lib/format'
 import { cn } from '../lib/cn'
+import { Protecao } from './Protecao'
 
-type Tab = 'backup' | 'modulos' | 'sistema'
+type Tab = 'backup' | 'modulos' | 'protecao' | 'sistema'
 
 const FREQ: Array<{ id: BackupSettings['frequency']; label: string }> = [
   { id: 'daily', label: 'Todo dia' },
@@ -421,6 +422,7 @@ export function Configuracoes(): React.JSX.Element {
   const tabs: Array<{ id: Tab; label: string }> = [
     { id: 'backup', label: 'Backup' },
     { id: 'modulos', label: 'Módulos' },
+    { id: 'protecao', label: 'Proteção anti-bloqueio' },
     { id: 'sistema', label: 'Sistema' }
   ]
   return (
@@ -444,6 +446,7 @@ export function Configuracoes(): React.JSX.Element {
       </div>
       {tab === 'backup' && <BackupTab />}
       {tab === 'modulos' && <ModulosTab />}
+      {tab === 'protecao' && <Protecao />}
       {tab === 'sistema' && <SistemaTab />}
     </div>
   )

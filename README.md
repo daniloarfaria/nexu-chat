@@ -18,7 +18,7 @@ Os dados ficam no SQLite embutido do Node (`node:sqlite`, sem módulo nativo). A
 ```bash
 npm install          # instala e aplica patches/ (patch-package)
 npm run dev          # abre o app em modo desenvolvimento
-npm test             # testes (Vitest): backup, versão, conversas, conversor de voz
+npm test             # testes (Vitest): backup, conversas, voz, regras, campanhas e motor, automações, grupos, lembretes, vendas, IA
 npm run typecheck && npm run lint
 npm run build:mac    # gera .dmg (arm64 e x64) em dist/
 ```
@@ -34,4 +34,6 @@ O `.exe` de Windows é gerado pelo GitHub Actions (Actions → Build → *Run wo
 - **Identidade do navegador:** `Browsers.windows('Desktop')`, a única que hoje permite pedir o histórico completo (veja a issue #2880 do Baileys).
 - **Atualização do app:** o app verifica ao abrir e a cada 6 h, e o usuário escolhe quando baixar. No Windows, baixa e instala sozinho. No Mac sem assinatura da Apple, abre a página do novo `.dmg`. As versões são publicadas no repositório público `daniloarfaria/disparador-releases` ao criar uma tag `vX.Y.Z`, o que exige o segredo `RELEASES_TOKEN`.
 - **Mac sem notarização:** na primeira vez, é preciso abrir com clique direito → Abrir.
+- **IA:** provedores gratuitos (formato OpenAI) com troca automática por limite; Claude como reserva paga via SDK oficial (`@anthropic-ai/sdk`, `claude-opus-5-5` por padrão, fallback de recusa ligado). Conversas anonimizadas antes de sair do computador ([src/main/ai/](src/main/ai/)).
+- **Planilhas:** SheetJS 0.20.3 do CDN oficial (a versão do npm tem falhas conhecidas).
 - **Dados:** ficam na pasta de dados do app (Configurações → Sistema → Abrir pasta). O backup gera um arquivo `.dspbak` (AES-256-GCM, chave derivada da senha com scrypt).

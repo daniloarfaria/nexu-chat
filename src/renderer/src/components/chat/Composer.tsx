@@ -10,11 +10,13 @@ import {
   Pencil,
   Reply,
   Send,
+  Sparkles,
   Square,
   Trash2,
   X
 } from 'lucide-react'
 import { useChats } from '../../lib/chatStore'
+import { useActiveAccount } from '../../lib/store'
 import { cn } from '../../lib/cn'
 import { Button, Input } from '../ui'
 
@@ -40,6 +42,23 @@ export function Composer({ jid, disabled }: { jid: string; disabled?: string | n
 
 function ComposerInner({ jid, disabled }: { jid: string; disabled?: string | null }): React.JSX.Element {
   const { accountId, replyTo, editing, setReply, setEditing } = useChats()
+  const iaOn = !!useActiveAccount()?.modules.ia
+  const [suggesting, setSuggesting] = useState(false)
+
+  async function suggest(): Promise<void> {
+    if (!accountId) return
+    setSuggesting(true)
+    setError(null)
+    try {
+      const r = await window.api.invoke('ai:suggest', { accountId, jid })
+      setText(r.text)
+      ta.current?.focus()
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setSuggesting(false)
+    }
+  }
   const [text, setText] = useState(() => (editing ? (editing.text ?? '') : readDraft(jid)))
   const [files, setFiles] = useState<File[]>([])
   const [asDocument, setAsDocument] = useState(false)
@@ -65,12 +84,6 @@ function ComposerInner({ jid, disabled }: { jid: string; disabled?: string | nul
       /* ignora */
     }
   }, [jid, text, editing])
-  useEffect(() => {
-    const el = ta.current
-    if (!el) return
-    el.style.height = 'auto'
-    el.style.height = Math.min(el.scrollHeight, 180) + 'px'
-  }, [text])
   useEffect(() => {
     if (recStart == null) return
     const t = setInterval(() => setNow(Date.now()), 250)
@@ -358,6 +371,18 @@ function ComposerInner({ jid, disabled }: { jid: string; disabled?: string | nul
                 }}
               />
             </div>
+            {iaOn && !jid.endsWith('@g.us') && (
+              <Button
+                variant="ghost"
+                aria-label="Sugerir resposta com IA"
+                title="Sugerir resposta com IA (você revisa antes de enviar)"
+                loading={suggesting}
+                onClick={() => void suggest()}
+                className="size-10 px-0"
+              >
+                {!suggesting && <Sparkles className="size-5 text-accent" />}
+              </Button>
+            )}
             <textarea
               ref={ta}
               rows={1}
@@ -375,7 +400,7 @@ function ComposerInner({ jid, disabled }: { jid: string; disabled?: string | nul
               }}
               placeholder={files.length ? 'Legenda (opcional)' : 'Digite uma mensagem'}
               aria-label="Mensagem"
-              className="max-h-[180px] min-h-10 flex-1 resize-none rounded-xl border border-line bg-sunken px-3.5 py-2 text-[14.5px] leading-[1.45] placeholder:text-ink-3 focus:border-accent focus:outline-none"
+              className="max-h-[180px] min-h-10 flex-1 resize-none [field-sizing:content] rounded-xl border border-line bg-sunken px-3.5 py-2 text-[14.5px] leading-[1.45] placeholder:text-ink-3 focus:border-accent focus:outline-none"
             />
           </>
         )}

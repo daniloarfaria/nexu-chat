@@ -125,12 +125,12 @@ CSP restrita, nenhum servidor HTTP aberto na rede, nenhum `npm install` em tempo
 ## 5. Fases de entrega
 1. ✅ **Base:** projeto Electron, segurança, banco local, backup em pasta configurável, contas, conexão Baileys com versão automática, Status. Instalador Mac/Windows.
 2. ✅ **Conversas:** sincronização do histórico, receber e enviar mensagens com todos os tipos de mídia (caixa de entrada completa).
-3. **Disparos:** contatos/importação, campanhas, fila, anti-bloqueio, relatórios (paridade + correções do bot antigo).
-4. **Respostas automáticas + opt-out.**
-5. **Grupos** (4 funções com liga/desliga).
-6. **Lembretes recorrentes.**
-7. **Vendas** (marcar venda/perdida, retorno por campanha, painel).
-8. **Assistente de IA** (análise, playbook, mensagens personalizadas).
+3. ✅ **Disparos:** contatos/importação, campanhas, fila, anti-bloqueio, relatórios (paridade + correções do bot antigo).
+4. ✅ **Respostas automáticas + opt-out.**
+5. ✅ **Grupos** (4 funções com liga/desliga).
+6. ✅ **Lembretes recorrentes.**
+7. ✅ **Vendas** (marcar venda/perdida, retorno por campanha, painel).
+8. ✅ **Assistente de IA** (análise, playbook, mensagens personalizadas).
 9. **Auditoria final** (security-audit, code-review, testes), assinatura opcional, publicação.
 
 ## 6. Riscos

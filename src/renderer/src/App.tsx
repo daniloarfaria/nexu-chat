@@ -5,8 +5,14 @@ import { UpdateBanner } from './components/UpdateBanner'
 import { Inicio } from './pages/Inicio'
 import { Contas } from './pages/Contas'
 import { Configuracoes } from './pages/Configuracoes'
-import { EmBreve } from './pages/EmBreve'
 import { Conversas } from './pages/Conversas'
+import { Contatos } from './pages/Contatos'
+import { Campanhas } from './pages/Campanhas'
+import { Automacoes } from './pages/Automacoes'
+import { Grupos } from './pages/Grupos'
+import { Lembretes } from './pages/Lembretes'
+import { Vendas } from './pages/Vendas'
+import { IA } from './pages/IA'
 import { subscribeChatEvents, useChats } from './lib/chatStore'
 
 function Page(): React.JSX.Element {
@@ -21,53 +27,19 @@ function Page(): React.JSX.Element {
     case 'conversas':
       return <Conversas />
     case 'contatos':
-      return (
-        <EmBreve
-          title="Contatos"
-          phase={3}
-          description="Importação de planilhas, etiquetas, campos personalizados e lista de quem pediu para sair."
-        />
-      )
+      return <Contatos />
     case 'campanhas':
-      return (
-        <EmBreve
-          title="Campanhas"
-          phase={3}
-          description="Disparos com variação de texto, agendamento, proteção anti-bloqueio e relatórios."
-        />
-      )
+      return <Campanhas />
     case 'automacoes':
-      return (
-        <EmBreve
-          title="Respostas automáticas"
-          phase={4}
-          description="Respostas por palavra-chave, fora do horário e opt-out automático."
-        />
-      )
+      return <Automacoes />
     case 'grupos':
-      return (
-        <EmBreve
-          title="Grupos"
-          phase={5}
-          description="Envio para grupos, extração de membros, criação de grupos e moderação."
-        />
-      )
+      return <Grupos />
     case 'lembretes':
-      return (
-        <EmBreve title="Lembretes" phase={6} description="Aniversário, pós-venda, óculos pronto e revisão anual." />
-      )
+      return <Lembretes />
     case 'vendas':
-      return (
-        <EmBreve title="Vendas" phase={7} description="Marque o que virou venda e veja o retorno de cada campanha." />
-      )
+      return <Vendas />
     case 'ia':
-      return (
-        <EmBreve
-          title="Assistente de IA"
-          phase={8}
-          description="Análise das conversas, playbook de vendas e mensagens personalizadas."
-        />
-      )
+      return <IA />
   }
 }
 

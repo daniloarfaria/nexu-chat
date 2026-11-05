@@ -181,3 +181,176 @@ export function Notice({
     </div>
   )
 }
+
+export function Textarea({ className, ...rest }: React.TextareaHTMLAttributes<HTMLTextAreaElement>): React.JSX.Element {
+  return (
+    <textarea
+      className={cn(
+        'w-full rounded-lg border border-line-strong bg-panel px-3 py-2 text-[14px] leading-[1.5] text-ink placeholder:text-ink-3 focus:border-accent focus:ring-3 focus:ring-accent/20 focus:outline-none focus-visible:outline-none',
+        className
+      )}
+      {...rest}
+    />
+  )
+}
+
+export function Select({
+  className,
+  children,
+  ...rest
+}: React.SelectHTMLAttributes<HTMLSelectElement>): React.JSX.Element {
+  return (
+    <select
+      className={cn(
+        'h-9 rounded-lg border border-line-strong bg-panel px-2.5 text-[14px] text-ink focus:border-accent focus:ring-3 focus:ring-accent/20 focus:outline-none',
+        className
+      )}
+      {...rest}
+    >
+      {children}
+    </select>
+  )
+}
+
+export function Badge({
+  tone = 'neutral',
+  children,
+  className
+}: {
+  tone?: 'neutral' | 'accent' | 'ok' | 'warn' | 'bad' | 'info'
+  children: ReactNode
+  className?: string
+}): React.JSX.Element {
+  return (
+    <span
+      className={cn(
+        'inline-flex h-[22px] items-center gap-1 rounded-full px-2 text-[12px] font-medium whitespace-nowrap',
+        tone === 'neutral' && 'bg-sunken text-ink-2',
+        tone === 'accent' && 'bg-accent-soft text-accent-ink',
+        tone === 'ok' && 'bg-ok-soft text-ok',
+        tone === 'warn' && 'bg-warn-soft text-warn',
+        tone === 'bad' && 'bg-bad-soft text-bad',
+        tone === 'info' && 'bg-info-soft text-info',
+        className
+      )}
+    >
+      {children}
+    </span>
+  )
+}
+
+export function Empty({
+  icon,
+  title,
+  children,
+  action
+}: {
+  icon: ReactNode
+  title: string
+  children?: ReactNode
+  action?: ReactNode
+}): React.JSX.Element {
+  return (
+    <div className="flex flex-col items-center rounded-xl border border-dashed border-line-strong px-6 py-14 text-center">
+      <span className="text-ink-3">{icon}</span>
+      <h2 className="mt-3 text-[16px] font-semibold">{title}</h2>
+      {children && <p className="mt-1 max-w-[52ch] text-[14px] text-ink-2">{children}</p>}
+      {action && <div className="mt-5">{action}</div>}
+    </div>
+  )
+}
+
+/** Painel lateral para editar algo sem sair da página. */
+export function Drawer({
+  title,
+  onClose,
+  children,
+  footer,
+  wide
+}: {
+  title: string
+  onClose: () => void
+  children: ReactNode
+  footer?: ReactNode
+  wide?: boolean
+}): React.JSX.Element {
+  return (
+    <div className="fixed inset-0 z-40 flex justify-end" role="dialog" aria-modal="true" aria-label={title}>
+      <button aria-label="Fechar" className="absolute inset-0 bg-black/25" onClick={onClose} />
+      <div
+        className={cn(
+          'relative flex h-full flex-col border-l border-line bg-panel shadow-pop',
+          wide ? 'w-[min(760px,92vw)]' : 'w-[min(520px,92vw)]'
+        )}
+        onKeyDown={(e) => e.key === 'Escape' && onClose()}
+      >
+        <header className="flex h-14 shrink-0 items-center justify-between border-b border-line px-5">
+          <h2 className="text-[16px] font-semibold">{title}</h2>
+          <button
+            onClick={onClose}
+            className="rounded-md px-2 py-1 text-[13px] text-ink-2 hover:bg-sunken hover:text-ink"
+          >
+            Fechar
+          </button>
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">{children}</div>
+        {footer && <footer className="flex shrink-0 justify-end gap-2 border-t border-line px-5 py-3">{footer}</footer>}
+      </div>
+    </div>
+  )
+}
+
+export function Tabs<T extends string>({
+  value,
+  onChange,
+  items
+}: {
+  value: T
+  onChange: (v: T) => void
+  items: Array<{ id: T; label: string; count?: number }>
+}): React.JSX.Element {
+  return (
+    <div className="mb-5 flex gap-1 border-b border-line" role="tablist">
+      {items.map((t) => (
+        <button
+          key={t.id}
+          role="tab"
+          aria-selected={value === t.id}
+          onClick={() => onChange(t.id)}
+          className={cn(
+            '-mb-px flex h-10 items-center gap-1.5 border-b-2 px-3 text-[14px] transition-colors',
+            value === t.id ? 'border-accent font-medium text-ink' : 'border-transparent text-ink-2 hover:text-ink'
+          )}
+        >
+          {t.label}
+          {t.count != null && <span className="tabular text-[12px] text-ink-3">{t.count}</span>}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+export function Checkbox({
+  checked,
+  onChange,
+  label,
+  indeterminate
+}: {
+  checked: boolean
+  onChange: (v: boolean) => void
+  label: string
+  indeterminate?: boolean
+}): React.JSX.Element {
+  return (
+    <input
+      type="checkbox"
+      aria-label={label}
+      checked={checked}
+      ref={(el) => {
+        if (el) el.indeterminate = !!indeterminate
+      }}
+      onChange={(e) => onChange(e.target.checked)}
+      className="size-4 cursor-pointer accent-[var(--color-accent)]"
+    />
+  )
+}

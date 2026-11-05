@@ -29,5 +29,43 @@ for (const theme of ['light', 'dark']) {
   await win.waitForTimeout(500)
   await win.screenshot({ path: join(out, `${theme}-grupo.png`) })
 }
+// Telas de negócio (tema claro)
+await win.evaluate(() => (document.documentElement.dataset.theme = 'light'))
+for (const [label, file] of [
+  ['Contatos', 'contatos'],
+  ['Campanhas', 'campanhas'],
+  ['Vendas', 'vendas'],
+  ['Lembretes', 'lembretes'],
+  ['Respostas automáticas', 'automacoes'],
+  ['Assistente de IA', 'ia'],
+  ['Grupos', 'grupos']
+]) {
+  await win
+    .getByRole('button', { name: new RegExp('^' + label) })
+    .first()
+    .click()
+  await win.waitForTimeout(500)
+  await win.screenshot({ path: join(out, `biz-${file}.png`) })
+}
+await win
+  .getByRole('button', { name: /^Campanhas/ })
+  .first()
+  .click()
+await win.getByRole('button', { name: /Black Friday semijoias/ }).click()
+await win.waitForTimeout(500)
+await win.screenshot({ path: join(out, 'biz-campanha-detalhe.png') })
+await win.getByRole('button', { name: 'Campanhas', exact: true }).last().click()
+await win.getByRole('button', { name: /Nova campanha/ }).click()
+await win.waitForTimeout(500)
+await win.screenshot({ path: join(out, 'biz-campanha-editor.png'), fullPage: true })
+await win.getByRole('button', { name: /^Configurações/ }).click()
+await win.getByRole('tab', { name: /Proteção/ }).click()
+await win.waitForTimeout(300)
+await win.screenshot({ path: join(out, 'biz-protecao.png') })
+await win.getByRole('button', { name: /^Conversas/ }).click()
+await win.getByRole('option', { name: /Ana Souza/ }).click()
+await win.getByRole('button', { name: /Virou venda/ }).click()
+await win.waitForTimeout(300)
+await win.screenshot({ path: join(out, 'biz-venda-na-conversa.png') })
 console.log(JSON.stringify({ errors }))
 await app.close()

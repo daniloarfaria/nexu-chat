@@ -10,6 +10,8 @@ import { Avatar } from '../components/chat/Avatar'
 import { dayKey, dayLabel, chatTime } from '../components/chat/time'
 import { formatPhone } from '../lib/format'
 import { Button, Input } from '../components/ui'
+import { DealBar } from '../components/chat/DealBar'
+import { useActiveAccount as useAcc } from '../lib/store'
 
 function MessageSearch({ onClose }: { onClose: () => void }): React.JSX.Element {
   const { accountId, select } = useChats()
@@ -65,6 +67,7 @@ function MessageSearch({ onClose }: { onClose: () => void }): React.JSX.Element 
 
 function ChatView({ jid }: { jid: string }): React.JSX.Element {
   const { messages, chats, loadOlder, hasOlder } = useChats()
+  const account = useAcc()
   const state = useApp((s) => (s.activeAccountId ? s.states[s.activeAccountId] : undefined))
   const chat = chats.find((c) => c.jid === jid)
   const list = messages[jid]
@@ -118,7 +121,7 @@ function ChatView({ jid }: { jid: string }): React.JSX.Element {
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-panel px-4">
+      <header className="relative flex h-14 shrink-0 items-center gap-3 border-b border-line bg-panel pr-16 pl-4">
         <Avatar id={jid} name={chat?.name ?? ''} group={chat?.isGroup} size={36} />
         <div className="min-w-0">
           <div className="truncate text-[15px] font-semibold">{chat?.name ?? formatPhone(jid.split('@')[0])}</div>
@@ -126,6 +129,7 @@ function ChatView({ jid }: { jid: string }): React.JSX.Element {
             {chat?.isGroup ? 'Grupo' : chat?.phone ? formatPhone(chat.phone) : ''}
           </div>
         </div>
+        {account?.modules.vendas && !chat?.isGroup && <DealBar key={jid} accountId={account.id} jid={jid} />}
       </header>
 
       <div className="relative min-h-0 flex-1 bg-sunken">

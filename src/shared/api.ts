@@ -12,6 +12,26 @@ import type {
   OutgoingFile,
   SyncState,
   UpdateStatus,
+  AntiBanSettings,
+  AiProvider,
+  AiPreset,
+  AiSettings,
+  AiUsageEntry,
+  AutoRule,
+  Campaign,
+  CampaignAudience,
+  CampaignTarget,
+  Deal,
+  EngineState,
+  GroupInfo,
+  GroupRule,
+  ImportMapping,
+  ImportPreview,
+  ImportResult,
+  Person,
+  Reminder,
+  SalesSummary,
+  TargetStatus,
   WaVersionInfo
 } from './types'
 
@@ -89,6 +109,174 @@ export interface ApiMap {
   'sync:state': { args: [{ accountId: string }]; ret: SyncState }
   'chats:new': { args: [{ accountId: string; phone: string }]; ret: string }
 
+  // Contatos
+  'people:list': {
+    args: [
+      {
+        accountId: string
+        search?: string
+        tag?: string | null
+        optOut?: 'all' | 'only' | 'exclude'
+        limit: number
+        offset: number
+      }
+    ]
+    ret: { items: Person[]; total: number }
+  }
+  'people:tags': { args: [{ accountId: string }]; ret: Array<{ tag: string; count: number }> }
+  'people:fields': { args: [{ accountId: string }]; ret: string[] }
+  'people:save': {
+    args: [
+      {
+        accountId: string
+        id?: number
+        name: string
+        phone: string
+        birthday?: string | null
+        fields?: Record<string, string>
+        tags?: string[]
+      }
+    ]
+    ret: Person
+  }
+  'people:delete': { args: [{ accountId: string; ids: number[] }]; ret: void }
+  'people:opt-out': { args: [{ accountId: string; ids: number[]; value: boolean }]; ret: void }
+  'people:tag': { args: [{ accountId: string; ids: number[]; tag: string; add: boolean }]; ret: void }
+  'people:import-preview': { args: [{ data: Uint8Array; sheet?: string }]; ret: ImportPreview }
+  'people:import': {
+    args: [{ accountId: string; token: string; mapping: ImportMapping; tags: string[] }]
+    ret: ImportResult
+  }
+  'people:export': { args: [{ accountId: string }]; ret: void }
+
+  // Campanhas
+  'antiban:get': { args: [{ accountId: string }]; ret: AntiBanSettings }
+  'antiban:set': { args: [{ accountId: string; patch: Partial<AntiBanSettings> }]; ret: AntiBanSettings }
+  'campaigns:list': { args: [{ accountId: string }]; ret: Campaign[] }
+  'campaigns:get': { args: [{ id: number }]; ret: Campaign }
+  'campaigns:save': {
+    args: [
+      {
+        id?: number
+        accountId: string
+        name: string
+        templates: string[]
+        audience: CampaignAudience
+        optOutFooter: boolean
+        scheduledAt: number | null
+      }
+    ]
+    ret: Campaign
+  }
+  'campaigns:media': {
+    args: [{ id: number; file: { name: string; mime: string; data: Uint8Array } | null }]
+    ret: Campaign
+  }
+  'campaigns:audience-count': {
+    args: [{ accountId: string; audience: CampaignAudience }]
+    ret: { total: number; optedOut: number }
+  }
+  'campaigns:start': { args: [{ id: number }]; ret: Campaign }
+  'campaigns:pause': { args: [{ id: number }]; ret: Campaign }
+  'campaigns:cancel': { args: [{ id: number }]; ret: Campaign }
+  'campaigns:retry': { args: [{ id: number }]; ret: Campaign }
+  'campaigns:delete': { args: [{ id: number }]; ret: void }
+  'campaigns:duplicate': { args: [{ id: number }]; ret: Campaign }
+  'campaigns:targets': {
+    args: [{ id: number; status: TargetStatus | 'all'; limit: number; offset: number }]
+    ret: CampaignTarget[]
+  }
+  'campaigns:export': { args: [{ id: number }]; ret: void }
+  'campaigns:test': { args: [{ accountId: string; templates: string[]; optOutFooter: boolean }]; ret: void }
+  'engine:state': { args: [{ accountId: string }]; ret: EngineState }
+
+  // Respostas automáticas
+  'rules:list': { args: [{ accountId: string }]; ret: AutoRule[] }
+  'rules:save': { args: [{ accountId: string; rule: Omit<AutoRule, 'id'> & { id?: number } }]; ret: AutoRule }
+  'rules:delete': { args: [{ accountId: string; id: number }]; ret: void }
+
+  // Grupos
+  'groups:list': { args: [{ accountId: string; refresh?: boolean }]; ret: GroupInfo[] }
+  'groups:extract': {
+    args: [{ accountId: string; jids: string[] }]
+    ret: { added: number; existing: number; withoutNumber: number }
+  }
+  'groups:create': {
+    args: [
+      {
+        accountId: string
+        subject: string
+        description?: string
+        phones?: string[]
+        tag?: string
+        adminsOnly?: boolean
+      }
+    ]
+    ret: { jid: string; inviteLink: string | null; queued: number }
+  }
+  'groups:invite': { args: [{ accountId: string; jid: string }]; ret: string }
+  'groups:rule-get': { args: [{ accountId: string; jid: string }]; ret: GroupRule }
+  'groups:rule-save': { args: [{ accountId: string; jid: string; rule: GroupRule }]; ret: GroupRule }
+
+  // Lembretes
+  'reminders:list': { args: [{ accountId: string }]; ret: Reminder[] }
+  'reminders:save': {
+    args: [{ accountId: string; reminder: Omit<Reminder, 'id' | 'lastRunDay'> & { id?: number } }]
+    ret: Reminder
+  }
+  'reminders:delete': { args: [{ accountId: string; id: number }]; ret: void }
+  'reminders:preview': { args: [{ accountId: string; id: number }]; ret: number }
+
+  // Vendas
+  'deals:save': {
+    args: [
+      {
+        accountId: string
+        chatJid: string
+        status: 'won' | 'lost'
+        amountCents: number
+        product?: string
+        payment?: string
+        reason?: string
+        note?: string
+      }
+    ]
+    ret: Deal
+  }
+  'deals:list': { args: [{ accountId: string; chatJid?: string; from?: number; to?: number }]; ret: Deal[] }
+  'deals:delete': { args: [{ accountId: string; id: number }]; ret: void }
+  'deals:summary': { args: [{ accountId: string; from: number; to: number }]; ret: SalesSummary }
+
+  // IA
+  'ai:providers': { args: []; ret: AiProvider[] }
+  'ai:provider-save': {
+    args: [
+      {
+        id?: number
+        preset: AiPreset
+        name?: string
+        baseUrl?: string
+        apiKey?: string | null
+        modelFast?: string
+        modelSmart?: string
+        trainsOnData?: boolean
+        enabled?: boolean
+        priority?: number
+      }
+    ]
+    ret: AiProvider
+  }
+  'ai:provider-delete': { args: [{ id: number }]; ret: void }
+  'ai:provider-test': { args: [{ id: number }]; ret: string }
+  'ai:settings': { args: []; ret: AiSettings }
+  'ai:settings-save': { args: [Partial<AiSettings>]; ret: AiSettings }
+  'ai:log': { args: []; ret: AiUsageEntry[] }
+  'ai:suggest': { args: [{ accountId: string; jid: string; goal?: string }]; ret: { text: string; provider: string } }
+  'ai:variations': { args: [{ accountId: string; base: string; count: number; brief?: string }]; ret: string[] }
+  'ai:playbook': { args: [{ accountId: string }]; ret: { content: string; updatedAt: number } | null }
+  'ai:playbook-build': { args: [{ accountId: string }]; ret: string }
+  'ai:playbook-save': { args: [{ accountId: string; content: string }]; ret: void }
+
   'backup:get': { args: []; ret: BackupSettings }
   'backup:update': {
     args: [{ frequency?: BackupSettings['frequency']; keep?: number }]
@@ -115,6 +303,17 @@ export interface EventMap {
   'chats:merged': { accountId: string; from: string; to: string }
   'sync:changed': SyncState
   'nav:open-chat': { accountId: string; jid: string }
+  'engine:changed': EngineState
+  'campaign:changed': Campaign
+  'groups:progress': {
+    accountId: string
+    jid: string
+    done: number
+    total: number
+    blocked: number
+    finished?: boolean
+  }
+  'ai:progress': { accountId: string; done: number; total: number }
 }
 export type EventChannel = keyof EventMap
 
@@ -153,6 +352,62 @@ export const API_CHANNELS: ApiChannel[] = [
   'media:get',
   'media:save-as',
   'sync:state',
+  'people:list',
+  'people:tags',
+  'people:fields',
+  'people:save',
+  'people:delete',
+  'people:opt-out',
+  'people:tag',
+  'people:import-preview',
+  'people:import',
+  'people:export',
+  'antiban:get',
+  'antiban:set',
+  'campaigns:list',
+  'campaigns:get',
+  'campaigns:save',
+  'campaigns:media',
+  'campaigns:audience-count',
+  'campaigns:start',
+  'campaigns:pause',
+  'campaigns:cancel',
+  'campaigns:retry',
+  'campaigns:delete',
+  'campaigns:duplicate',
+  'campaigns:targets',
+  'campaigns:export',
+  'campaigns:test',
+  'engine:state',
+  'rules:list',
+  'rules:save',
+  'rules:delete',
+  'groups:list',
+  'groups:extract',
+  'groups:create',
+  'groups:invite',
+  'groups:rule-get',
+  'groups:rule-save',
+  'reminders:list',
+  'reminders:save',
+  'reminders:delete',
+  'reminders:preview',
+  'deals:save',
+  'deals:list',
+  'deals:delete',
+  'deals:summary',
+  'ai:providers',
+  'ai:provider-save',
+  'ai:provider-delete',
+  'ai:provider-test',
+  'ai:settings',
+  'ai:settings-save',
+  'ai:log',
+  'ai:suggest',
+  'ai:variations',
+  'ai:playbook',
+  'ai:playbook-build',
+  'ai:playbook-save',
   'backup:get',
   'backup:update',
   'backup:choose-folder',
@@ -171,7 +426,11 @@ export const EVENT_CHANNELS: EventChannel[] = [
   'messages:reload',
   'chats:merged',
   'sync:changed',
-  'nav:open-chat'
+  'nav:open-chat',
+  'engine:changed',
+  'campaign:changed',
+  'groups:progress',
+  'ai:progress'
 ]
 
 export interface BridgeApi {

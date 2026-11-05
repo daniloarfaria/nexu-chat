@@ -80,6 +80,9 @@ export function attachStore(accountId: string, sock: WASocket): void {
 
   // Reações chegam também como messages.upsert (reactionMessage) e são tratadas lá.
 
+  ev.on('group-participants.update', (u) => storeEvents.emit('group-participants', { accountId, ...u }))
+  ev.on('groups.upsert', (groups) => storeEvents.emit('groups-changed', { accountId, groups }))
+
   ev.on('messages.delete', (d) => {
     if ('all' in d) deleteChats(accountId, [d.jid])
   })

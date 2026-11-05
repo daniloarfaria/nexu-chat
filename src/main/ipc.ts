@@ -10,6 +10,7 @@ import { wa } from './wa/manager'
 import { getCachedWaVersion, refreshWaVersion } from './wa/version'
 import { log } from './log'
 import { registerChatIpc } from './ipc-chat'
+import { registerBusinessIpc } from './ipc-business'
 import { checkForUpdates, downloadUpdate, getUpdateStatus, installUpdate } from './updater'
 
 export type Handle = <C extends ApiChannel>(channel: C, schema: z.ZodTypeAny | null, fn: Handler<C>) => void
@@ -106,6 +107,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null, relaunch: () 
   handle('accounts:logout', z.object({ id }).strict(), (a) => wa.logout(a.id))
 
   registerChatIpc(handle, getWindow)
+  registerBusinessIpc(handle, getWindow)
 
   handle('backup:get', null, () => backup.getBackupSettings())
   handle(

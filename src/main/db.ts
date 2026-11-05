@@ -94,6 +94,204 @@ const MIGRATIONS: string[] = [
     started_at INTEGER,
     finished_at INTEGER
   );
+  `,
+  // v3 — base de clientes, campanhas, automações, lembretes, vendas, grupos e IA
+  `
+  CREATE TABLE people (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    phone TEXT NOT NULL,
+    jid TEXT,
+    name TEXT,
+    birthday TEXT,
+    fields TEXT,
+    opt_out INTEGER NOT NULL DEFAULT 0,
+    opt_out_at INTEGER,
+    has_wa INTEGER,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    UNIQUE (account_id, phone)
+  );
+  CREATE INDEX people_jid ON people (account_id, jid);
+  CREATE TABLE person_tags (
+    person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+    tag TEXT NOT NULL,
+    PRIMARY KEY (person_id, tag)
+  );
+  CREATE INDEX person_tags_tag ON person_tags (tag);
+
+  CREATE TABLE campaigns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'people',
+    status TEXT NOT NULL DEFAULT 'draft',
+    templates TEXT NOT NULL,
+    media TEXT,
+    audience TEXT NOT NULL,
+    opt_out_footer INTEGER NOT NULL DEFAULT 1,
+    scheduled_at INTEGER,
+    started_at INTEGER,
+    finished_at INTEGER,
+    paused_reason TEXT,
+    source TEXT,
+    created_at INTEGER NOT NULL
+  );
+  CREATE TABLE campaign_targets (
+    campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+    seq INTEGER NOT NULL,
+    person_id INTEGER,
+    jid TEXT,
+    phone TEXT,
+    name TEXT,
+    vars TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    message_id TEXT,
+    error TEXT,
+    sent_at INTEGER,
+    delivered_at INTEGER,
+    read_at INTEGER,
+    replied_at INTEGER,
+    PRIMARY KEY (campaign_id, seq)
+  );
+  CREATE INDEX targets_status ON campaign_targets (campaign_id, status);
+  CREATE INDEX targets_msg ON campaign_targets (message_id);
+  CREATE INDEX targets_jid ON campaign_targets (jid, sent_at);
+  CREATE TABLE send_log (
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    day TEXT NOT NULL,
+    sent INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (account_id, day)
+  );
+
+  CREATE TABLE auto_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    keywords TEXT,
+    match_mode TEXT NOT NULL DEFAULT 'contains',
+    reply TEXT NOT NULL,
+    cooldown_min INTEGER NOT NULL DEFAULT 60,
+    created_at INTEGER NOT NULL
+  );
+  CREATE TABLE auto_log (
+    account_id TEXT NOT NULL,
+    rule_id INTEGER NOT NULL,
+    jid TEXT NOT NULL,
+    at INTEGER NOT NULL
+  );
+  CREATE INDEX auto_log_idx ON auto_log (account_id, rule_id, jid, at);
+
+  CREATE TABLE reminders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    field TEXT,
+    offset_days INTEGER NOT NULL DEFAULT 0,
+    send_hour INTEGER NOT NULL DEFAULT 10,
+    template TEXT NOT NULL,
+    tags TEXT,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    last_run_day TEXT,
+    created_at INTEGER NOT NULL
+  );
+  CREATE TABLE reminder_log (
+    reminder_id INTEGER NOT NULL REFERENCES reminders(id) ON DELETE CASCADE,
+    person_id INTEGER NOT NULL,
+    period TEXT NOT NULL,
+    at INTEGER NOT NULL,
+    PRIMARY KEY (reminder_id, person_id, period)
+  );
+
+  CREATE TABLE deals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    chat_jid TEXT NOT NULL,
+    status TEXT NOT NULL,
+    amount_cents INTEGER NOT NULL DEFAULT 0,
+    product TEXT,
+    payment TEXT,
+    reason TEXT,
+    note TEXT,
+    source_type TEXT NOT NULL DEFAULT 'organic',
+    source_id INTEGER,
+    source_name TEXT,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX deals_account ON deals (account_id, created_at);
+  CREATE INDEX deals_chat ON deals (account_id, chat_jid);
+
+  CREATE TABLE group_rules (
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    group_jid TEXT NOT NULL,
+    welcome TEXT,
+    anti_link INTEGER NOT NULL DEFAULT 0,
+    banned_words TEXT,
+    max_warnings INTEGER NOT NULL DEFAULT 2,
+    PRIMARY KEY (account_id, group_jid)
+  );
+  CREATE TABLE group_warnings (
+    account_id TEXT NOT NULL,
+    group_jid TEXT NOT NULL,
+    participant TEXT NOT NULL,
+    count INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (account_id, group_jid, participant)
+  );
+  CREATE TABLE groups_cache (
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    jid TEXT NOT NULL,
+    subject TEXT,
+    description TEXT,
+    size INTEGER NOT NULL DEFAULT 0,
+    is_admin INTEGER NOT NULL DEFAULT 0,
+    announce INTEGER NOT NULL DEFAULT 0,
+    participants TEXT,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (account_id, jid)
+  );
+
+  CREATE TABLE ai_providers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    preset TEXT NOT NULL,
+    name TEXT NOT NULL,
+    base_url TEXT NOT NULL,
+    api_key TEXT,
+    model_fast TEXT,
+    model_smart TEXT,
+    trains_on_data INTEGER NOT NULL DEFAULT 1,
+    rpm INTEGER,
+    rpd INTEGER,
+    paid INTEGER NOT NULL DEFAULT 0,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    priority INTEGER NOT NULL DEFAULT 100,
+    cooldown_until INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+  );
+  CREATE TABLE ai_usage (
+    provider_id INTEGER NOT NULL REFERENCES ai_providers(id) ON DELETE CASCADE,
+    day TEXT NOT NULL,
+    requests INTEGER NOT NULL DEFAULT 0,
+    tokens INTEGER NOT NULL DEFAULT 0,
+    errors INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (provider_id, day)
+  );
+  CREATE TABLE ai_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL,
+    task TEXT NOT NULL,
+    customer_data INTEGER NOT NULL,
+    chars_sent INTEGER NOT NULL,
+    at INTEGER NOT NULL
+  );
+  CREATE TABLE playbooks (
+    account_id TEXT PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
   `
 ]
 

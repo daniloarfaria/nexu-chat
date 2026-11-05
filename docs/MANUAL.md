@@ -1,6 +1,6 @@
 # Manual do Disparador
 
-> Versão do app: 0.2.0 · Atualizado em 05/11/2026
+> Versão do app: 0.3.0 · Atualizado em 05/11/2026
 > O nome "Disparador" é provisório.
 
 O Disparador conecta o WhatsApp da sua loja ao computador. Com ele você atende os clientes, guarda todas as conversas no computador e, nas próximas versões, também envia campanhas, gerencia grupos e acompanha as vendas.
@@ -19,7 +19,7 @@ O Disparador conecta o WhatsApp da sua loja ao computador. Com ele você atende 
 2. Se aparecer "O Windows protegeu o computador", clique em **Mais informações** e depois em **Executar assim mesmo**.
 3. Siga o instalador. O atalho fica na Área de Trabalho e no Menu Iniciar.
 
-> Desinstalar o app **não apaga** suas conversas nem a conexão do WhatsApp. Para levar tudo para outro computador, use o **backup** (seção 5).
+> Desinstalar o app **não apaga** suas conversas nem a conexão do WhatsApp. Para levar tudo para outro computador, use o **backup** (seção 13).
 
 ---
 
@@ -115,18 +115,161 @@ Quando chega mensagem e você não está olhando aquela conversa, aparece uma no
 
 Em **Configurações → Módulos** você liga e desliga as funções de cada conta. O menu mostra só o que está ligado, e assim o app fica simples para quem usa pouco.
 
-| Módulo | Situação |
+| Módulo | Para que serve |
 |---|---|
-| Conversas | Disponível |
-| Campanhas, Proteção anti-bloqueio | Em construção |
-| Respostas automáticas | Em construção |
-| Grupos (envio, extrair membros, criar, moderação) | Em construção |
-| Lembretes recorrentes | Em construção |
-| Vendas, Assistente de IA | Em construção |
+| Conversas | Atender pelo computador (seção 3) |
+| Contatos (sempre ligado) | Base de clientes para campanhas e lembretes (seção 5) |
+| Campanhas e Proteção anti-bloqueio | Enviar promoções para a base de clientes (seções 6 e 7) |
+| Respostas automáticas | Responder sozinho por palavra-chave, fora do horário e boas-vindas (seção 8) |
+| Grupos (envio, extrair membros, criar, moderação) | Cada função liga separada (seção 9) |
+| Lembretes | Aniversário, pós-venda, revisão anual (seção 10) |
+| Vendas | Marcar o que virou venda e ver o retorno (seção 11) |
+| Assistente de IA | Sugestões de resposta, versões de campanha e playbook (seção 12) |
 
 ---
 
-## 5. Backup
+## 5. Contatos
+
+O menu **Contatos** é a base de clientes da loja, usada por campanhas e lembretes.
+
+- **Importar planilha:** escolha o arquivo (Excel, CSV ou LibreOffice) e confira as colunas que o app sugeriu: telefone, nome e aniversário.
+  - Marque também outras colunas que quiser guardar, como cidade e data_compra. Elas viram variáveis nas mensagens: `{cidade}`, `{data_compra}`.
+  - Dá para colocar etiquetas em todos de uma vez, como "Clientes 2026".
+  - Telefones são padronizados sozinhos, com DDD e 55.
+  - Números repetidos e inválidos são ignorados e mostrados no resumo.
+  - Importar de novo **atualiza** quem já existe, nunca duplica.
+- **Etiquetas:** selecione contatos e aplique ou remova etiquetas. É assim que você escolhe o público das campanhas.
+- **Não receber:** quem responde **SAIR** (ou "parar", "não quero mais"…) entra sozinho nessa lista e recebe uma confirmação. Você também pode marcar à mão.
+- **Excluir** atende pedidos de exclusão de dados (LGPD). **Exportar** gera um CSV com todos os contatos.
+
+---
+
+## 6. Campanhas
+
+1. **Campanhas → Nova campanha.**
+2. Dê um nome e escolha o **público**: por etiqueta, todos os contatos ou grupos. Dá para excluir uma etiqueta (ex.: não enviar para "Inativo"). O app mostra quantos vão receber.
+3. Escreva a **mensagem**.
+   - Escreva **2 ou mais versões** com palavras diferentes. O app sorteia uma para cada pessoa, e isso reduz bastante o risco de bloqueio.
+   - Use `{primeiro_nome}`, `{nome}`, `{loja}` e os campos dos contatos.
+   - Use `{Oi|Olá|E aí}` para o app escolher uma das palavras.
+   - Com a IA ligada, **Gerar versões com IA** escreve variações para você.
+4. Deixe ligado o rodapé **"responda SAIR para não receber"**.
+5. Se quiser, anexe imagem, vídeo, áudio ou PDF. A mensagem vira a legenda.
+6. Confira a **prévia** e use **Enviar teste para mim** para ver no seu celular.
+7. **Iniciar campanha** começa agora. Se você preencher uma data em "Agendar para", ela começa sozinha nesse horário.
+
+### Acompanhar
+Clique na campanha para ver:
+- **progresso:** enviadas, entregues, lidas, quem respondeu, falhas, sem WhatsApp e quem pediu para não receber;
+- **situação agora:** "aguardando o intervalo de segurança", "pausa longa", "fora do horário", "limite diário atingido";
+- **ações:** **Pausar**, **Retomar**, **Cancelar**, **Reenviar falhas** e **Relatório** (planilha CSV);
+- **Duplicar** (na lista): reaproveita uma campanha.
+
+Campanhas continuam de onde pararam mesmo se o app fechar ou a internet cair.
+
+---
+
+## 7. Proteção anti-bloqueio
+
+Em **Configurações → Proteção anti-bloqueio** (vale para campanhas e lembretes de cada conta):
+
+| Ajuste | Padrão | Para que serve |
+|---|---|---|
+| Intervalo entre mensagens | 60 a 180 s (sorteado) | Ritmo humano |
+| Pausa longa | a cada 18 envios, de 10 a 20 min | Evita sequência longa de disparos |
+| Limite por dia | 200 | Teto diário por número |
+| Horário e dias | 9h–19h, segunda a sábado | Só envia em horário comercial |
+| Simular "digitando…" | ligado | Mostra digitando antes de enviar |
+| Aquecimento de número novo | desligado | 20 mensagens no 1º dia, +15 por dia |
+| Pausar se poucos responderem | desligado (0%) | Depois de 30 envios, pausa se a taxa de resposta cair abaixo do mínimo |
+| Pausar após falhas seguidas | 5 | Para de insistir quando algo está errado |
+
+Os botões **Mais seguro / Equilibrado / Mais rápido** preenchem os números. **O que mais protege o número:** mandar só para quem já é cliente, sem link na primeira mensagem, e com mensagens que convidam a responder.
+
+---
+
+## 8. Respostas automáticas
+
+Respondem sozinhas em conversas individuais (nunca em grupos):
+- **Palavra-chave:** ex.: "horário, que horas, aberto" → "Funcionamos de seg a sáb, das 9h às 19h". Não precisa acertar acento nem maiúscula.
+- **Fora do horário:** responde quem escreve fora do expediente que você definir.
+- **Primeira mensagem:** boas-vindas para quem fala com a loja pela primeira vez.
+
+O app não repete a mesma resposta para a mesma pessoa dentro do intervalo escolhido e responde no máximo 30 vezes por hora. Isso evita conversa em círculo com outros robôs.
+
+---
+
+## 9. Grupos
+
+Clique em **Atualizar** para ler os grupos do número. Cada função liga separada em Módulos:
+- **Envio para grupos:** em Campanhas, escolha o público **Grupos**.
+- **Extrair membros:** selecione grupos e clique em **Copiar membros para Contatos**. Eles ganham a etiqueta "Grupo: nome". Quem esconde o número no WhatsApp não é copiado.
+- **Criar grupo:** a partir de uma etiqueta ou de uma lista de números.
+  - Para proteger o número, o app adiciona 5 pessoas de cada vez, a cada 30 a 60 s.
+  - Quem não puder ser adicionado (privacidade) recebe o **link de convite**.
+- **Moderação** (o número precisa ser administrador):
+  - boas-vindas com `{nome}` marcando a pessoa;
+  - apagar links de quem não é admin;
+  - palavras proibidas;
+  - remoção automática depois de N avisos.
+- O ícone de corrente copia o **link de convite**.
+
+---
+
+## 10. Lembretes
+
+Mensagens automáticas em datas de cada cliente, enviadas **uma vez por pessoa** por período:
+- **Aniversário:** usa a data de nascimento do contato.
+- **Dias depois de uma data:** ex.: 7 dias depois da `data_compra` (pós-venda).
+- **Todo ano na data:** ex.: revisão anual de grau um ano depois da compra.
+
+Use os modelos prontos. A lista mostra quantos contatos recebem **hoje**. Os envios saem no horário escolhido, respeitando a Proteção anti-bloqueio, e aparecem em Campanhas como "Lembrete: …".
+
+---
+
+## 11. Vendas
+
+No topo de cada conversa:
+- **Virou venda:** valor, produto e forma de pagamento;
+- **Perdida:** motivo (preço, sem estoque, só pesquisando…).
+
+O painel **Vendas** mostra:
+- faturamento pelo WhatsApp, número de vendas, ticket médio e conversão;
+- **de onde vieram as vendas:** a venda conta para a campanha ou o lembrete enviado ao cliente nos 7 dias anteriores, com o valor faturado **por mensagem enviada**;
+- os motivos de perda mais comuns.
+
+---
+
+## 12. Assistente de IA
+
+### Configurar (gratuito)
+Em **Assistente de IA → Provedores**, adicione pelo menos dois provedores gratuitos. Cada um tem o link para criar a chave:
+- **Groq:** rápido, cerca de 1.000 pedidos por dia, não treina com seus dados;
+- **Google Gemini:** no plano grátis pode usar os textos para melhorar produtos;
+- **OpenRouter**, **Mistral**, ou **Ollama** (roda no próprio computador);
+- **Claude (pago, opcional):** usado só quando todos os gratuitos falham, com limite de chamadas por mês.
+
+O app usa primeiro os gratuitos e **troca sozinho de provedor** quando um atinge o limite do dia ou do minuto.
+
+### Privacidade
+- **Anonimizar** (recomendado): nomes, telefones, e-mails, CPF e endereços viram marcadores antes de sair do computador.
+- **Estrita:** conversas só vão para provedores que não treinam com os dados.
+- A aba **Uso** registra cada chamada, sem o conteúdo.
+
+### Usar
+- **Sugerir resposta:** botão ✨ ao lado da caixa de texto da conversa. A sugestão aparece na caixa para **você revisar** antes de enviar. A IA nunca envia nada sozinha.
+- **Versões de campanha:** no editor de campanha, **Gerar versões com IA**.
+- **Playbook de vendas:** depois de marcar algumas vendas e perdas, clique em **Montar playbook**. A IA analisa as conversas e escreve:
+  - as abordagens que funcionam;
+  - as respostas para objeções;
+  - frases prontas;
+  - o que evitar.
+
+  Você pode editar o playbook, e as sugestões de resposta passam a segui-lo.
+
+---
+
+## 13. Backup
 
 Seus dados ficam **só neste computador**. Configure o backup para não perder nada se o computador der problema.
 
@@ -146,7 +289,7 @@ Use **Fazer backup agora** para garantir uma cópia antes de mudanças grandes.
 
 ---
 
-## 6. Atualizações
+## 14. Atualizações
 
 - **Do app:** toda vez que abre, o app verifica se existe uma versão nova. Se existir, aparece uma faixa no alto com o botão **Baixar**.
   - **Windows:** baixa e mostra **Reiniciar e instalar**.
@@ -156,22 +299,23 @@ Use **Fazer backup agora** para garantir uma cópia antes de mudanças grandes.
 
 ---
 
-## 7. Tema claro e escuro
+## 15. Tema claro e escuro
 
 No rodapé do menu: ☀ claro, ☾ escuro ou **automático** (segue o computador).
 
 ---
 
-## 8. Privacidade e LGPD
+## 16. Privacidade e LGPD
 
 - Conversas, contatos e mídias ficam no computador da loja. Nada é enviado para servidores da agência.
 - A conexão do WhatsApp fica guardada **criptografada** com a proteção do sistema (Keychain no Mac, DPAPI no Windows).
 - Os registros técnicos do app escondem os números de telefone.
-- Envie mensagens de marketing só para clientes que já compraram e que não pediram para sair. As próximas versões terão a lista de "não quero receber" automática.
+- Envie mensagens de marketing só para clientes que já compraram. Quem responde SAIR vai automaticamente para a lista de não receber.
+- A IA recebe as conversas anonimizadas por padrão (seção 12).
 
 ---
 
-## 9. Problemas comuns
+## 17. Problemas comuns
 
 | Problema | O que fazer |
 |---|---|
@@ -181,11 +325,14 @@ No rodapé do menu: ☀ claro, ☾ escuro ou **automático** (segue o computador
 | Conversas antigas não aparecem | Use **Contas → Reimportar histórico**. |
 | Mídia não baixa ("Conecte o WhatsApp…") | A conta precisa estar **Conectada** para baixar mídias que ainda não estão no computador. |
 | Microfone não funciona | Mac: Ajustes do Sistema → Privacidade e Segurança → Microfone → ative o Disparador. Windows: Configurações → Privacidade → Microfone. |
+| Campanha pausada sozinha | Veja o motivo no topo da campanha (falhas seguidas, taxa de resposta baixa). Corrija e clique em **Retomar**. |
+| Campanha parada em "fora do horário" ou "limite diário" | É a proteção funcionando; ela continua sozinha no próximo horário permitido. |
+| Assistente de IA: "Nenhum provedor disponível" | Cadastre uma chave em Assistente de IA → Provedores, ou aguarde a pausa do provedor terminar. |
 | Precisa enviar os registros para o suporte | **Configurações → Sistema → Abrir pasta** → pasta `logs`. |
 
 ---
 
-## 10. Avisos importantes
+## 18. Avisos importantes
 
-- O Disparador usa uma conexão **não oficial** com o WhatsApp, a mesma usada pelo WhatsApp Web. O WhatsApp pode restringir números que enviam muitas mensagens para quem não responde. As funções de campanha virão com proteção contra bloqueio, mas o risco nunca é zero.
+- O Disparador usa uma conexão **não oficial** com o WhatsApp, a mesma usada pelo WhatsApp Web. O WhatsApp pode restringir números que enviam muitas mensagens para quem não responde. A Proteção anti-bloqueio reduz esse risco, mas ele nunca é zero.
 - Mantenha o celular da loja com internet de vez em quando. Se ficar mais de 14 dias desligado, o WhatsApp desconecta os aparelhos vinculados.

@@ -4,6 +4,11 @@ import { test } from 'vitest'
 import type { WAMessage } from 'baileys'
 import { closeDb, getDb, openDb } from '../../src/main/db'
 import * as store from '../../src/main/wa/store'
+import * as people from '../../src/main/people'
+import * as C from '../../src/main/campaigns'
+import { saveDeal } from '../../src/main/deals'
+import { saveRule } from '../../src/main/automation'
+import { saveReminder } from '../../src/main/reminders'
 
 const ACC = '22222222-2222-4222-8222-222222222222'
 let n = 0
@@ -132,5 +137,112 @@ test('seed', () => {
   )
   getDb().prepare('UPDATE chats SET unread = 2 WHERE jid = ?').run(ana)
   getDb().prepare('UPDATE chats SET unread = 1 WHERE jid = ?').run(carlos)
+  getDb()
+    .prepare('UPDATE accounts SET modules = ? WHERE id = ?')
+    .run(
+      JSON.stringify({
+        conversas: true,
+        campanhas: true,
+        antiban: true,
+        vendas: true,
+        ia: true,
+        respostasAuto: true,
+        lembretes: true,
+        gruposEnvio: true,
+        gruposExtrair: true,
+        gruposCriar: true,
+        gruposModeracao: true
+      }),
+      ACC
+    )
+  const names = [
+    'Ana Souza',
+    'Bruno Costa',
+    'Carla Mendes',
+    'Diego Martins',
+    'Elisa Prado',
+    'Fábio Nunes',
+    'Gabi Torres',
+    'Heitor Reis'
+  ]
+  names.forEach((nm, i) =>
+    people.savePerson(ACC, {
+      name: nm,
+      phone: `1198765${String(1000 + i)}`,
+      birthday: i % 3 === 0 ? `0${(i % 9) + 1}/11/19${80 + i}` : null,
+      tags: i % 2 ? ['VIP', 'Clientes 2026'] : ['Clientes 2026'],
+      fields: { cidade: i % 2 ? 'Campinas' : 'São Paulo', data_compra: `2025-11-0${(i % 8) + 1}` }
+    })
+  )
+  const c = C.saveCampaign({
+    accountId: ACC,
+    name: 'Black Friday semijoias',
+    templates: [
+      '{Oi|Olá} {primeiro_nome}! A Black da {loja} chegou: 10% OFF em semijoias e relógios. Quer que eu separe algum modelo pra você?',
+      'Oi {primeiro_nome}, tudo bem? Novembro é mês de Black aqui na {loja}! Semijoias e relógios com 10% OFF. Posso te mostrar as novidades?'
+    ],
+    audience: { type: 'tags', tags: ['Clientes 2026'] },
+    optOutFooter: true,
+    scheduledAt: null
+  })
+  C.startCampaign(c.id)
+  for (let s = 1; s <= 5; s++)
+    C.markTarget(c.id, s, 'sent', { messageId: `X${s}`, jid: `55119876${1000 + s - 1}@s.whatsapp.net` })
+  C.markTarget(c.id, 6, 'no_wa')
+  C.onCampaignReceipt('X1', 4)
+  C.onCampaignReceipt('X2', 4)
+  C.onCampaignReceipt('X3', 3)
+  C.onCampaignReply(ACC, '5511987651000@s.whatsapp.net')
+  C.onCampaignReply(ACC, '5511987651001@s.whatsapp.net')
+  C.pauseCampaign(c.id, null)
+  saveDeal(ACC, { chatJid: ana, status: 'won', amountCents: 25990, product: 'Relógio dourado', payment: 'Pix' })
+  saveDeal(ACC, {
+    chatJid: '5511987651001@s.whatsapp.net',
+    status: 'won',
+    amountCents: 18900,
+    product: 'Brinco',
+    payment: 'Cartão de crédito'
+  })
+  saveDeal(ACC, { chatJid: carlos, status: 'won', amountCents: 89000, product: 'Óculos de grau', payment: 'Crediário' })
+  saveDeal(ACC, { chatJid: '5511987650003@s.whatsapp.net', status: 'lost', amountCents: 0, reason: 'Preço' })
+  saveRule(ACC, {
+    name: 'Horário de funcionamento',
+    kind: 'keyword',
+    enabled: true,
+    keywords: ['horário', 'que horas', 'aberto'],
+    matchMode: 'contains',
+    reply: 'Oi {primeiro_nome}! Funcionamos de segunda a sábado, das 9h às 19h. 😊',
+    cooldownMin: 120
+  })
+  saveRule(ACC, {
+    name: 'Fora do expediente',
+    kind: 'away',
+    enabled: true,
+    keywords: [],
+    matchMode: 'contains',
+    reply: 'Recebemos sua mensagem! Respondemos assim que a loja abrir.',
+    cooldownMin: 720,
+    schedule: { hourStart: 9, hourEnd: 19, days: [1, 2, 3, 4, 5, 6] }
+  })
+  saveReminder(ACC, {
+    name: 'Aniversário',
+    kind: 'birthday',
+    field: null,
+    offsetDays: 0,
+    sendHour: 10,
+    template: 'Parabéns, {primeiro_nome}! 🎉',
+    tags: [],
+    enabled: true
+  })
+  saveReminder(ACC, {
+    name: 'Revisão anual',
+    kind: 'yearly',
+    field: 'data_compra',
+    offsetDays: 0,
+    sendHour: 10,
+    template: 'Oi {primeiro_nome}! Que tal revisar o grau?',
+    tags: [],
+    enabled: true
+  })
   closeDb()
 })

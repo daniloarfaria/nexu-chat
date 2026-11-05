@@ -9,7 +9,7 @@ import { getDb } from '../db'
 
 const MAX_FILE = 100 * 1024 * 1024
 
-async function sendAndStore(
+export async function sendAndStore(
   sock: WASocket,
   accountId: string,
   chatJid: string,
