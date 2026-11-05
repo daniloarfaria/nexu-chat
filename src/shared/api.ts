@@ -107,6 +107,7 @@ export interface ApiMap {
   'media:get': { args: [{ accountId: string; jid: string; id: string }]; ret: MediaInfo }
   'media:save-as': { args: [{ accountId: string; jid: string; id: string }]; ret: void }
   'sync:state': { args: [{ accountId: string }]; ret: SyncState }
+  'avatars:get': { args: [{ accountId: string; jids: string[] }]; ret: Record<string, string | null> }
   'chats:new': { args: [{ accountId: string; phone: string }]; ret: string }
 
   // Contatos
@@ -314,6 +315,7 @@ export interface EventMap {
     finished?: boolean
   }
   'ai:progress': { accountId: string; done: number; total: number }
+  'avatars:changed': { accountId: string; avatars: Record<string, string | null> }
 }
 export type EventChannel = keyof EventMap
 
@@ -352,6 +354,7 @@ export const API_CHANNELS: ApiChannel[] = [
   'media:get',
   'media:save-as',
   'sync:state',
+  'avatars:get',
   'people:list',
   'people:tags',
   'people:fields',
@@ -430,7 +433,8 @@ export const EVENT_CHANNELS: EventChannel[] = [
   'engine:changed',
   'campaign:changed',
   'groups:progress',
-  'ai:progress'
+  'ai:progress',
+  'avatars:changed'
 ]
 
 export interface BridgeApi {

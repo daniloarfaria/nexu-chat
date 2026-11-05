@@ -18,6 +18,7 @@ import { engine } from './engine'
 import { startAutomation } from './automation'
 import { startReminders } from './reminders'
 import { groupEvents } from './groups'
+import { avatarEvents, setAvatarSocketGetter } from './wa/avatars'
 
 const APP_ID = 'br.com.disparador.app'
 const VERSION_RECHECK_MS = 6 * 60 * 60 * 1000
@@ -198,6 +199,8 @@ if (!app.requestSingleInstanceLock()) {
     engine.on('campaign', (c: Campaign) => send('campaign:changed', c))
     groupEvents.on('create-progress', (p: unknown) => send('groups:progress', p))
     startAutomation()
+    setAvatarSocketGetter((id) => wa.getSocket(id))
+    avatarEvents.on('changed', (p: unknown) => send('avatars:changed', p))
 
     createWindow()
 

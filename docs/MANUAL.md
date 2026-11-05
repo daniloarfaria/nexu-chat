@@ -1,6 +1,6 @@
 # Manual do Disparador
 
-> Versão do app: 0.4.0 · Atualizado em 05/11/2026
+> Versão do app: 0.4.1 · Atualizado em 05/11/2026
 > O nome "Disparador" é provisório.
 
 O Disparador conecta o WhatsApp da sua loja ao computador. Com ele você atende os clientes, guarda todas as conversas no computador e, nas próximas versões, também envia campanhas, gerencia grupos e acompanha as vendas.
@@ -61,6 +61,11 @@ O menu **Conversas** funciona como o WhatsApp do computador, mas tudo fica **sal
 - Quanto tempo de histórico vem depende do celular. Normalmente são meses.
 - Para trazer o histórico de novo, use **Contas → Reimportar histórico**. Nada do que já está salvo é apagado e nada fica duplicado.
 - Com o app fechado, o celular continua recebendo normalmente. Quando você abrir o app, o que chegou nesse meio-tempo é baixado.
+
+### Fotos de perfil
+As fotos dos contatos e dos grupos aparecem na lista, no topo da conversa e, nos grupos, ao lado das mensagens de cada participante, como no WhatsApp.
+- O app busca as fotos aos poucos, só das conversas que estão na tela, e guarda no computador por 24 h.
+- Quem esconde a foto (privacidade) aparece com as iniciais.
 
 ### Lista de conversas
 - **Buscar conversa**: procura por nome ou número. Não precisa digitar acentos ("joao" encontra "João").

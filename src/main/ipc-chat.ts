@@ -9,6 +9,7 @@ import { wa } from './wa/manager'
 import * as store from './wa/store'
 import * as send from './wa/send'
 import { ensureMedia, markDownloaded, safeFileName } from './wa/media'
+import { getAvatars } from './wa/avatars'
 import type { Handle } from './ipc'
 
 const accountId = z.string().uuid()
@@ -178,4 +179,8 @@ export function registerChatIpc(handle: Handle, getWindow: () => BrowserWindow |
   })
 
   handle('sync:state', z.object({ accountId }).strict(), (a) => store.getSyncState(a.accountId))
+  handle('avatars:get', z.object({ accountId, jids: z.array(jid).max(200) }).strict(), (a) => {
+    account(a.accountId)
+    return getAvatars(a.accountId, a.jids)
+  })
 }

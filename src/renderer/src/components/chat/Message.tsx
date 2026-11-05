@@ -27,6 +27,7 @@ import { cn } from '../../lib/cn'
 import { useChats } from '../../lib/chatStore'
 import { formatBytes } from '../../lib/format'
 import { duration, msgTime } from './time'
+import { Avatar } from './Avatar'
 
 const QUICK = ['👍', '❤️', '😂', '😮', '😢', '🙏']
 
@@ -439,6 +440,12 @@ export const Message = memo(function Message({
         reactions.length ? 'mb-4' : 'mb-1'
       )}
     >
+      {/* Grupos: foto de quem mandou na primeira mensagem da sequência (como no WhatsApp) */}
+      {isGroup && !m.fromMe && (
+        <div className="mr-1.5 w-7 shrink-0 self-start pt-0.5">
+          {showSender && m.sender && <Avatar id={m.sender} name={m.senderName ?? ''} size={28} />}
+        </div>
+      )}
       <div className={cn('relative flex max-w-[min(560px,78%)] items-start gap-1', m.fromMe && 'flex-row-reverse')}>
         <div
           className={cn(

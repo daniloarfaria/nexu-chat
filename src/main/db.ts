@@ -305,6 +305,16 @@ const MIGRATIONS: string[] = [
     SELECT account_id, phone, COALESCE(opt_out_at, 0) FROM people WHERE opt_out = 1;
   INSERT OR IGNORE INTO suppression (account_id, key, at)
     SELECT account_id, jid, COALESCE(opt_out_at, 0) FROM people WHERE opt_out = 1 AND jid IS NOT NULL;
+  `,
+  // v5 — fotos de perfil (cache local)
+  `
+  CREATE TABLE avatars (
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    jid TEXT NOT NULL,
+    file TEXT,
+    checked_at INTEGER NOT NULL,
+    PRIMARY KEY (account_id, jid)
+  );
   `
 ]
 

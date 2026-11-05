@@ -1,5 +1,8 @@
 import { Users } from 'lucide-react'
+import { useState } from 'react'
 import { cn } from '../../lib/cn'
+import { useAvatar } from '../../lib/avatars'
+import { useChats } from '../../lib/chatStore'
 
 const PALETTE = [
   '#C2410C',
@@ -40,7 +43,24 @@ export function Avatar({
   size?: number
   className?: string
 }): React.JSX.Element {
+  const accountId = useChats((s) => s.accountId)
+  const url = useAvatar(accountId, id)
+  const [broken, setBroken] = useState<string | null>(null)
   const color = PALETTE[hash(id) % PALETTE.length]
+  if (url && broken !== url) {
+    return (
+      <img
+        src={url}
+        alt=""
+        aria-hidden
+        loading="lazy"
+        draggable={false}
+        onError={() => setBroken(url)}
+        className={cn('shrink-0 rounded-full bg-sunken object-cover select-none', className)}
+        style={{ width: size, height: size }}
+      />
+    )
+  }
   return (
     <span
       aria-hidden

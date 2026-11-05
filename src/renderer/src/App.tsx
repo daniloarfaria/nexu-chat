@@ -14,6 +14,7 @@ import { Lembretes } from './pages/Lembretes'
 import { Vendas } from './pages/Vendas'
 import { IA } from './pages/IA'
 import { subscribeChatEvents, useChats } from './lib/chatStore'
+import { subscribeAvatarEvents } from './lib/avatars'
 
 function Page(): React.JSX.Element {
   const page = useApp((s) => s.page)
@@ -50,6 +51,7 @@ export default function App(): React.JSX.Element {
     let cleanup: (() => void) | undefined
     void init().then((c) => (cleanup = c))
     const offChats = subscribeChatEvents()
+    const offAvatars = subscribeAvatarEvents()
     const offNav = window.api.on('nav:open-chat', async ({ accountId, jid }) => {
       useApp.getState().setActive(accountId)
       useApp.getState().go('conversas')
@@ -59,6 +61,7 @@ export default function App(): React.JSX.Element {
     return () => {
       cleanup?.()
       offChats()
+      offAvatars()
       offNav()
     }
   }, [init])

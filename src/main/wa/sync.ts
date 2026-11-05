@@ -13,6 +13,7 @@ import {
   updateStatus
 } from './store'
 import { ensureMedia, shouldAutoDownload } from './media'
+import { invalidateAvatar } from './avatars'
 import { log } from '../log'
 
 /** Liga os eventos do Baileys ao banco local. */
@@ -34,7 +35,11 @@ export function attachStore(accountId: string, sock: WASocket): void {
 
   ev.on('lid-mapping.update', (m) => saveLidMappings(accountId, [m]))
   ev.on('contacts.upsert', (c) => saveContacts(accountId, c))
-  ev.on('contacts.update', (c) => saveContacts(accountId, c))
+  ev.on('contacts.update', (c) => {
+    saveContacts(accountId, c)
+    // Foto trocada: busca de novo quando aparecer na tela
+    for (const x of c) if (x.id && x.imgUrl !== undefined) invalidateAvatar(accountId, canonJid(accountId, x.id))
+  })
   ev.on('chats.upsert', (c) => saveChats(accountId, c))
   ev.on('chats.update', (c) => saveChats(accountId, c, true))
   ev.on('chats.delete', (jids) => deleteChats(accountId, jids))
