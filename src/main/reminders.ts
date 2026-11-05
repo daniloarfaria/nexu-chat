@@ -141,26 +141,38 @@ export function runReminders(now = new Date()): void {
       if (!r.enabled || r.lastRunDay === today || now.getHours() < r.sendHour) continue
       const ids = dueToday(a.id, r, now)
       const db = getDb()
-      transaction(db, () => {
-        db.prepare('UPDATE reminders SET last_run_day = ? WHERE id = ?').run(today, r.id)
-        const period = periodKey(r.kind, now)
-        const ins = db.prepare(
-          'INSERT OR IGNORE INTO reminder_log (reminder_id, person_id, period, at) VALUES (?, ?, ?, ?)'
-        )
-        for (const id of ids) ins.run(r.id, id, period, Date.now())
-      })
-      if (!ids.length) continue
-      const c = saveCampaign({
-        accountId: a.id,
-        name: `Lembrete: ${r.name} — ${now.toLocaleDateString('pt-BR')}`,
-        templates: [r.template],
-        audience: { type: 'list', personIds: ids },
-        optOutFooter: false,
-        scheduledAt: null,
-        kind: 'reminder',
-        source: `reminder:${r.id}`
-      })
-      startCampaign(c.id)
+      const markDone = (): void =>
+        transaction(db, () => {
+          db.prepare('UPDATE reminders SET last_run_day = ? WHERE id = ?').run(today, r.id)
+          const period = periodKey(r.kind, now)
+          const ins = db.prepare(
+            'INSERT OR IGNORE INTO reminder_log (reminder_id, person_id, period, at) VALUES (?, ?, ?, ?)'
+          )
+          for (const id of ids) ins.run(r.id, id, period, Date.now())
+        })
+      if (!ids.length) {
+        markDone()
+        continue
+      }
+      // Cria e inicia a campanha antes de registrar: se falhar, tenta de novo na próxima verificação
+      let c: ReturnType<typeof saveCampaign>
+      try {
+        c = saveCampaign({
+          accountId: a.id,
+          name: `Lembrete: ${r.name} — ${now.toLocaleDateString('pt-BR')}`,
+          templates: [r.template],
+          audience: { type: 'list', personIds: ids },
+          optOutFooter: false,
+          scheduledAt: null,
+          kind: 'reminder',
+          source: `reminder:${r.id}`
+        })
+        startCampaign(c.id)
+      } catch (e) {
+        log.error(`Falha ao criar o lembrete "${r.name}"`, e)
+        continue
+      }
+      markDone()
       engine.kick(a.id)
       log.info(`Lembrete "${r.name}": ${ids.length} contato(s)`)
     }

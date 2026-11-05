@@ -18,6 +18,7 @@ interface Session {
   stopped: boolean
   pairingPhone?: string
   wasConnected: boolean
+  gen: number
 }
 
 const MAX_BACKOFF_MS = 60_000
@@ -64,7 +65,8 @@ class WhatsAppManager extends EventEmitter {
         retries: 0,
         timer: null,
         stopped: false,
-        wasConnected: false
+        wasConnected: false,
+        gen: 0
       }
       this.sessions.set(accountId, s)
     }
@@ -81,6 +83,7 @@ class WhatsAppManager extends EventEmitter {
 
   private async start(accountId: string, s: Session): Promise<void> {
     if (s.stopped) return
+    const gen = ++s.gen // conexões antigas reconhecem que foram substituídas
     this.setState(s, { status: 'connecting', error: undefined })
 
     const { state, saveCreds, clear } = sqliteAuthState(accountId)
@@ -97,7 +100,7 @@ class WhatsAppManager extends EventEmitter {
       syncFullHistory: true, // histórico completo na primeira vinculação
       shouldSyncHistoryMessage: () => true, // o padrão do Baileys descarta o histórico FULL
       generateHighQualityLinkPreview: false,
-      getMessage: async (key) => (key.id ? findRawById(accountId, key.id) : undefined)
+      getMessage: async (key) => (key.id ? findRawById(accountId, key.remoteJid, key.id) : undefined)
     })
     s.sock = sock
     let pairingRequested = false
@@ -177,6 +180,7 @@ class WhatsAppManager extends EventEmitter {
         if (code === 405) {
           // versão recusada: busca a mais recente antes de tentar de novo
           await refreshWaVersion()
+          if (s.gen !== gen || s.sock || s.stopped) return // outra conexão começou enquanto esperava
         }
         const delay =
           code === DisconnectReason.restartRequired ? 0 : Math.min(MAX_BACKOFF_MS, 2000 * 2 ** Math.min(s.retries, 5))
@@ -185,8 +189,10 @@ class WhatsAppManager extends EventEmitter {
           status: 'connecting',
           error: delay ? `Reconectando em ${Math.round(delay / 1000)}s…` : undefined
         })
+        if (s.timer) clearTimeout(s.timer)
         s.timer = setTimeout(() => {
           s.timer = null
+          if (s.gen !== gen || s.sock) return
           void this.start(accountId, s)
         }, delay)
       }

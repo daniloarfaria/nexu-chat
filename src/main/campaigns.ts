@@ -493,3 +493,9 @@ export function replyHealth(campaignId: number, minAgeMs: number): { sent: numbe
     .get(campaignId, Date.now() - minAgeMs) as { sent: number; replied: number | null }
   return { sent: r.sent, replied: r.replied ?? 0 }
 }
+
+export function targetStillPending(campaignId: number, seq: number): boolean {
+  return !!getDb()
+    .prepare("SELECT 1 FROM campaign_targets WHERE campaign_id = ? AND seq = ? AND status = 'pending'")
+    .get(campaignId, seq)
+}

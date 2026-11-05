@@ -78,12 +78,13 @@ export function registerChatIpc(handle: Handle, getWindow: () => BrowserWindow |
         accountId,
         jid,
         before: z.number().int().positive().nullable(),
+        beforeRid: z.number().int().positive().nullable().optional(),
         limit: z.number().int().min(1).max(300)
       })
       .strict(),
     (a) => {
       account(a.accountId)
-      return store.listMessages(a.accountId, a.jid, a.before, a.limit)
+      return store.listMessages(a.accountId, a.jid, a.before, a.limit, a.beforeRid)
     }
   )
   handle('messages:search', z.object({ accountId, query: z.string().min(2).max(100) }).strict(), (a) =>

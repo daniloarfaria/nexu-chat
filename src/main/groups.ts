@@ -9,6 +9,7 @@ import { fold, hasLink, normalizePhone, randomBetween } from '@shared/rules'
 import { canonJid, getRawMessage, phoneOf, setGroupName } from './wa/store'
 import { sendAndStore } from './wa/send'
 import { log } from './log'
+import { enqueueSend } from './outbox'
 
 export const groupEvents = new EventEmitter()
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
@@ -251,7 +252,7 @@ export async function moderateGroupMessage(sock: WASocket, accountId: string, m:
   if (author?.admin) return
 
   const raw = getRawMessage(accountId, m.chatJid, m.id)
-  if (raw) await sock.sendMessage(m.chatJid, { delete: raw.key }).catch(() => undefined)
+  if (raw) enqueueSend(accountId, () => sock.sendMessage(m.chatJid, { delete: raw.key }))
 
   const db = getDb()
   db.prepare(
@@ -267,11 +268,13 @@ export async function moderateGroupMessage(sock: WASocket, accountId: string, m:
   const mention = raw?.key.participant ?? m.sender
   const handle = '@' + (phoneOf(m.sender) ?? mention.split('@')[0])
   if (rule.maxWarnings > 0 && count > rule.maxWarnings) {
-    await sendAndStore(sock, accountId, m.chatJid, {
-      text: `${handle} foi removido(a): ${why}.`,
-      mentions: [mention]
-    }).catch(() => undefined)
-    await sock.groupParticipantsUpdate(m.chatJid, [mention], 'remove').catch(() => undefined)
+    enqueueSend(accountId, async () => {
+      await sendAndStore(sock, accountId, m.chatJid, {
+        text: `${handle} foi removido(a): ${why}.`,
+        mentions: [mention]
+      })
+      await sock.groupParticipantsUpdate(m.chatJid, [mention], 'remove')
+    })
     db.prepare('DELETE FROM group_warnings WHERE account_id = ? AND group_jid = ? AND participant = ?').run(
       accountId,
       m.chatJid,
@@ -279,10 +282,8 @@ export async function moderateGroupMessage(sock: WASocket, accountId: string, m:
     )
   } else {
     const left = Math.max(0, rule.maxWarnings - count + 1)
-    await sendAndStore(sock, accountId, m.chatJid, {
-      text: `${handle}, ${why}.${rule.maxWarnings > 0 ? ` Aviso ${count} de ${rule.maxWarnings}${left === 1 ? ' — no próximo, a remoção é automática' : ''}.` : ''}`,
-      mentions: [mention]
-    }).catch(() => undefined)
+    const text = `${handle}, ${why}.${rule.maxWarnings > 0 ? ` Aviso ${count} de ${rule.maxWarnings}${left === 1 ? ' — no próximo, a remoção é automática' : ''}.` : ''}`
+    enqueueSend(accountId, () => sendAndStore(sock, accountId, m.chatJid, { text, mentions: [mention] }))
   }
 }
 
@@ -306,6 +307,5 @@ export async function welcomeParticipants(
   const text = rule.welcome
     .replace(/\{nome\}|\{participante\}/gi, handles.join(', '))
     .replace(/\{grupo\}/gi, group?.subject ?? '')
-  await sleep(randomBetween(2000, 5000))
-  await sendAndStore(sock, accountId, groupJid, { text, mentions: ids })
+  enqueueSend(accountId, () => sendAndStore(sock, accountId, groupJid, { text, mentions: ids }))
 }

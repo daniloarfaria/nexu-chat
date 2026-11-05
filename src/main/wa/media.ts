@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { execFile } from 'node:child_process'
 import { join, normalize, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { downloadMediaMessage, type WASocket } from 'baileys'
+import { downloadMediaMessage, normalizeMessageContent, type WAMessage, type WASocket } from 'baileys'
 import type { MediaInfo } from '@shared/types'
 import { getRawMessage, setMediaUrl, storeEvents } from './store'
 import { getDb } from '../db'
@@ -93,6 +93,34 @@ function extFor(media: MediaInfo): string {
 }
 
 const inflight = new Map<string, Promise<MediaInfo>>()
+const MAX_MEDIA_BYTES = 120 * 1024 * 1024
+
+/**
+ * A mensagem diz de onde baixar a mídia. Só aceitamos servidores do WhatsApp:
+ * evita que um remetente faça o app buscar endereços da rede local (SSRF).
+ */
+export function assertSafeMediaSource(msg: WAMessage): void {
+  const m = normalizeMessageContent(msg.message)
+  const c = m
+    ? (Object.values(m).find((v) => v && typeof v === 'object' && ('directPath' in v || 'url' in v)) as
+        { url?: string | null; directPath?: string | null } | undefined)
+    : undefined
+  if (!c) throw new Error('Mensagem sem mídia')
+  if (c.url) {
+    let host: string
+    try {
+      const u = new URL(c.url)
+      if (u.protocol !== 'https:') throw new Error()
+      host = u.hostname
+    } catch {
+      throw new Error('Endereço de mídia inválido')
+    }
+    if (!/(^|\.)(whatsapp\.net|whatsapp\.com)$/i.test(host))
+      throw new Error('Mídia hospedada fora do WhatsApp foi bloqueada')
+  }
+  if (c.directPath && !/^\/[\w\-./=?&%]+$/.test(c.directPath)) throw new Error('Caminho de mídia inválido')
+  if (!c.url && !c.directPath) throw new Error('Mídia sem endereço')
+}
 
 /** Baixa (se preciso) e devolve a mídia com a URL local. */
 export function ensureMedia(sock: WASocket | null, accountId: string, chatJid: string, id: string): Promise<MediaInfo> {
@@ -110,12 +138,25 @@ export function ensureMedia(sock: WASocket | null, accountId: string, chatJid: s
     const msg = getRawMessage(accountId, chatJid, id)
     if (!msg) throw new Error('Mensagem não encontrada')
 
-    const buf = await downloadMediaMessage(
+    assertSafeMediaSource(msg)
+    // Baixa em fluxo com teto de tamanho (não confia no tamanho declarado pelo remetente)
+    const stream = await downloadMediaMessage(
       msg,
-      'buffer',
+      'stream',
       {},
       { logger: log.baileys(), reuploadRequest: (m) => sock.updateMediaMessage(m) }
     )
+    const chunks: Buffer[] = []
+    let total = 0
+    for await (const chunk of stream as AsyncIterable<Buffer>) {
+      total += chunk.length
+      if (total > MAX_MEDIA_BYTES) {
+        ;(stream as unknown as { destroy(): void }).destroy()
+        throw new Error('Arquivo grande demais para baixar pelo app (limite de 120 MB)')
+      }
+      chunks.push(chunk)
+    }
+    const buf = Buffer.concat(chunks)
     const dir = join(mediaRoot(), accountId)
     mkdirSync(dir, { recursive: true })
     const file = `${createHash('sha256')

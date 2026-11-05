@@ -24,6 +24,7 @@ const num = (v: unknown): number | undefined =>
 
 function vcardPhones(vcard?: string | null): string[] {
   if (!vcard) return []
+  vcard = vcard.slice(0, 8000) // vCard real é pequeno; limita entrada maliciosa
   return [...vcard.matchAll(/waid=(\d+)|TEL[^:]*:([+\d\s()-]+)/g)]
     .map((m) => (m[1] ?? m[2] ?? '').replace(/\D/g, ''))
     .filter(Boolean)

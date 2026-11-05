@@ -10,6 +10,7 @@ import { sendAndStore } from './wa/send'
 import { wa } from './wa/manager'
 import { moderateGroupMessage, welcomeParticipants } from './groups'
 import { log } from './log'
+import { enqueueSend } from './outbox'
 
 /**
  * Tudo que reage a mensagens recebidas:
@@ -151,10 +152,14 @@ function isFirstContact(accountId: string, jid: string): boolean {
   return r.n <= 1
 }
 
-async function reply(sock: WASocket, accountId: string, jid: string, text: string): Promise<void> {
-  await sock.sendPresenceUpdate('composing', jid).catch(() => undefined)
-  await sleep(1500 + Math.min(4000, text.length * 25))
-  await sendAndStore(sock, accountId, jid, { text })
+async function reply(_sock: WASocket, accountId: string, jid: string, text: string): Promise<void> {
+  enqueueSend(accountId, async () => {
+    const sock = wa.getSocket(accountId) // conexão atual na hora do envio
+    if (!sock) return
+    await sock.sendPresenceUpdate('composing', jid).catch(() => undefined)
+    await sleep(1500 + Math.min(4000, text.length * 25))
+    await sendAndStore(sock, accountId, jid, { text })
+  })
 }
 
 // ---------- Entrada ----------

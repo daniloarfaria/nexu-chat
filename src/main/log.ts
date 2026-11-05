@@ -1,5 +1,5 @@
 import pino from 'pino'
-import { mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, renameSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 // Mascara telefones e JIDs nos logs (LGPD): 5511987654321 → 5511*****4321
@@ -26,6 +26,13 @@ let logger: pino.Logger = pino({ level: 'info' })
 
 export function initLog(dir: string): void {
   mkdirSync(dir, { recursive: true })
+  // Rotação simples: mantém o atual + 1 anterior, até ~5 MB cada
+  const file = join(dir, 'app.log')
+  try {
+    if (existsSync(file) && statSync(file).size > 5 * 1024 * 1024) renameSync(file, join(dir, 'app.1.log'))
+  } catch {
+    /* segue sem rotacionar */
+  }
   const dest = pino.destination({ dest: join(dir, 'app.log'), sync: false, mkdir: true })
   logger = pino(
     {

@@ -67,7 +67,7 @@ export interface ApiMap {
   'chats:read': { args: [{ accountId: string; jid: string }]; ret: void }
   'chats:unread-total': { args: [{ accountId: string }]; ret: number }
   'messages:list': {
-    args: [{ accountId: string; jid: string; before: number | null; limit: number }]
+    args: [{ accountId: string; jid: string; before: number | null; beforeRid?: number | null; limit: number }]
     ret: MessageItem[]
   }
   'messages:search': {

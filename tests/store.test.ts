@@ -240,3 +240,68 @@ describe('tipos especiais', () => {
     expect(store.listMessages(ACC, PN, null, 10)[0]).toMatchObject({ type: 'text', text: 'Oi' })
   })
 })
+
+describe('autoria de edição e apagamento', () => {
+  test('em grupo, outro participante não edita nem apaga mensagem alheia', () => {
+    const OTHER = '5511900000099@s.whatsapp.net'
+    store.saveMessages(
+      ACC,
+      [msg({ key: { remoteJid: GROUP, participant: PN, fromMe: false, id: 'AU1' }, text: 'original' })],
+      { live: false }
+    )
+    store.saveMessages(
+      ACC,
+      [
+        msg({
+          key: { remoteJid: GROUP, participant: OTHER, fromMe: false, id: 'AU2' },
+          message: {
+            protocolMessage: {
+              type: 14,
+              key: { remoteJid: GROUP, id: 'AU1' },
+              editedMessage: { conversation: 'falsificado' }
+            }
+          }
+        }),
+        msg({
+          key: { remoteJid: GROUP, participant: OTHER, fromMe: false, id: 'AU3' },
+          message: { protocolMessage: { type: 0, key: { remoteJid: GROUP, id: 'AU1' } } }
+        })
+      ],
+      { live: true }
+    )
+    let m = store.listMessages(ACC, GROUP, null, 10).find((x) => x.id === 'AU1')!
+    expect(m.text).toBe('original')
+    expect(m.deleted).toBe(false)
+    // o próprio autor pode
+    store.saveMessages(
+      ACC,
+      [
+        msg({
+          key: { remoteJid: GROUP, participant: PN, fromMe: false, id: 'AU4' },
+          message: { protocolMessage: { type: 0, key: { remoteJid: GROUP, id: 'AU1' } } }
+        })
+      ],
+      { live: true }
+    )
+    m = store.listMessages(ACC, GROUP, null, 10).find((x) => x.id === 'AU1')!
+    expect(m.deleted).toBe(true)
+    // reenvio do original não traz o conteúdo de volta
+    store.saveMessages(
+      ACC,
+      [msg({ key: { remoteJid: GROUP, participant: PN, fromMe: false, id: 'AU1' }, text: 'original' })],
+      { live: false }
+    )
+    const raw = getDb().prepare("SELECT raw, text FROM messages WHERE id = 'AU1'").get() as {
+      raw: unknown
+      text: unknown
+    }
+    expect(raw.raw).toBeNull()
+  })
+
+  test('reenvio (retry) só devolve mensagem nossa da mesma conversa', () => {
+    store.saveMessages(ACC, [msg({ key: { remoteJid: PN, fromMe: true, id: 'RT1' }, text: 'nossa' })], { live: false })
+    expect(store.findRawById(ACC, PN, 'RT1')).toBeTruthy()
+    expect(store.findRawById(ACC, GROUP, 'RT1')).toBeUndefined()
+    expect(store.findRawById(ACC, null, 'RT1')).toBeUndefined()
+  })
+})

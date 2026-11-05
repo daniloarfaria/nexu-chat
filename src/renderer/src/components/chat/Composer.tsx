@@ -26,9 +26,9 @@ async function toOutgoing(f: File): Promise<{ name: string; mime: string; data: 
   return { name: f.name, mime: f.type || 'application/octet-stream', data: new Uint8Array(await f.arrayBuffer()) }
 }
 
-function readDraft(jid: string): string {
+function readDraft(key: string): string {
   try {
-    return sessionStorage.getItem(`draft:${jid}`) ?? ''
+    return sessionStorage.getItem(`draft:${key}`) ?? ''
   } catch {
     return ''
   }
@@ -37,7 +37,8 @@ function readDraft(jid: string): string {
 /** O componente é recriado (key) ao trocar de conversa ou entrar em edição, zerando o estado. */
 export function Composer({ jid, disabled }: { jid: string; disabled?: string | null }): React.JSX.Element {
   const editingId = useChats((s) => s.editing?.id ?? '')
-  return <ComposerInner key={`${jid}|${editingId}`} jid={jid} disabled={disabled} />
+  const accountId = useChats((s) => s.accountId ?? '')
+  return <ComposerInner key={`${accountId}|${jid}|${editingId}`} jid={jid} disabled={disabled} />
 }
 
 function ComposerInner({ jid, disabled }: { jid: string; disabled?: string | null }): React.JSX.Element {
@@ -59,7 +60,7 @@ function ComposerInner({ jid, disabled }: { jid: string; disabled?: string | nul
       setSuggesting(false)
     }
   }
-  const [text, setText] = useState(() => (editing ? (editing.text ?? '') : readDraft(jid)))
+  const [text, setText] = useState(() => (editing ? (editing.text ?? '') : readDraft(`${accountId}|${jid}`)))
   const [files, setFiles] = useState<File[]>([])
   const [asDocument, setAsDocument] = useState(false)
   const [menu, setMenu] = useState(false)
@@ -67,6 +68,7 @@ function ComposerInner({ jid, disabled }: { jid: string; disabled?: string | nul
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const recRef = useRef<{ recorder: MediaRecorder; chunks: Blob[] } | null>(null)
+  const mounted = useRef(true)
   const [recStart, setRecStart] = useState<number | null>(null)
   const [now, setNow] = useState(0)
   const ta = useRef<HTMLTextAreaElement>(null)
@@ -77,25 +79,26 @@ function ComposerInner({ jid, disabled }: { jid: string; disabled?: string | nul
     ta.current?.focus()
   }, [replyTo])
   // Ao trocar de conversa ou sair da tela no meio de uma gravação: desliga o microfone
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
       const cur = recRef.current
       if (cur) {
         cur.recorder.stream.getTracks().forEach((t) => t.stop())
         if (cur.recorder.state !== 'inactive') cur.recorder.stop()
         recRef.current = null
       }
-    },
-    []
-  )
+    }
+  }, [])
   useEffect(() => {
     if (editing) return
     try {
-      sessionStorage.setItem(`draft:${jid}`, text)
+      sessionStorage.setItem(`draft:${accountId}|${jid}`, text)
     } catch {
       /* ignora */
     }
-  }, [jid, text, editing])
+  }, [accountId, jid, text, editing])
   useEffect(() => {
     if (recStart == null) return
     const t = setInterval(() => setNow(Date.now()), 250)

@@ -110,6 +110,14 @@ export function savePerson(
         .prepare('SELECT id FROM people WHERE account_id = ? AND phone = ? AND id != ?')
         .get(accountId, phone, id)
       if (clash) throw new Error('Já existe um contato com este telefone')
+      // Telefone mudou: o WhatsApp antigo (jid) não vale mais
+      db.prepare(
+        'UPDATE people SET jid = CASE WHEN phone = ? THEN jid ELSE NULL END, has_wa = CASE WHEN phone = ? THEN has_wa ELSE NULL END WHERE id = ? AND account_id = ?'
+      ).run(phone, phone, id, accountId)
+      db.prepare("UPDATE campaign_targets SET jid = NULL, phone = ? WHERE person_id = ? AND status = 'pending'").run(
+        phone,
+        id
+      )
       db.prepare(
         'UPDATE people SET name = ?, phone = ?, birthday = ?, fields = ?, updated_at = ? WHERE id = ? AND account_id = ?'
       ).run(
@@ -213,6 +221,11 @@ export function deletePeople(accountId: string, ids: number[]): { mediaFiles: st
       if (!p) continue
       const keys = identityKeys(accountId, p.phone)
       if (p.jid) for (const k of identityKeys(accountId, p.jid)) keys.push(k)
+      // Se qualquer identidade (número, JID, LID) pediu SAIR, a supressão vale para todas antes de apagar os mapas
+      const suppressed = db
+        .prepare(`SELECT 1 FROM suppression WHERE account_id = ? AND key IN (SELECT value FROM json_each(?)) LIMIT 1`)
+        .get(accountId, JSON.stringify(keys))
+      if (suppressed || p.opt_out) suppress(accountId, [...keys, p.phone])
       const jids = [...new Set(keys.filter((k) => k.includes('@')))]
       for (const jid of jids) {
         const media = db
@@ -231,11 +244,11 @@ export function deletePeople(accountId: string, ids: number[]): { mediaFiles: st
         db.prepare('DELETE FROM group_warnings WHERE account_id = ? AND participant = ?').run(accountId, jid)
         db.prepare('DELETE FROM lid_map WHERE account_id = ? AND (lid = ? OR pn = ?)').run(accountId, jid, jid)
       }
+      db.prepare("UPDATE campaign_targets SET status = 'skipped' WHERE person_id = ? AND status = 'pending'").run(id)
       db.prepare(
         `UPDATE campaign_targets SET name = NULL, phone = NULL, jid = NULL, vars = NULL, error = NULL
          WHERE person_id = ? AND campaign_id IN (SELECT id FROM campaigns WHERE account_id = ?)`
       ).run(id, accountId)
-      if (p.opt_out) suppress(accountId, [p.phone])
       db.prepare('DELETE FROM people WHERE id = ? AND account_id = ?').run(id, accountId)
     }
   })
@@ -318,6 +331,7 @@ function guess(headers: string[], words: string[]): number | null {
 
 export function previewImport(data: Uint8Array, sheetName?: string): ImportPreview {
   if (data.length > 30 * 1024 * 1024) throw new Error('Planilha maior que 30 MB')
+  assertZipNotBomb(data)
   // sheetRows limita o que é lido (evita travar com planilha gigante ou maliciosa)
   const wb = XLSX.read(data, { type: 'array', cellDates: true, dense: true, sheetRows: MAX_ROWS + 2 })
   const sheet = sheetName && wb.SheetNames.includes(sheetName) ? sheetName : wb.SheetNames[0]
@@ -440,4 +454,36 @@ export function markHasWa(personId: number, jid: string | null, has: boolean): v
   getDb()
     .prepare('UPDATE people SET has_wa = ?, jid = COALESCE(?, jid) WHERE id = ?')
     .run(has ? 1 : 0, jid, personId)
+}
+
+/**
+ * .xlsx/.ods são arquivos ZIP. Antes de abrir, soma o tamanho descompactado declarado
+ * no índice do ZIP: um arquivo pequeno que "explode" para gigabytes travaria o app.
+ */
+export function assertZipNotBomb(data: Uint8Array, maxTotal = 250 * 1024 * 1024): void {
+  if (data.length < 22 || data[0] !== 0x50 || data[1] !== 0x4b) return // não é ZIP (CSV, .xls antigo)
+  const dv = new DataView(data.buffer, data.byteOffset, data.byteLength)
+  // Fim do diretório central: assinatura 0x06054b50 nos últimos 64 KB
+  let eocd = -1
+  for (let i = data.length - 22; i >= Math.max(0, data.length - 65_557); i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) {
+      eocd = i
+      break
+    }
+  }
+  if (eocd < 0) throw new Error('Planilha corrompida')
+  const entries = dv.getUint16(eocd + 10, true)
+  let off = dv.getUint32(eocd + 16, true)
+  if (entries > 10_000 || off >= data.length) throw new Error('Planilha corrompida ou suspeita')
+  let total = 0
+  for (let n = 0; n < entries; n++) {
+    if (off + 46 > data.length || dv.getUint32(off, true) !== 0x02014b50) throw new Error('Planilha corrompida')
+    const comp = dv.getUint32(off + 20, true)
+    const size = dv.getUint32(off + 24, true)
+    if (size === 0xffffffff || comp === 0xffffffff) throw new Error('Planilha grande demais')
+    if (comp > 0 && size / comp > 1000) throw new Error('Planilha suspeita (compressão anormal)')
+    total += size
+    if (total > maxTotal) throw new Error('Planilha grande demais depois de aberta')
+    off += 46 + dv.getUint16(off + 28, true) + dv.getUint16(off + 30, true) + dv.getUint16(off + 32, true)
+  }
 }

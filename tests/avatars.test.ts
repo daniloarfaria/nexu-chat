@@ -22,16 +22,24 @@ let calls: string[] = []
 beforeEach(() => {
   closeDb()
   openDb(join(mkdtempSync(join(tmpdir(), 'dsp-avdb-')), 'db.sqlite'))
-  getDb().prepare('INSERT INTO accounts (id, name, color, modules, created_at) VALUES (?, ?, ?, ?, ?)').run(ACC, 'T', '#000000', '{}', Date.now())
+  getDb()
+    .prepare('INSERT INTO accounts (id, name, color, modules, created_at) VALUES (?, ?, ?, ?, ?)')
+    .run(ACC, 'T', '#000000', '{}', Date.now())
   calls = []
-  setAvatarSocketGetter(() => ({
-    profilePictureUrl: async (jid: string) => {
-      calls.push(jid)
-      if (jid === B) throw new Error('item-not-found')
-      return 'https://pps.whatsapp.net/v/foto.jpg'
-    }
-  }) as never)
-  vi.stubGlobal('fetch', async () => new Response(new Uint8Array([0xff, 0xd8, 0xff, 1, 2, 3]), { headers: { 'content-type': 'image/jpeg' } }))
+  setAvatarSocketGetter(
+    () =>
+      ({
+        profilePictureUrl: async (jid: string) => {
+          calls.push(jid)
+          if (jid === B) throw new Error('item-not-found')
+          return 'https://pps.whatsapp.net/v/foto.jpg'
+        }
+      }) as never
+  )
+  vi.stubGlobal(
+    'fetch',
+    async () => new Response(new Uint8Array([0xff, 0xd8, 0xff, 1, 2, 3]), { headers: { 'content-type': 'image/jpeg' } })
+  )
 })
 
 test('busca em fila, guarda a foto, lembra quem não tem e não repete dentro de 24 h', async () => {

@@ -117,6 +117,7 @@ export const useChats = create<ChatState>((set, get) => ({
     if (!jid || !accountId) return
     if (!get().messages[jid]) {
       const msgs = await window.api.invoke('messages:list', { accountId, jid, before: null, limit: MSG_PAGE })
+      if (get().accountId !== accountId) return // trocou de conta enquanto carregava
       set((s) => ({
         messages: { ...s.messages, [jid]: msgs },
         hasOlder: { ...s.hasOlder, [jid]: msgs.length === MSG_PAGE }
@@ -130,27 +131,20 @@ export const useChats = create<ChatState>((set, get) => ({
     const { accountId, messages, hasOlder } = get()
     if (!accountId || hasOlder[jid] === false) return false
     const cur = messages[jid] ?? []
-    // Busca "até" o segundo da mais antiga (inclusive) para não pular mensagens do mesmo segundo
+    const oldest = cur[0]
+    const older = await window.api.invoke('messages:list', {
+      accountId,
+      jid,
+      before: oldest?.ts ?? null,
+      beforeRid: oldest?.rid ?? null,
+      limit: MSG_PAGE
+    })
+    if (get().accountId !== accountId) return false // trocou de conta enquanto carregava
     const known = new Set(cur.map((m) => m.id))
-    let before = cur[0]?.ts ?? null
-    let fresh: typeof cur = []
-    let full = false
-    for (let i = 0; i < 3 && !fresh.length; i++) {
-      const older = await window.api.invoke('messages:list', {
-        accountId,
-        jid,
-        before: before ? before + 1 : null,
-        limit: MSG_PAGE
-      })
-      fresh = older.filter((m) => !known.has(m.id))
-      full = older.length === MSG_PAGE
-      if (!fresh.length && full && before)
-        before = before - 1 // página inteira já conhecida: avança um segundo
-      else break
-    }
+    const fresh = older.filter((m) => !known.has(m.id))
     set((s) => ({
       messages: { ...s.messages, [jid]: [...fresh, ...(s.messages[jid] ?? [])] },
-      hasOlder: { ...s.hasOlder, [jid]: full || fresh.length > 0 }
+      hasOlder: { ...s.hasOlder, [jid]: older.length === MSG_PAGE }
     }))
     return fresh.length > 0
   },
@@ -179,7 +173,7 @@ export const useChats = create<ChatState>((set, get) => ({
       if (i != null) list[i] = m
       else list.push(m)
     }
-    list.sort((a, b) => a.ts - b.ts)
+    list.sort((a, b) => a.ts - b.ts || (a.rid ?? 0) - (b.rid ?? 0))
     set({ messages: { ...st.messages, [chatJid]: list } })
     if (st.selected === chatJid && msgs.some((m) => !m.fromMe) && document.hasFocus()) {
       void window.api.invoke('chats:read', { accountId, jid: chatJid }).catch(() => undefined)
@@ -189,6 +183,7 @@ export const useChats = create<ChatState>((set, get) => ({
   reloadMessages: async (accountId, chatJid) => {
     if (get().accountId !== accountId || !get().messages[chatJid]) return
     const msgs = await window.api.invoke('messages:list', { accountId, jid: chatJid, before: null, limit: MSG_PAGE })
+    if (get().accountId !== accountId) return
     set((s) => ({ messages: { ...s.messages, [chatJid]: msgs } }))
   }
 }))

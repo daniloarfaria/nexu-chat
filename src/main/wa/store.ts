@@ -92,6 +92,9 @@ export function saveLidMappings(accountId: string, maps: Array<{ lid: string; pn
 /** Junta a conversa guardada pelo LID na conversa do número. */
 function mergeChat(accountId: string, from: string, to: string): void {
   const db = getDb()
+  // Vendas e registros de automação acompanham a conversa (mesmo sem mensagens salvas no LID)
+  db.prepare('UPDATE deals SET chat_jid = ? WHERE account_id = ? AND chat_jid = ?').run(to, accountId, from)
+  db.prepare('UPDATE auto_log SET jid = ? WHERE account_id = ? AND jid = ?').run(to, accountId, from)
   const exists = db.prepare('SELECT 1 FROM chats WHERE account_id = ? AND jid = ?').get(accountId, from)
   if (!exists) return
   db.prepare(
@@ -242,8 +245,8 @@ export function saveMessages(accountId: string, msgs: WAMessage[], opts: SaveOpt
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(account_id, chat_jid, id) DO UPDATE SET
        status = MAX(messages.status, excluded.status),
-       raw = COALESCE(excluded.raw, messages.raw),
-       media = CASE WHEN messages.media IS NULL THEN excluded.media ELSE messages.media END`
+       raw = CASE WHEN messages.deleted = 1 THEN NULL ELSE COALESCE(excluded.raw, messages.raw) END,
+       media = CASE WHEN messages.deleted = 1 THEN NULL WHEN messages.media IS NULL THEN excluded.media ELSE messages.media END`
   )
   const fts = db.prepare('INSERT INTO messages_fts (text, account_id, chat_jid, id) VALUES (?, ?, ?, ?)')
   const exists = db.prepare('SELECT type, deleted FROM messages WHERE account_id = ? AND chat_jid = ? AND id = ?')
@@ -276,7 +279,12 @@ export function saveMessages(accountId: string, msgs: WAMessage[], opts: SaveOpt
       const chat = canonJid(accountId, key.remoteJid, k.remoteJidAlt)
       const mut = mutationOf(m)
       if (mut) {
-        applyMutation(accountId, chat, mut, key.fromMe ? (opts.ownJid ?? 'me') : (key.participant ?? chat))
+        const actor = key.fromMe
+          ? (opts.ownJid ?? 'me')
+          : key.participant
+            ? canonJid(accountId, key.participant, k.participantAlt)
+            : chat
+        applyMutation(accountId, chat, mut, actor, !!key.fromMe)
         continue
       }
       const p = parseMessage(m)
@@ -339,13 +347,29 @@ export function saveMessages(accountId: string, msgs: WAMessage[], opts: SaveOpt
   return fresh.map((f) => getMessagesByIds(accountId, f.chat, [f.id])[0]).filter((x) => x && !x.fromMe)
 }
 
-function applyMutation(accountId: string, chat: string, mut: ReturnType<typeof mutationOf>, actor: string): void {
+function applyMutation(
+  accountId: string,
+  chat: string,
+  mut: ReturnType<typeof mutationOf>,
+  actor: string,
+  actorIsMe: boolean
+): void {
   if (!mut || mut.kind === 'ignore') return
   const db = getDb()
   const row = db
-    .prepare('SELECT chat_jid, reactions FROM messages WHERE account_id = ? AND id = ? AND chat_jid = ?')
-    .get(accountId, mut.targetId, chat) as { chat_jid: string; reactions: string | null } | undefined
+    .prepare(
+      'SELECT chat_jid, reactions, sender, from_me, deleted FROM messages WHERE account_id = ? AND id = ? AND chat_jid = ?'
+    )
+    .get(accountId, mut.targetId, chat) as
+    { chat_jid: string; reactions: string | null; sender: string | null; from_me: number; deleted: number } | undefined
   if (!row) return
+  // Editar/apagar só vale vindo de quem escreveu a mensagem
+  if (mut.kind !== 'reaction') {
+    const isAuthor = row.from_me
+      ? actorIsMe
+      : !actorIsMe && (row.sender === actor || (!isJidGroup(chat) && actor === chat))
+    if (!isAuthor || row.deleted) return
+  }
   if (mut.kind === 'reaction') {
     const r = row.reactions ? (JSON.parse(row.reactions) as Record<string, string>) : {}
     if (mut.emoji) r[actor] = mut.emoji
@@ -412,9 +436,19 @@ export function getRawMessage(accountId: string, chatJid: string, id: string): W
 }
 
 /** Usado pelo Baileys para reenviar mensagens que o destinatário não conseguiu decifrar. */
-export function findRawById(accountId: string, id: string): proto.IMessage | undefined {
-  const r = getDb().prepare('SELECT raw FROM messages WHERE account_id = ? AND id = ? LIMIT 1').get(accountId, id) as
-    { raw: Uint8Array | null } | undefined
+export function findRawById(
+  accountId: string,
+  remoteJid: string | null | undefined,
+  id: string
+): proto.IMessage | undefined {
+  // Só a conversa que pediu o reenvio (nunca outra conversa com o mesmo id)
+  if (!remoteJid) return undefined
+  const chat = canonJid(accountId, remoteJid)
+  const r = getDb()
+    .prepare(
+      'SELECT raw FROM messages WHERE account_id = ? AND chat_jid = ? AND id = ? AND from_me = 1 AND deleted = 0'
+    )
+    .get(accountId, chat, id) as { raw: Uint8Array | null } | undefined
   return r?.raw ? (proto.WebMessageInfo.decode(r.raw).message ?? undefined) : undefined
 }
 
@@ -504,6 +538,7 @@ export function unreadTotal(accountId: string): number {
 }
 
 interface MsgRow {
+  rid: number
   chat_jid: string
   id: string
   from_me: number
@@ -526,6 +561,7 @@ function toMsg(r: MsgRow): MessageItem {
   const extra = r.extra ? (JSON.parse(r.extra) as MessageExtra) : null
   return {
     id: r.id,
+    rid: r.rid,
     chatJid: r.chat_jid,
     fromMe: !!r.from_me,
     sender: r.sender,
@@ -543,16 +579,25 @@ function toMsg(r: MsgRow): MessageItem {
   }
 }
 
-const MSG_SELECT = `SELECT m.chat_jid, m.id, m.from_me, m.sender, m.sender_name, m.ts, m.type, m.text, m.media, m.extra,
+const MSG_SELECT = `SELECT m.rowid AS rid, m.chat_jid, m.id, m.from_me, m.sender, m.sender_name, m.ts, m.type, m.text, m.media, m.extra,
   m.quoted_id, m.status, m.reactions, m.edited, m.deleted, co.name AS c_name
   FROM messages m LEFT JOIN contacts co ON co.account_id = m.account_id AND co.jid = m.sender`
 
-export function listMessages(accountId: string, chatJid: string, before: number | null, limit: number): MessageItem[] {
+/** Página de mensagens antes do cursor (horário, posição): nunca pula nem repete, mesmo no mesmo segundo. */
+export function listMessages(
+  accountId: string,
+  chatJid: string,
+  before: number | null,
+  limit: number,
+  beforeRid?: number | null
+): MessageItem[] {
+  const cursor = before ? (beforeRid ? 'AND (m.ts < ? OR (m.ts = ? AND m.rowid < ?))' : 'AND m.ts < ?') : ''
+  const cargs = before ? (beforeRid ? [before, before, beforeRid] : [before]) : []
   const rows = getDb()
     .prepare(
-      `${MSG_SELECT} WHERE m.account_id = ? AND m.chat_jid = ? ${before ? 'AND m.ts < ?' : ''} ORDER BY m.ts DESC, m.rowid DESC LIMIT ?`
+      `${MSG_SELECT} WHERE m.account_id = ? AND m.chat_jid = ? ${cursor} ORDER BY m.ts DESC, m.rowid DESC LIMIT ?`
     )
-    .all(...(before ? [accountId, chatJid, before, limit] : [accountId, chatJid, limit])) as unknown as MsgRow[]
+    .all(accountId, chatJid, ...cargs, limit) as unknown as MsgRow[]
   return fillQuoted(accountId, rows.reverse().map(toMsg))
 }
 

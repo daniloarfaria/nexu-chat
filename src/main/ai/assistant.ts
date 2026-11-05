@@ -15,6 +15,7 @@ import type { MessageItem } from '@shared/types'
  */
 export function anonymize(text: string, names: string[] = []): string {
   let t = text
+    .slice(0, 20_000)
     .replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, '[email]')
     .replace(/https?:\/\/\S+/g, '[link]')
     // Receita de óculos (dado de saúde): grau esférico/cilíndrico, eixo, adição, DNP
@@ -125,12 +126,13 @@ export async function campaignVariations(
   count: number,
   brief?: string
 ): Promise<string[]> {
-  const { name, playbook } = storeContext(accountId)
+  const { name } = storeContext(accountId)
   const r = await complete({
     task: 'variacoes_campanha',
     tier: 'smart',
     customerData: false,
-    system: `${BASE_RULES}\nLoja: ${name}.${playbook ? `\nPlaybook:\n${playbook.slice(0, 3000)}` : ''}
+    system: `${BASE_RULES}
+Loja: ${name}.
 Você escreve mensagens promocionais para clientes que já compraram na loja.
 Cada variação deve ter o mesmo conteúdo e oferta, com palavras e estrutura diferentes, para não parecer mensagem em massa.
 Mantenha exatamente as variáveis entre chaves que existirem, como {primeiro_nome}. Termine convidando o cliente a responder (pergunta simples).

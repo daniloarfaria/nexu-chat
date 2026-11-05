@@ -77,3 +77,38 @@ Dependências que vão no app: **0 vulnerabilidades** (`npm audit --omit=dev`). 
 
 - O app instalado bloqueia o modo de inspeção, que é a proteção dos fusíveis. Por isso os testes de interface automáticos (`tests/e2e`) rodam na versão não empacotada (`npx electron-vite build` + `node tests/e2e/…`).
 - `npm test` roda 91 testes: regras, backup, conversas, LID, voz, importação, campanhas e motor (com um WhatsApp simulado), automações, grupos, lembretes, vendas, IA (roteador e anonimização) e LGPD.
+
+---
+
+## Segunda rodada: auditoria independente com o Codex (OpenAI)
+
+> 05/11/2026 · Codex CLI em modo somente leitura · 23 achados (0 críticos, 11 altos, 12 médios). Os 13 novos e os 10 em que a correção anterior estava incompleta foram conferidos no código. Os testes passaram de 92 para 95.
+
+### Corrigido
+- **Mídia baixada de servidor escolhido pelo remetente (SSRF)** (alto): o Baileys usa o servidor que vem na mensagem.
+  - Agora só são aceitos servidores do WhatsApp (https), e o caminho é validado.
+  - O download é feito em fluxo, com teto de 120 MB.
+- **Edição e apagamento sem conferir o autor** (alto): agora só o autor edita ou apaga. Uma mensagem já apagada não recebe conteúdo de volta num reenvio.
+- **Reenvio (retry) entre conversas** (alto): o pedido de reenvio só devolve mensagens nossas da **mesma** conversa.
+- **Trocar o telefone de um contato** (alto): o WhatsApp antigo é esquecido e os envios pendentes vão para o número novo.
+- **Opt-out depois de exclusão via LID** (alto): se qualquer identidade (número, JID ou LID) pediu SAIR, a supressão vale para todas antes de apagar os mapas. Envios pendentes de um contato excluído são cancelados.
+- **SAIR durante o "digitando…"** (alto): opt-out, existência do contato e status da campanha são conferidos imediatamente antes de cada envio.
+- **Mistura de contas na interface** (alto): respostas atrasadas são descartadas ao trocar de conta, e os rascunhos são guardados por conta e conversa.
+- **Planilha que "explode" ao abrir** (alto): antes de abrir, o app soma o tamanho real declarado no índice do arquivo e recusa compressão anormal.
+- **Rajadas de envio automático** (médio): respostas automáticas, boas-vindas e moderação passam por uma fila por conta, com 3 a 7 s entre envios.
+- **Intervalo de segurança encurtado** (médio): iniciar outra campanha ou salvar a Proteção não encurta mais uma espera ou pausa longa em andamento.
+- **Envio parcial duplicado** (médio): com áudio, o destinatário é marcado como enviado logo após o áudio, e o texto seguinte não causa reenvio.
+- **Vendas e automações ao unir conversas LID** (médio): agora acompanham a conversa.
+- **Lembrete registrado antes de a campanha existir** (médio): o registro só acontece depois de a campanha ser criada e iniciada.
+- **Backup adulterado com cálculo gigante** (médio): só são aceitos os perfis de derivação de chave conhecidos.
+- **Corpo de erro de provedor de IA nos logs** (médio): não é mais guardado. O log tem rotação (cerca de 5 MB, atual + 1 anterior).
+- **Paginação** (médio): o cursor exato (horário e posição) não pula nem repete mensagens.
+- **Microfone aberto depois de sair da conversa** (médio): o app confere se a conversa continua aberta quando a permissão chega.
+- **Reconexão concorrente depois do erro 405** (médio): cada conexão tem uma geração, e uma tentativa antiga não abre uma segunda conexão.
+- **Expressões regulares lentas** (médio): a entrada de vCard e da anonimização é limitada.
+- **Variações de campanha** (médio): não enviam mais o playbook para a IA.
+
+### Aceito ou pendente
+- **Dados em texto legível no SQLite e nas mídias do computador** (médio): o banco fica legível para quem tem acesso ao computador. Recomendação: criptografia de disco do sistema (FileVault no Mac, BitLocker no Windows) e senha de usuário. A sessão do WhatsApp e as chaves já são criptografadas.
+- **Termos de saúde soltos no texto** (ex.: "tenho glaucoma") não são reconhecidos pela anonimização. Para conversas de saúde, use a privacidade **Estrita** (só provedores que não treinam) ou o Ollama local.
+- **Assinatura de código:** continua pendente (veja acima).

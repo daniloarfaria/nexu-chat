@@ -24,6 +24,7 @@ interface Runner {
   sinceLongPause: number
   failStreak: number
   failCampaign: number | null
+  notBefore: number
   state: EngineState
 }
 
@@ -39,6 +40,7 @@ class CampaignEngine extends EventEmitter {
         sinceLongPause: 0,
         failStreak: 0,
         failCampaign: null,
+        notBefore: 0,
         state: { accountId, campaignId: null, phase: 'idle', nextAt: null, sentToday: 0, limitToday: 0 }
       }
       this.runners.set(accountId, r)
@@ -64,10 +66,13 @@ class CampaignEngine extends EventEmitter {
   }
 
   /** Agenda o próximo passo da conta. */
-  private schedule(accountId: string, ms: number): void {
+  private schedule(accountId: string, ms: number, safety = false): void {
     const r = this.runner(accountId)
+    if (safety) r.notBefore = Date.now() + ms
+    // Nada (iniciar outra campanha, salvar proteção…) encurta um intervalo de segurança em andamento
+    const wait = Math.max(ms, r.notBefore - Date.now(), 0)
     if (r.timer) clearTimeout(r.timer)
-    r.timer = setTimeout(() => void this.tick(accountId), Math.max(0, ms))
+    r.timer = setTimeout(() => void this.tick(accountId), wait)
   }
 
   kick(accountId: string): void {
@@ -137,7 +142,7 @@ class CampaignEngine extends EventEmitter {
       r.sinceLongPause = 0
       const ms = randomBetween(s.pauseMin, s.pauseMax) * 60_000
       this.set(accountId, { phase: 'paused_long', campaignId: campaign.id, nextAt: Date.now() + ms })
-      return this.schedule(accountId, ms)
+      return this.schedule(accountId, ms, true)
     }
 
     // Saúde: taxa de resposta muito baixa → pausa para proteger o número.
@@ -186,7 +191,7 @@ class CampaignEngine extends EventEmitter {
     }
     const delay = randomBetween(s.minDelay, s.maxDelay) * 1000
     this.set(accountId, { phase: 'waiting', campaignId: campaign.id, nextAt: Date.now() + delay })
-    this.schedule(accountId, delay)
+    this.schedule(accountId, delay, true)
   }
 
   private async sendOne(
@@ -235,8 +240,13 @@ class CampaignEngine extends EventEmitter {
         await sleep(Math.min(8000, 1500 + text.length * 35) * randomBetween(0.7, 1.2))
         await sock.sendPresenceUpdate('paused', jid!).catch(() => undefined)
       }
-      // Pausada ou cancelada enquanto "digitava": não envia
+      // Pausada/cancelada ou pediu SAIR enquanto "digitava": não envia
       if (C.getCampaign(c.id)?.status !== 'running') return 'skip'
+      if (c.kind !== 'groups' && (isOptedOut(accountId, jid!) || (t.phone && isOptedOut(accountId, t.phone)))) {
+        C.markTarget(c.id, t.seq, 'opted_out', { jid: jid! })
+        return 'skip'
+      }
+      if (!C.targetStillPending(c.id, t.seq)) return 'skip' // contato excluído ou alvo alterado
 
       let content: AnyMessageContent
       if (c.media) {
@@ -251,8 +261,13 @@ class CampaignEngine extends EventEmitter {
       }
       const sent = await sendAndStore(sock, accountId, jid!, content)
       // Áudio não tem legenda: manda o texto em seguida
-      if (c.media && /^audio\//.test(c.media.mime) && text) await sendAndStore(sock, accountId, jid!, { text })
+      // O principal já foi: marca como enviado antes do complemento, para nunca reenviar em dobro
       C.markTarget(c.id, t.seq, 'sent', { messageId: sent?.key.id ?? undefined, jid: jid! })
+      if (c.media && /^audio\//.test(c.media.mime) && text) {
+        await sendAndStore(sock, accountId, jid!, { text }).catch((e: Error) =>
+          log.warn('Texto após o áudio não foi enviado', { erro: e.message })
+        )
+      }
       return 'sent'
     } catch (e) {
       const msg = (e as Error).message ?? String(e)

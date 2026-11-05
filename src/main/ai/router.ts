@@ -311,14 +311,14 @@ async function callOpenAiCompatible(p: Row, model: string, req: AiRequest): Prom
     signal: AbortSignal.timeout(90_000)
   })
   if (!res.ok) {
-    const body = (await res.text()).slice(0, 300)
+    await res.body?.cancel().catch(() => undefined) // corpo do erro pode repetir o pedido: não é guardado
     const ra = Number(res.headers.get('retry-after'))
     if (res.status === 429)
-      throw new ProviderError(`limite atingido (${body})`, Number.isFinite(ra) && ra > 0 ? ra * 1000 : 60_000)
+      throw new ProviderError('limite atingido', Number.isFinite(ra) && ra > 0 ? ra * 1000 : 60_000)
     if (res.status === 401 || res.status === 403)
       throw new ProviderError('chave inválida ou sem permissão', 6 * 3600_000, true)
     if (res.status >= 500) throw new ProviderError(`erro do servidor ${res.status}`, 30_000)
-    throw new ProviderError(`erro ${res.status}: ${body}`, 5 * 60_000)
+    throw new ProviderError(`erro ${res.status}`, 5 * 60_000)
   }
   const json = (await res.json()) as {
     choices?: Array<{ message?: { content?: string } }>
@@ -355,9 +355,9 @@ async function callClaude(p: Row, model: string, req: AiRequest): Promise<{ text
     if (e instanceof Anthropic.RateLimitError) throw new ProviderError('limite atingido', 60_000)
     if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError)
       throw new ProviderError('chave inválida ou sem permissão', 6 * 3600_000, true)
-    if (e instanceof Anthropic.BadRequestError) throw new ProviderError(`pedido recusado: ${e.message}`, 5 * 60_000)
+    if (e instanceof Anthropic.BadRequestError) throw new ProviderError('pedido recusado (400)', 5 * 60_000)
     if (e instanceof Anthropic.APIError) throw new ProviderError(`erro ${e.status ?? ''}`, 30_000)
-    throw new ProviderError((e as Error).message, 30_000)
+    throw new ProviderError((e as Error).name === 'TimeoutError' ? 'tempo esgotado' : 'falha de conexão', 30_000)
   }
 }
 

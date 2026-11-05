@@ -3,6 +3,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as XLSX from 'xlsx'
+import { deflateRawSync } from 'node:zlib'
 
 vi.mock('electron', () => ({
   app: { getPath: () => tmpdir() },
@@ -390,5 +391,48 @@ describe('LGPD: supressão e exclusão', () => {
     // volta pela planilha
     people.savePerson(ACC, { name: 'Ana', phone: '11987650001', tags: ['VIP'] })
     expect(C.countAudience(ACC, { type: 'tags', tags: ['VIP'] })).toEqual({ total: 1, optedOut: 1 })
+  })
+})
+
+describe('planilha maliciosa', () => {
+  // ZIP mínimo (1 arquivo, deflate) montado à mão
+  function zipOf(name: string, content: Buffer): Uint8Array {
+    const comp = deflateRawSync(content, { level: 9 })
+    const fn = Buffer.from(name)
+    const local = Buffer.alloc(30)
+    local.writeUInt32LE(0x04034b50, 0)
+    local.writeUInt16LE(20, 4)
+    local.writeUInt16LE(8, 8)
+    local.writeUInt32LE(comp.length, 18)
+    local.writeUInt32LE(content.length, 22)
+    local.writeUInt16LE(fn.length, 26)
+    const central = Buffer.alloc(46)
+    central.writeUInt32LE(0x02014b50, 0)
+    central.writeUInt16LE(20, 4)
+    central.writeUInt16LE(20, 6)
+    central.writeUInt16LE(8, 10)
+    central.writeUInt32LE(comp.length, 20)
+    central.writeUInt32LE(content.length, 24)
+    central.writeUInt16LE(fn.length, 28)
+    const cdOffset = local.length + fn.length + comp.length
+    const eocd = Buffer.alloc(22)
+    eocd.writeUInt32LE(0x06054b50, 0)
+    eocd.writeUInt16LE(1, 8)
+    eocd.writeUInt16LE(1, 10)
+    eocd.writeUInt32LE(central.length + fn.length, 12)
+    eocd.writeUInt32LE(cdOffset, 16)
+    return new Uint8Array(Buffer.concat([local, fn, comp, central, fn, eocd]))
+  }
+  test('recusa ZIP que explode ao abrir e aceita planilha normal', () => {
+    expect(() =>
+      people.assertZipNotBomb(
+        sheet([
+          ['Nome', 'Telefone'],
+          ['Ana', '11987650001']
+        ])
+      )
+    ).not.toThrow()
+    expect(() => people.assertZipNotBomb(zipOf('xl/x.xml', Buffer.alloc(50 * 1024 * 1024)))).toThrow(/suspeita|grande/)
+    expect(() => people.assertZipNotBomb(zipOf('xl/x.xml', Buffer.from('ok'.repeat(1000))))).not.toThrow()
   })
 })

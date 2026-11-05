@@ -174,6 +174,7 @@ export interface MessageExtra {
 
 export interface MessageItem {
   id: string
+  rid?: number // posição no banco (cursor da paginação)
   chatJid: string
   fromMe: boolean
   sender: string | null
