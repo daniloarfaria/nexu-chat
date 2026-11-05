@@ -26,6 +26,7 @@ import logoCor from '../assets/brand/logo-horizontal-cor.svg'
 import logoNeg from '../assets/brand/logo-horizontal-negativo.svg'
 import { cn } from '../lib/cn'
 import { StatusDot } from './StatusPill'
+import { AccountMark } from './AccountMark'
 
 interface NavItem {
   id: PageId
@@ -107,13 +108,7 @@ function AccountSwitcher(): React.JSX.Element {
         aria-expanded={open}
         className="flex h-11 w-full items-center gap-2.5 rounded-lg border border-line bg-panel px-2.5 text-left shadow-card hover:border-line-strong"
       >
-        <span
-          className="grid size-7 shrink-0 place-items-center rounded-md text-[12px] font-semibold text-white"
-          style={{ background: active.color }}
-          aria-hidden
-        >
-          {active.name.slice(0, 1).toUpperCase()}
-        </span>
+        <AccountMark account={active} size={28} />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13.5px] font-medium text-ink">{active.name}</span>
         </span>
@@ -139,7 +134,7 @@ function AccountSwitcher(): React.JSX.Element {
                 a.id === active.id && 'bg-sunken'
               )}
             >
-              <span className="size-2.5 shrink-0 rounded-sm" style={{ background: a.color }} aria-hidden />
+              <AccountMark account={a} size={22} />
               <span className="flex-1 truncate">{a.name}</span>
               <StatusDot status={states[a.id]?.status ?? 'disconnected'} />
             </button>

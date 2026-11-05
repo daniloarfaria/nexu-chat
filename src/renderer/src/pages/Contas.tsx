@@ -5,6 +5,7 @@ import { useApp } from '../lib/store'
 import { Button, Field, Input, Notice, PageHeader, Switch } from '../components/ui'
 import { StatusPill } from '../components/StatusPill'
 import { formatPhone } from '../lib/format'
+import { AccountMark } from '../components/AccountMark'
 import { cn } from '../lib/cn'
 
 const COLORS = ['#D9481F', '#2563EB', '#0F8A5F', '#9333EA', '#C2410C', '#0E7490', '#BE185D', '#4D5562']
@@ -200,13 +201,7 @@ function AccountRow({ account }: { account: Account }): React.JSX.Element {
   return (
     <li className="rounded-xl border border-line bg-panel p-5 shadow-card">
       <div className="flex items-center gap-4">
-        <span
-          className="grid size-10 shrink-0 place-items-center rounded-lg text-[15px] font-semibold text-white"
-          style={{ background: account.color }}
-          aria-hidden
-        >
-          {account.name.slice(0, 1).toUpperCase()}
-        </span>
+        <AccountMark account={account} size={40} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2.5">
             <h3 className="truncate text-[15px] font-semibold">{account.name}</h3>
