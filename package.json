@@ -16,10 +16,11 @@
     "postinstall": "patch-package && install-electron && electron-builder install-app-deps",
     "build:unpack": "npm run build && electron-builder --dir",
     "build:win": "npm run build && electron-builder --win --publish never",
-    "build:mac": "npm run build && electron-builder --mac --publish never",
+    "build:mac": "npm run build && electron-builder --mac --arm64 --publish never",
     "test": "vitest run",
     "build:all": "npm run build && electron-builder --mac --win --publish never",
-    "release": "npm run build && electron-builder --mac --win --publish always"
+    "release": "npm run build && electron-builder --mac --win --publish always",
+    "build:mac-intel": "npm run typecheck && NO_BYTECODE=1 electron-vite build && electron-builder --mac --x64 --publish never"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.5.0",

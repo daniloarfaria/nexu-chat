@@ -37,7 +37,11 @@ jobs:
           - os: windows-latest
             target: --win
           - os: macos-latest
-            target: --mac
+            target: --mac --arm64
+          # Mac Intel sai sem bytecode (o bytecode só roda na arquitetura em que foi gerado)
+          - os: macos-latest
+            target: --mac --x64
+            nobytecode: '1'
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -47,6 +51,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+        env:
+          NO_BYTECODE: ${{ matrix.nobytecode }}
       - name: Gerar instaladores
         shell: bash
         env:
@@ -58,7 +64,7 @@ jobs:
           npx electron-builder ${{ matrix.target }} --publish $PUBLISH
       - uses: actions/upload-artifact@v4
         with:
-          name: instaladores-${{ matrix.os }}
+          name: instaladores-${{ matrix.os }}-${{ strategy.job-index }}
           path: |
             dist/*.exe
             dist/*.dmg
