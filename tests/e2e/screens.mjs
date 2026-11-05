@@ -14,6 +14,7 @@ const errors = []
 win.on('pageerror', (e) => errors.push(e.message))
 win.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
 
+/** @returns {Promise<void>} */
 async function shot(name) {
   await win.waitForTimeout(400)
   await win.screenshot({ path: join(out, `${name}.png`) })
@@ -26,7 +27,11 @@ for (const theme of ['light', 'dark']) {
   }, theme)
   await win.getByRole('button', { name: 'Início' }).click()
   await shot(`${theme}-inicio-vazio`)
-  await win.getByRole('button', { name: 'Gerenciar contas' }).or(win.getByRole('button', { name: 'Adicionar conta' })).first().click()
+  await win
+    .getByRole('button', { name: 'Gerenciar contas' })
+    .or(win.getByRole('button', { name: 'Adicionar conta' }))
+    .first()
+    .click()
   if (theme === 'light') {
     await win.getByRole('button', { name: 'Nova conta' }).first().click()
     await win.getByLabel('Nome da conta').fill('Ótica Centro')

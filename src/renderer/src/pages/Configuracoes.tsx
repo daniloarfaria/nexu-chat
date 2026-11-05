@@ -122,7 +122,10 @@ function BackupTab(): React.JSX.Element {
             )
           }}
         >
-          <Field label={s.passwordSet ? 'Nova senha (mínimo 8 caracteres)' : 'Senha (mínimo 8 caracteres)'} htmlFor="bk-pw">
+          <Field
+            label={s.passwordSet ? 'Nova senha (mínimo 8 caracteres)' : 'Senha (mínimo 8 caracteres)'}
+            htmlFor="bk-pw"
+          >
             <Input
               id="bk-pw"
               type="password"
@@ -140,13 +143,7 @@ function BackupTab(): React.JSX.Element {
               onChange={(e) => setPw2(e.target.value)}
             />
           </Field>
-          <Button
-            type="submit"
-            variant="primary"
-            loading={busy === 'pw'}
-            disabled={pw.length < 8 || pw !== pw2}
-            
-          >
+          <Button type="submit" variant="primary" loading={busy === 'pw'} disabled={pw.length < 8 || pw !== pw2}>
             Salvar senha
           </Button>
         </form>
