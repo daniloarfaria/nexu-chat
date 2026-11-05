@@ -28,8 +28,8 @@ electronFuses:
 
 mac:
   target:
+    # Arquitetura vem do comando (--arm64 / --x64): cada uma é gerada separada por causa do bytecode
     - target: dmg
-      arch: [arm64, x64]
   category: public.app-category.business
   icon: build/icon.png
   darkModeSupport: true
