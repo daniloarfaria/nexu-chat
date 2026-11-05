@@ -10,6 +10,7 @@ import { Avatar } from '../components/chat/Avatar'
 import { dayKey, dayLabel, chatTime } from '../components/chat/time'
 import { formatPhone } from '../lib/format'
 import { Button, Input } from '../components/ui'
+import { ContactStrip } from '../components/chat/ContactStrip'
 import { DealBar } from '../components/chat/DealBar'
 import { useActiveAccount as useAcc } from '../lib/store'
 
@@ -131,6 +132,9 @@ function ChatView({ jid }: { jid: string }): React.JSX.Element {
         </div>
         {account?.modules.vendas && !chat?.isGroup && <DealBar key={jid} accountId={account.id} jid={jid} />}
       </header>
+      {account && !jid.endsWith('@g.us') && (
+        <ContactStrip key={jid} accountId={account.id} jid={jid} funil={!!account.modules.funil} />
+      )}
 
       <div className="relative min-h-0 flex-1 bg-sunken">
         <div ref={scroller} onScroll={() => void onScroll()} className="absolute inset-0 overflow-y-auto py-3">

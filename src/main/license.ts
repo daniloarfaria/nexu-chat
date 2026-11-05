@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { createPublicKey, verify } from 'node:crypto'
-import { MODULE_KEYS, type LicensePayload, type LicenseStatus, type ModuleKey } from '@shared/types'
+import { MODULE_KEYS, PLANS, type LicensePayload, type LicenseStatus, type ModuleKey, type PlanId } from '@shared/types'
 import { getSetting, setSetting } from './db'
 import { LICENSE_PUBLIC_KEY } from './license-key'
 
@@ -23,7 +23,9 @@ export function parseLicense(key: string, publicKeyPem = LICENSE_PUBLIC_KEY): Li
   if (!ok) throw new Error('Chave de licença inválida (assinatura não confere)')
   const p = JSON.parse(b64url(parts[1]).toString('utf8')) as LicensePayload
   if (p.v !== 1 || !p.id || !p.cliente || !Array.isArray(p.modulos)) throw new Error('Chave de licença inválida')
-  p.modulos = p.modulos.filter((m) => (MODULE_KEYS as readonly string[]).includes(m))
+  // Módulos novos entram nos planos sem precisar emitir outra chave
+  const doPlano = PLANS[p.plano as PlanId]?.modulos ?? []
+  p.modulos = [...new Set([...p.modulos, ...doPlano])].filter((m) => (MODULE_KEYS as readonly string[]).includes(m))
   return p
 }
 

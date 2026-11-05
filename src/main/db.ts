@@ -319,6 +319,65 @@ const MIGRATIONS: string[] = [
   // v6 — transcrição de áudios (Whisper)
   `
   ALTER TABLE messages ADD COLUMN transcript TEXT;
+  `,
+  // v7 — etiquetas com cor e funis (kanban)
+  `
+  CREATE TABLE tag_defs (
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    name TEXT NOT NULL COLLATE NOCASE,
+    color TEXT NOT NULL DEFAULT 'slate',
+    description TEXT,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (account_id, name)
+  );
+  INSERT OR IGNORE INTO tag_defs (account_id, name, color, created_at)
+    SELECT DISTINCT p.account_id, t.tag, 'slate', CAST(strftime('%s','now') AS INTEGER) * 1000
+    FROM person_tags t JOIN people p ON p.id = t.person_id;
+  UPDATE OR IGNORE person_tags SET tag = (
+    SELECT d.name FROM tag_defs d JOIN people p ON p.account_id = d.account_id
+    WHERE p.id = person_tags.person_id AND d.name = person_tags.tag
+  );
+  DELETE FROM person_tags WHERE NOT EXISTS (
+    SELECT 1 FROM tag_defs d JOIN people p ON p.account_id = d.account_id
+    WHERE p.id = person_tags.person_id AND d.name = person_tags.tag COLLATE BINARY
+  );
+
+  CREATE TABLE pipelines (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    color TEXT NOT NULL DEFAULT 'blue',
+    position INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX pipelines_account ON pipelines (account_id, position);
+  CREATE TABLE pipeline_stages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pipeline_id INTEGER NOT NULL REFERENCES pipelines(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    color TEXT NOT NULL DEFAULT 'slate',
+    kind TEXT NOT NULL DEFAULT 'open',
+    position INTEGER NOT NULL,
+    auto_tag TEXT,
+    remove_tag_on_leave INTEGER NOT NULL DEFAULT 0,
+    sla_days INTEGER,
+    description TEXT
+  );
+  CREATE INDEX stages_pipeline ON pipeline_stages (pipeline_id, position);
+  CREATE TABLE pipeline_cards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pipeline_id INTEGER NOT NULL REFERENCES pipelines(id) ON DELETE CASCADE,
+    stage_id INTEGER NOT NULL REFERENCES pipeline_stages(id) ON DELETE CASCADE,
+    person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+    position REAL NOT NULL,
+    value_cents INTEGER NOT NULL DEFAULT 0,
+    note TEXT,
+    created_at INTEGER NOT NULL,
+    moved_at INTEGER NOT NULL,
+    UNIQUE (pipeline_id, person_id)
+  );
+  CREATE INDEX cards_stage ON pipeline_cards (stage_id, position);
+  CREATE INDEX cards_person ON pipeline_cards (person_id);
   `
 ]
 

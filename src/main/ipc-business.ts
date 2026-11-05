@@ -12,6 +12,9 @@ import * as rules from './automation'
 import * as groups from './groups'
 import * as reminders from './reminders'
 import * as deals from './deals'
+import * as tags from './tags'
+import * as pipes from './pipelines'
+import { TAG_COLORS } from '@shared/types'
 import * as ai from './ai/router'
 import * as assistant from './ai/assistant'
 import { wa } from './wa/manager'
@@ -33,9 +36,11 @@ const tag = z.string().trim().min(1).max(40)
 const bytes = z.instanceof(Uint8Array)
 const audience = z
   .object({
-    type: z.enum(['tags', 'all', 'groups', 'list']),
+    type: z.enum(['tags', 'all', 'groups', 'list', 'stages']),
     tags: z.array(tag).max(50).optional(),
+    tagMode: z.enum(['any', 'all']).optional(),
     excludeTags: z.array(tag).max(50).optional(),
+    stageIds: z.array(id).max(100).optional(),
     groups: z.array(groupJid).max(500).optional(),
     personIds: z.array(id).max(50_000).optional()
   })
@@ -86,6 +91,131 @@ export function registerBusinessIpc(handle: Handle, getWindow: () => BrowserWind
     (a) => people.listPeople(a)
   )
   handle('people:tags', z.object({ accountId }).strict(), (a) => people.listTags(a.accountId))
+
+  // ---------- Etiquetas ----------
+  const tagColor = z.enum(TAG_COLORS)
+  handle('tags:list', z.object({ accountId }).strict(), (a) => tags.listTagDefs(a.accountId))
+  handle(
+    'tags:save',
+    z
+      .object({
+        accountId,
+        name: tag,
+        color: tagColor,
+        description: z.string().max(200).nullable().optional(),
+        previousName: tag.nullable().optional()
+      })
+      .strict(),
+    (a) => tags.saveTag(a.accountId, a)
+  )
+  handle('tags:delete', z.object({ accountId, name: tag }).strict(), (a) => tags.deleteTag(a.accountId, a.name))
+
+  // ---------- Funis (kanban) ----------
+  const stageInput = z
+    .object({
+      id: id.optional(),
+      name: z.string().trim().min(1).max(40),
+      color: tagColor,
+      kind: z.enum(['open', 'won', 'lost']),
+      autoTag: tag.nullable().optional(),
+      removeTagOnLeave: z.boolean().optional(),
+      slaDays: z.number().int().min(1).max(365).nullable().optional(),
+      description: z.string().max(200).nullable().optional()
+    })
+    .strict()
+  const funil =
+    <T extends { accountId: string }, R>(fn: (a: T) => R) =>
+    (a: T): R => {
+      need(a.accountId, 'funil')
+      return fn(a)
+    }
+  handle('pipelines:list', z.object({ accountId }).strict(), (a) => pipes.listPipelines(a.accountId))
+  handle(
+    'pipelines:save',
+    z
+      .object({
+        accountId,
+        id: id.optional(),
+        name: z.string().trim().min(1).max(60),
+        color: tagColor,
+        stages: z.array(stageInput).min(1).max(20)
+      })
+      .strict(),
+    funil((a) => pipes.savePipeline(a.accountId, a))
+  )
+  handle(
+    'pipelines:create-template',
+    z.object({ accountId, templateId: z.string().max(40), name: z.string().max(60).optional() }).strict(),
+    funil((a) => pipes.createFromTemplate(a.accountId, a.templateId, a.name))
+  )
+  handle(
+    'pipelines:delete',
+    z.object({ accountId, id }).strict(),
+    funil((a) => pipes.deletePipeline(a.accountId, a.id))
+  )
+  handle(
+    'pipelines:reorder',
+    z.object({ accountId, ids: z.array(id).max(100) }).strict(),
+    funil((a) => pipes.reorderPipelines(a.accountId, a.ids))
+  )
+  handle(
+    'pipelines:board',
+    z
+      .object({
+        accountId,
+        pipelineId: id,
+        search: z.string().max(100).optional(),
+        tags: z.array(tag).max(20).optional()
+      })
+      .strict(),
+    (a) => pipes.getBoard(a.accountId, a.pipelineId, a)
+  )
+  handle(
+    'pipelines:move-card',
+    z.object({ accountId, cardId: id, stageId: id, index: z.number().int().min(0).max(100_000) }).strict(),
+    funil((a) => pipes.moveCard(a.accountId, a.cardId, a.stageId, a.index))
+  )
+  handle(
+    'pipelines:update-card',
+    z
+      .object({
+        accountId,
+        cardId: id,
+        valueCents: z.number().int().min(0).max(1e12).optional(),
+        note: z.string().max(2000).nullable().optional()
+      })
+      .strict(),
+    funil((a) => pipes.updateCard(a.accountId, a.cardId, a))
+  )
+  handle(
+    'pipelines:remove-cards',
+    z.object({ accountId, cardIds: z.array(id).max(5000) }).strict(),
+    funil((a) => pipes.removeCards(a.accountId, a.cardIds))
+  )
+  handle(
+    'pipelines:add-people',
+    z.object({ accountId, stageId: id, personIds: z.array(id).max(50_000), move: z.boolean().optional() }).strict(),
+    funil((a) => pipes.addPeople(a.accountId, a.stageId, a.personIds, a.move))
+  )
+  handle(
+    'pipelines:add-by-tags',
+    z.object({ accountId, stageId: id, tags: z.array(tag).min(1).max(20) }).strict(),
+    funil((a) => pipes.addByTags(a.accountId, a.stageId, a.tags))
+  )
+  handle(
+    'pipelines:add-chat',
+    z.object({ accountId, stageId: id, chatJid: jid }).strict(),
+    funil((a) => pipes.addFromChat(a.accountId, a.stageId, a.chatJid))
+  )
+  handle('pipelines:chat-profile', z.object({ accountId, chatJid: jid }).strict(), (a) =>
+    pipes.chatProfile(a.accountId, a.chatJid)
+  )
+  handle('pipelines:chat-tags', z.object({ accountId, chatJid: jid, tags: z.array(tag).max(50) }).strict(), (a) =>
+    pipes.setChatTags(a.accountId, a.chatJid, a.tags)
+  )
+  handle('pipelines:person', z.object({ accountId, personId: id }).strict(), (a) =>
+    pipes.placementsOfPerson(a.accountId, a.personId)
+  )
   handle('people:fields', z.object({ accountId }).strict(), (a) => people.customFieldNames(a.accountId))
   handle(
     'people:save',

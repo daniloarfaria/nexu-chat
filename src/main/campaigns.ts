@@ -12,6 +12,7 @@ import type {
   CampaignTarget,
   TargetStatus
 } from '@shared/types'
+import { stagesOfAccount } from './pipelines'
 import { getDb, getSetting, setSetting, transaction } from './db'
 import { DEFAULT_ANTIBAN, dayKey, firstName } from '@shared/rules'
 import { getAccount } from './accounts'
@@ -213,16 +214,36 @@ export function countAudience(accountId: string, a: CampaignAudience): { total: 
 // Pediu para sair: marcado no contato ou presente na lista de supressão (número ou JID)
 const OPTED_SQL = `(p.opt_out = 1 OR EXISTS (SELECT 1 FROM suppression s WHERE s.account_id = p.account_id AND (s.key = p.phone OR s.key = p.jid)))`
 
+function tagSql(tags: string[], mode: 'any' | 'all' | undefined): string {
+  const list = tags.map(() => '?').join(',')
+  return mode === 'all'
+    ? `(SELECT COUNT(DISTINCT t.tag) FROM person_tags t WHERE t.person_id = p.id AND t.tag IN (${list})) = ${new Set(tags).size}`
+    : `EXISTS (SELECT 1 FROM person_tags t WHERE t.person_id = p.id AND t.tag IN (${list}))`
+}
+
 function audienceSql(accountId: string, a: CampaignAudience): { sql: string; args: Array<string | number> } {
   const where = ['p.account_id = ?']
   const args: Array<string | number> = [accountId]
   if (a.type === 'tags' && a.tags?.length) {
-    where.push(
-      `EXISTS (SELECT 1 FROM person_tags t WHERE t.person_id = p.id AND t.tag IN (${a.tags.map(() => '?').join(',')}))`
-    )
+    where.push(tagSql(a.tags, a.tagMode))
     args.push(...a.tags)
   } else if (a.type === 'tags') {
     where.push('0')
+  }
+  if (a.type === 'stages') {
+    // Só colunas de funis desta conta; as etiquetas escolhidas filtram junto
+    const ids = stagesOfAccount(accountId, a.stageIds ?? [])
+    if (!ids.length) where.push('0')
+    else {
+      where.push(
+        'EXISTS (SELECT 1 FROM pipeline_cards c WHERE c.person_id = p.id AND c.stage_id IN (SELECT value FROM json_each(?)))'
+      )
+      args.push(JSON.stringify(ids))
+    }
+    if (a.tags?.length) {
+      where.push(tagSql(a.tags, a.tagMode))
+      args.push(...a.tags)
+    }
   }
   if (a.type === 'list') {
     const ids = (a.personIds ?? []).slice(0, 50_000)

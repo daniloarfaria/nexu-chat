@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import * as XLSX from 'xlsx'
 import type { ImportMapping, ImportPreview, ImportResult, Person, PersonQuery } from '@shared/types'
 import { getDb, transaction } from './db'
+import { ensureTag, listTagDefs } from './tags'
 import { fold, normalizeDate, normalizePhone } from '@shared/rules'
 
 // Planilhas lidas ficam em memória por alguns minutos entre a prévia e a importação
@@ -79,13 +80,8 @@ export function findPersonByJid(accountId: string, jid: string): Person | null {
   return r ? toPerson(r) : null
 }
 
-export function listTags(accountId: string): Array<{ tag: string; count: number }> {
-  return getDb()
-    .prepare(
-      `SELECT t.tag, COUNT(*) AS count FROM person_tags t JOIN people p ON p.id = t.person_id
-       WHERE p.account_id = ? GROUP BY t.tag ORDER BY t.tag COLLATE NOCASE`
-    )
-    .all(accountId) as Array<{ tag: string; count: number }>
+export function listTags(accountId: string): Array<{ tag: string; count: number; color: string }> {
+  return listTagDefs(accountId).map((t) => ({ tag: t.name, count: t.count, color: t.color }))
 }
 
 export function savePerson(
@@ -149,27 +145,27 @@ export function savePerson(
           ).lastInsertRowid
       )
     }
-    if (input.tags) setTags(id!, input.tags)
+    if (input.tags) setTags(accountId, id!, input.tags)
     return getPerson(accountId, id!)!
   })
 }
 
-function setTags(personId: number, tags: string[]): void {
+function setTags(accountId: string, personId: number, tags: string[]): void {
   const db = getDb()
   db.prepare('DELETE FROM person_tags WHERE person_id = ?').run(personId)
   const ins = db.prepare('INSERT OR IGNORE INTO person_tags (person_id, tag) VALUES (?, ?)')
-  for (const t of tags.map((x) => x.trim()).filter(Boolean)) ins.run(personId, t.slice(0, 40))
+  for (const t of tags.map((x) => x.trim()).filter(Boolean)) ins.run(personId, ensureTag(accountId, t))
 }
 
 export function bulkTag(accountId: string, ids: number[], tag: string, add: boolean): void {
   const db = getDb()
   transaction(db, () => {
+    const name = add ? ensureTag(accountId, tag) : tag.trim()
     for (const id of ids) {
       const own = db.prepare('SELECT 1 FROM people WHERE id = ? AND account_id = ?').get(id, accountId)
       if (!own) continue
-      if (add)
-        db.prepare('INSERT OR IGNORE INTO person_tags (person_id, tag) VALUES (?, ?)').run(id, tag.trim().slice(0, 40))
-      else db.prepare('DELETE FROM person_tags WHERE person_id = ? AND tag = ?').run(id, tag)
+      if (add) db.prepare('INSERT OR IGNORE INTO person_tags (person_id, tag) VALUES (?, ?)').run(id, name)
+      else db.prepare('DELETE FROM person_tags WHERE person_id = ? AND tag = ? COLLATE NOCASE').run(id, name)
     }
   })
 }
@@ -392,9 +388,15 @@ export function runImport(accountId: string, token: string, mapping: ImportMappi
     'UPDATE people SET name = COALESCE(?, name), birthday = COALESCE(?, birthday), fields = ?, updated_at = ? WHERE id = ?'
   )
   const tag = db.prepare('INSERT OR IGNORE INTO person_tags (person_id, tag) VALUES (?, ?)')
-  const cleanTags = tags.map((t) => t.trim().slice(0, 40)).filter(Boolean)
-
   transaction(db, () => {
+    const cleanTags = [
+      ...new Set(
+        tags
+          .map((t) => t.trim())
+          .filter(Boolean)
+          .map((t) => ensureTag(accountId, t))
+      )
+    ]
     for (const r of pending.rows) {
       const raw = r[mapping.phone!]
       const phone = normalizePhone(raw)

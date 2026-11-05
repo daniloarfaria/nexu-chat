@@ -13,6 +13,7 @@ export const MODULE_KEYS = [
   'respostasAuto',
   'lembretes',
   'vendas',
+  'funil',
   'ia'
 ] as const
 
@@ -38,6 +39,11 @@ export const MODULE_INFO: Record<ModuleKey, { label: string; description: string
   gruposCriar: { label: 'Criar grupos', description: 'Criar grupos a partir de listas', group: 'Grupos' },
   gruposModeracao: { label: 'Moderação', description: 'Boas-vindas, anti-link e regras', group: 'Grupos' },
   vendas: { label: 'Vendas', description: 'Marcar o que virou venda e ver o retorno', group: 'Vendas' },
+  funil: {
+    label: 'Funis (Kanban)',
+    description: 'Quadros com etapas personalizadas e disparo por coluna',
+    group: 'Vendas'
+  },
   ia: { label: 'Assistente de IA', description: 'Playbook de vendas e mensagens sugeridas', group: 'Vendas' }
 }
 
@@ -52,6 +58,7 @@ export const DEFAULT_MODULES: Modules = {
   respostasAuto: false,
   lembretes: false,
   vendas: true,
+  funil: true,
   ia: false
 }
 
@@ -289,9 +296,13 @@ export type CampaignStatus = 'draft' | 'scheduled' | 'running' | 'paused' | 'don
 export type TargetStatus = 'pending' | 'sent' | 'failed' | 'skipped' | 'no_wa' | 'opted_out'
 
 export interface CampaignAudience {
-  type: 'tags' | 'all' | 'groups' | 'list'
+  type: 'tags' | 'all' | 'groups' | 'list' | 'stages'
   tags?: string[]
+  /** 'any' = tem pelo menos uma das etiquetas (padrão); 'all' = tem todas */
+  tagMode?: 'any' | 'all'
   excludeTags?: string[]
+  /** Colunas de funil (type 'stages'); as etiquetas, se houver, filtram junto */
+  stageIds?: number[]
   groups?: string[]
   personIds?: number[]
 }
@@ -544,7 +555,8 @@ export const PLANS: Record<PlanId, { nome: string; modulos: ModuleKey[] }> = {
       'gruposEnvio',
       'gruposExtrair',
       'gruposCriar',
-      'gruposModeracao'
+      'gruposModeracao',
+      'funil'
     ]
   },
   completo: { nome: 'Completo', modulos: [...MODULE_KEYS] }
@@ -570,3 +582,163 @@ export interface LicenseStatus {
   maxAccounts: number
   message: string
 }
+
+// ---------- Etiquetas ----------
+
+export const TAG_COLORS = [
+  'slate',
+  'red',
+  'orange',
+  'amber',
+  'lime',
+  'green',
+  'teal',
+  'sky',
+  'blue',
+  'indigo',
+  'violet',
+  'pink'
+] as const
+export type TagColor = (typeof TAG_COLORS)[number]
+
+export interface TagDef {
+  name: string
+  color: TagColor
+  description: string | null
+  count: number
+}
+
+// ---------- Funis (Kanban) ----------
+
+export type StageKind = 'open' | 'won' | 'lost'
+
+export interface PipelineStage {
+  id: number
+  name: string
+  color: TagColor
+  kind: StageKind
+  position: number
+  /** Etiqueta colocada no contato quando o cartão entra nesta coluna */
+  autoTag: string | null
+  /** Tira a etiqueta automática quando o cartão sai da coluna */
+  removeTagOnLeave: boolean
+  /** Avisa quando o cartão fica parado mais que N dias */
+  slaDays: number | null
+  description: string | null
+  count: number
+  valueCents: number
+}
+
+export interface Pipeline {
+  id: number
+  name: string
+  color: TagColor
+  position: number
+  createdAt: number
+  stages: PipelineStage[]
+}
+
+export interface PipelineStageInput {
+  id?: number
+  name: string
+  color: TagColor
+  kind: StageKind
+  autoTag?: string | null
+  removeTagOnLeave?: boolean
+  slaDays?: number | null
+  description?: string | null
+}
+
+export interface PipelineCard {
+  id: number
+  pipelineId: number
+  stageId: number
+  personId: number
+  name: string | null
+  phone: string
+  jid: string | null
+  tags: string[]
+  optOut: boolean
+  valueCents: number
+  note: string | null
+  position: number
+  createdAt: number
+  movedAt: number
+  lastMessageAt: number | null
+  lastPreview: string | null
+  unread: number
+}
+
+export interface PipelineBoard {
+  pipeline: Pipeline
+  cards: PipelineCard[]
+}
+
+/** Em que funis e colunas um contato (ou conversa) está. */
+export interface CardPlacement {
+  cardId: number
+  personId: number
+  pipelineId: number
+  pipelineName: string
+  stageId: number
+  stageName: string
+  stageColor: TagColor
+  stageKind: StageKind
+  valueCents: number
+}
+
+export interface PipelineTemplate {
+  id: string
+  name: string
+  description: string
+  stages: PipelineStageInput[]
+}
+
+export const PIPELINE_TEMPLATES: PipelineTemplate[] = [
+  {
+    id: 'vendas',
+    name: 'Funil de vendas',
+    description: 'Do primeiro contato ao fechamento',
+    stages: [
+      { name: 'Novo contato', color: 'sky', kind: 'open' },
+      { name: 'Em conversa', color: 'blue', kind: 'open', slaDays: 2 },
+      { name: 'Orçamento enviado', color: 'amber', kind: 'open', slaDays: 3 },
+      { name: 'Negociação', color: 'orange', kind: 'open', slaDays: 5 },
+      { name: 'Ganho', color: 'green', kind: 'won' },
+      { name: 'Perdido', color: 'slate', kind: 'lost' }
+    ]
+  },
+  {
+    id: 'pedidos',
+    name: 'Pedidos e entregas',
+    description: 'Acompanhar o pedido até a entrega',
+    stages: [
+      { name: 'Pedido feito', color: 'sky', kind: 'open' },
+      { name: 'Em produção', color: 'violet', kind: 'open', slaDays: 7 },
+      { name: 'Pronto para retirar', color: 'amber', kind: 'open', slaDays: 3 },
+      { name: 'Entregue', color: 'green', kind: 'won' }
+    ]
+  },
+  {
+    id: 'posvenda',
+    name: 'Pós-venda e recompra',
+    description: 'Relacionamento depois da compra',
+    stages: [
+      { name: 'Comprou', color: 'green', kind: 'open' },
+      { name: 'Pesquisa de satisfação', color: 'sky', kind: 'open', slaDays: 7 },
+      { name: 'Indicou alguém', color: 'violet', kind: 'open' },
+      { name: 'Pronto para recompra', color: 'amber', kind: 'open' },
+      { name: 'Recomprou', color: 'green', kind: 'won' }
+    ]
+  },
+  {
+    id: 'vazio',
+    name: 'Em branco',
+    description: 'Três colunas para você renomear',
+    stages: [
+      { name: 'A fazer', color: 'slate', kind: 'open' },
+      { name: 'Em andamento', color: 'blue', kind: 'open' },
+      { name: 'Concluído', color: 'green', kind: 'won' }
+    ]
+  }
+]

@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
-import { generateKeyPairSync } from 'node:crypto'
+import { createPrivateKey, generateKeyPairSync, sign } from 'node:crypto'
 
 vi.mock('electron', () => ({ app: { isPackaged: true, getPath: () => '/tmp' } }))
 
@@ -50,5 +50,27 @@ describe('licença', () => {
     expect(evaluate(null)).toMatchObject({ state: 'none', modules: ['conversas'], maxAccounts: 1 })
     const forever = parseLicense(issue(PRIV, { cliente: 'Y', plano: 'basico', validade: null }).key, PUB)
     expect(evaluate(forever, new Date(2040, 0, 1)).state).toBe('active')
+  })
+})
+
+describe('licença antiga', () => {
+  test('módulo novo do plano é liberado sem emitir outra chave', () => {
+    // Chave emitida antes do Funil existir: a lista assinada não tem 'funil'
+    const payload = {
+      v: 1,
+      id: 'LIC-ANTIGA1',
+      cliente: 'Antiga',
+      plano: 'completo',
+      contas: 1,
+      modulos: ['conversas', 'campanhas', 'vendas', 'ia'],
+      emitida: '2026-11-01',
+      validade: null
+    }
+    const b64 = (b: Buffer): string => b.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+    const head = `DSP1.${b64(Buffer.from(JSON.stringify(payload)))}`
+    const sig = sign(null, Buffer.from(head), createPrivateKey(PRIV))
+    const p = parseLicense(`${head}.${b64(sig)}`, PUB)
+    expect(p.modulos).toContain('funil')
+    expect(p.modulos).toContain('ia')
   })
 })

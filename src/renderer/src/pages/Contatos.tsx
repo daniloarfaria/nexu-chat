@@ -1,11 +1,27 @@
 import { useMemo, useState } from 'react'
-import { Ban, Download, FileSpreadsheet, Plus, Search, Tag, Trash2, Upload, Users } from 'lucide-react'
-import type { ImportMapping, ImportPreview, ImportResult, Person } from '@shared/types'
-import { useActiveAccount } from '../lib/store'
+import {
+  Ban,
+  Download,
+  FileSpreadsheet,
+  Plus,
+  Search,
+  SquareKanban,
+  Tag,
+  Tags,
+  Trash2,
+  Upload,
+  Users
+} from 'lucide-react'
+import type { ImportMapping, ImportPreview, ImportResult, Person, TagDef } from '@shared/types'
+import { useActiveAccount, useApp } from '../lib/store'
 import { fileBytes, useAction, useLoad } from '../lib/useAsync'
 import { formatPhone } from '../lib/format'
 import { Badge, Button, Checkbox, Drawer, Empty, Field, Input, Notice, PageHeader, Select } from '../components/ui'
 import { cn } from '../lib/cn'
+import { ColorDot, TagChip, TagPicker } from '../components/tags'
+import { useTagDefs } from '../lib/tagColors'
+import { TagManager } from '../components/TagManager'
+import { StagePicker } from '../components/StagePicker'
 
 const PAGE = 100
 
@@ -18,16 +34,26 @@ function birthdayLabel(b: string | null): string {
 function PersonForm({
   accountId,
   person,
+  tagDefs,
+  funil,
   onDone
 }: {
   accountId: string
   person: Person | null
+  tagDefs: TagDef[]
+  funil: boolean
   onDone: () => void
 }): React.JSX.Element {
   const [name, setName] = useState(person?.name ?? '')
   const [phone, setPhone] = useState(person ? formatPhone(person.phone) : '')
   const [birthday, setBirthday] = useState(birthdayLabel(person?.birthday ?? null))
-  const [tags, setTags] = useState((person?.tags ?? []).join(', '))
+  const [tags, setTags] = useState<string[]>(person?.tags ?? [])
+  const places = useLoad(
+    () =>
+      person && funil ? window.api.invoke('pipelines:person', { accountId, personId: person.id }) : Promise.resolve([]),
+    [accountId, person?.id, funil]
+  )
+  const openPipeline = useApp((s) => s.openPipeline)
   const [fields, setFields] = useState<Array<[string, string]>>(Object.entries(person?.fields ?? {}))
   const { busy, error, run } = useAction()
 
@@ -39,10 +65,7 @@ function PersonForm({
         name,
         phone,
         birthday: birthday || null,
-        tags: tags
-          .split(',')
-          .map((t) => t.trim())
-          .filter(Boolean),
+        tags,
         fields: Object.fromEntries(fields.filter(([k]) => k.trim()).map(([k, v]) => [k.trim(), v]))
       })
     )
@@ -81,9 +104,27 @@ function PersonForm({
         <Field label="Aniversário" htmlFor="p-bday" hint="Dia/mês ou dia/mês/ano">
           <Input id="p-bday" value={birthday} onChange={(e) => setBirthday(e.target.value)} placeholder="25/12" />
         </Field>
-        <Field label="Etiquetas" htmlFor="p-tags" hint="Separe por vírgula. Ex.: VIP, Comprou óculos">
-          <Input id="p-tags" value={tags} onChange={(e) => setTags(e.target.value)} />
+        <Field label="Etiquetas" hint="Digite para buscar; Enter cria uma etiqueta nova.">
+          <TagPicker defs={tagDefs} value={tags} onChange={setTags} />
         </Field>
+        {(places.data ?? []).length > 0 && (
+          <Field label="Nos funis">
+            <ul className="flex flex-col gap-1.5">
+              {(places.data ?? []).map((p) => (
+                <li key={p.cardId}>
+                  <button
+                    className="flex items-center gap-2 text-[13.5px] hover:text-accent"
+                    onClick={() => openPipeline(p.pipelineId)}
+                  >
+                    <ColorDot color={p.stageColor} />
+                    <span className="font-medium">{p.pipelineName}</span>
+                    <span className="text-ink-3">→ {p.stageName}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </Field>
+        )}
         <fieldset className="flex flex-col gap-2">
           <legend className="mb-1.5 text-[13px] font-medium">Outras informações</legend>
           {fields.map(([k, v], i) => (
@@ -366,6 +407,12 @@ export function Contatos(): React.JSX.Element {
   const [editing, setEditing] = useState<Person | null | 'new'>(null)
   const [importing, setImporting] = useState(false)
   const [tagInput, setTagInput] = useState('')
+  const [managing, setManaging] = useState(false)
+  const [toFunnel, setToFunnel] = useState(false)
+  const [funnelStage, setFunnelStage] = useState<number | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const tagDefs = useTagDefs(accountId)
+  const funil = !!active?.modules.funil
   const { busy, error, run } = useAction()
 
   const list = useLoad(
@@ -390,6 +437,7 @@ export function Contatos(): React.JSX.Element {
     await run(key, fn)
     setSelected(new Set())
     await list.reload()
+    void tagDefs.reload()
   }
 
   return (
@@ -399,6 +447,9 @@ export function Contatos(): React.JSX.Element {
         description="Sua base de clientes para campanhas e lembretes. Quem responde SAIR vai para a lista de não receber automaticamente."
         actions={
           <>
+            <Button onClick={() => setManaging(true)}>
+              <Tags className="size-4" /> Etiquetas
+            </Button>
             <Button onClick={() => void window.api.invoke('people:export', { accountId })}>
               <Download className="size-4" /> Exportar
             </Button>
@@ -457,9 +508,15 @@ export function Contatos(): React.JSX.Element {
             className="h-8 w-44"
             placeholder="Etiqueta"
             aria-label="Etiqueta para aplicar"
+            list="tag-names"
             value={tagInput}
             onChange={(e) => setTagInput(e.target.value)}
           />
+          <datalist id="tag-names">
+            {tagDefs.defs.map((t) => (
+              <option key={t.name} value={t.name} />
+            ))}
+          </datalist>
           <Button
             size="sm"
             disabled={!tagInput.trim()}
@@ -483,6 +540,11 @@ export function Contatos(): React.JSX.Element {
           >
             Tirar etiqueta
           </Button>
+          {funil && (
+            <Button size="sm" onClick={() => (setNotice(null), setToFunnel(true))}>
+              <SquareKanban className="size-3.5" /> Adicionar ao funil
+            </Button>
+          )}
           <Button
             size="sm"
             onClick={() => void bulk('opt', () => window.api.invoke('people:opt-out', { accountId, ids, value: true }))}
@@ -507,6 +569,11 @@ export function Contatos(): React.JSX.Element {
           >
             <Trash2 className="size-3.5" /> Excluir
           </Button>
+        </div>
+      )}
+      {notice && (
+        <div className="mb-3">
+          <Notice tone="ok">{notice}</Notice>
         </div>
       )}
       {(error || list.error) && (
@@ -580,7 +647,7 @@ export function Contatos(): React.JSX.Element {
                   <td className="px-2 py-2">
                     <div className="flex flex-wrap gap-1">
                       {p.tags.slice(0, 4).map((t) => (
-                        <Badge key={t}>{t}</Badge>
+                        <TagChip key={t} name={t} color={tagDefs.colorOf(t)} size="sm" />
                       ))}
                       {p.tags.length > 4 && <Badge>+{p.tags.length - 4}</Badge>}
                     </div>
@@ -619,11 +686,64 @@ export function Contatos(): React.JSX.Element {
         <PersonForm
           accountId={accountId}
           person={editing === 'new' ? null : editing}
+          tagDefs={tagDefs.defs}
+          funil={funil}
           onDone={() => {
             setEditing(null)
             void list.reload()
+            void tagDefs.reload()
           }}
         />
+      )}
+      {managing && (
+        <TagManager
+          accountId={accountId}
+          onClose={(changed) => {
+            setManaging(false)
+            if (changed) {
+              void list.reload()
+              void tagDefs.reload()
+            }
+          }}
+        />
+      )}
+      {toFunnel && (
+        <Drawer
+          title="Adicionar ao funil"
+          onClose={() => setToFunnel(false)}
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setToFunnel(false)}>
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                disabled={!funnelStage}
+                loading={busy === 'funil'}
+                onClick={async () => {
+                  const r = await run('funil', () =>
+                    window.api.invoke('pipelines:add-people', { accountId, stageId: funnelStage!, personIds: ids })
+                  )
+                  if (r) {
+                    setNotice(
+                      `${r.added} contato(s) adicionado(s) ao funil${r.already ? ` · ${r.already} já estava(m) nele` : ''}.`
+                    )
+                    setToFunnel(false)
+                    setSelected(new Set())
+                  }
+                }}
+              >
+                Adicionar {selected.size}
+              </Button>
+            </>
+          }
+        >
+          <p className="mb-4 text-[13.5px] text-ink-2">
+            Os {selected.size} contatos selecionados entram na coluna escolhida. Quem já está no funil continua onde
+            está.
+          </p>
+          <StagePicker accountId={accountId} value={funnelStage} onChange={(id) => setFunnelStage(id)} />
+        </Drawer>
       )}
       {importing && (
         <ImportWizard

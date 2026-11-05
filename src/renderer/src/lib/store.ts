@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Account, AccountState, WaVersionInfo } from '@shared/types'
+import type { Account, AccountState, CampaignAudience, WaVersionInfo } from '@shared/types'
 
 export type PageId =
   | 'inicio'
@@ -10,6 +10,7 @@ export type PageId =
   | 'automacoes'
   | 'lembretes'
   | 'vendas'
+  | 'funis'
   | 'ia'
   | 'contas'
   | 'configuracoes'
@@ -24,7 +25,13 @@ interface AppState {
   waVersion: WaVersionInfo | null
   theme: Theme
   loaded: boolean
+  /** Campanha pré-preenchida (ex.: disparo por coluna do funil); a página Campanhas consome e limpa */
+  campaignDraft: { name: string; audience: CampaignAudience } | null
+  /** Funil a abrir na página Funis */
+  openPipelineId: number | null
   go: (p: PageId) => void
+  draftCampaign: (d: { name: string; audience: CampaignAudience }) => void
+  openPipeline: (id: number) => void
   setActive: (id: string | null) => void
   setTheme: (t: Theme) => void
   reloadAccounts: () => Promise<void>
@@ -54,8 +61,12 @@ export const useApp = create<AppState>((set, get) => ({
   waVersion: null,
   theme: readTheme(),
   loaded: false,
+  campaignDraft: null,
+  openPipelineId: null,
 
   go: (page) => set({ page }),
+  draftCampaign: (campaignDraft) => set({ campaignDraft, page: 'campanhas' }),
+  openPipeline: (openPipelineId) => set({ openPipelineId, page: 'funis' }),
   setActive: (activeAccountId) => {
     set({ activeAccountId })
     try {

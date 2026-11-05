@@ -35,6 +35,8 @@ import {
   Textarea
 } from '../components/ui'
 import { cn } from '../lib/cn'
+import { ColorDot, TagToggles } from '../components/tags'
+import { useTagDefs } from '../lib/tagColors'
 
 const STATUS: Record<
   Campaign['status'],
@@ -91,18 +93,23 @@ function Countdown({ at }: { at: number | null }): React.JSX.Element | null {
 function Editor({
   accountId,
   initial,
+  draft,
   onClose
 }: {
   accountId: string
   initial: Campaign | null
+  draft?: { name: string; audience: CampaignAudience } | null
   onClose: (saved?: Campaign) => void
 }): React.JSX.Element {
   const account = useActiveAccount()
   const groupsEnabled = !!account?.modules.gruposEnvio
   const iaEnabled = !!account?.modules.ia
-  const [name, setName] = useState(initial?.name ?? '')
+  const funilEnabled = !!account?.modules.funil
+  const [name, setName] = useState(initial?.name ?? draft?.name ?? '')
   const [templates, setTemplates] = useState<string[]>(initial?.templates.length ? initial.templates : [''])
-  const [audience, setAudience] = useState<CampaignAudience>(initial?.audience ?? { type: 'tags', tags: [] })
+  const [audience, setAudience] = useState<CampaignAudience>(
+    initial?.audience ?? draft?.audience ?? { type: 'tags', tags: [] }
+  )
   const [footer, setFooter] = useState(initial?.optOutFooter ?? true)
   const [when, setWhen] = useState<string>(
     initial?.scheduledAt
@@ -113,7 +120,11 @@ function Editor({
   const [keepMedia, setKeepMedia] = useState(!!initial?.media)
   const [brief, setBrief] = useState('')
   const { busy, error, run, setError } = useAction()
-  const tags = useLoad(() => window.api.invoke('people:tags', { accountId }), [accountId])
+  const tagDefs = useTagDefs(accountId)
+  const pipelines = useLoad(
+    () => (funilEnabled ? window.api.invoke('pipelines:list', { accountId }) : Promise.resolve([])),
+    [accountId, funilEnabled]
+  )
   const fields = useLoad(() => window.api.invoke('people:fields', { accountId }), [accountId])
   const groups = useLoad(
     () => (groupsEnabled ? window.api.invoke('groups:list', { accountId }) : Promise.resolve([])),
@@ -193,6 +204,7 @@ function Editor({
                 {(
                   [
                     ['tags', 'Por etiqueta'],
+                    ...(funilEnabled || audience.type === 'stages' ? [['stages', 'Colunas do funil']] : []),
                     ['all', 'Todos os contatos'],
                     ...(groupsEnabled ? [['groups', 'Grupos']] : [])
                   ] as Array<[CampaignAudience['type'], string]>
@@ -201,7 +213,7 @@ function Editor({
                     key={t}
                     role="radio"
                     aria-checked={audience.type === t}
-                    onClick={() => setAudience({ type: t, tags: [], groups: [] })}
+                    onClick={() => setAudience({ type: t, tags: [], groups: [], stageIds: [] })}
                     className={cn(
                       'h-8 rounded-md px-3 text-[13.5px] text-ink-2',
                       audience.type === t && 'bg-panel font-medium text-ink shadow-card'
@@ -211,63 +223,98 @@ function Editor({
                   </button>
                 ))}
               </div>
-              {audience.type === 'tags' && (
-                <div className="flex flex-wrap gap-1.5">
-                  {(tags.data ?? []).length === 0 && (
-                    <p className="text-[13px] text-ink-3">Nenhuma etiqueta ainda. Importe contatos com etiquetas.</p>
+              {audience.type === 'stages' && (
+                <div className="flex flex-col gap-3">
+                  {(pipelines.data ?? []).length === 0 && (
+                    <p className="text-[13px] text-ink-3">Nenhum funil ainda. Crie em Funis.</p>
                   )}
-                  {(tags.data ?? []).map((t) => {
-                    const on = audience.tags?.includes(t.tag)
-                    return (
-                      <button
-                        key={t.tag}
-                        aria-pressed={on}
-                        onClick={() =>
-                          setAudience({
-                            ...audience,
-                            tags: on ? audience.tags!.filter((x) => x !== t.tag) : [...(audience.tags ?? []), t.tag]
-                          })
-                        }
-                        className={cn(
-                          'h-8 rounded-full border px-3 text-[13px]',
-                          on
-                            ? 'border-accent bg-accent-soft text-accent-ink'
-                            : 'border-line-strong text-ink-2 hover:text-ink'
-                        )}
-                      >
-                        {t.tag} <span className="tabular text-ink-3">{t.count}</span>
-                      </button>
-                    )
-                  })}
+                  {(pipelines.data ?? []).map((p) => (
+                    <div key={p.id}>
+                      <div className="mb-1.5 flex items-center gap-2 text-[12.5px] font-medium text-ink-2">
+                        <ColorDot color={p.color} /> {p.name}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {p.stages.map((st) => {
+                          const on = audience.stageIds?.includes(st.id)
+                          return (
+                            <button
+                              key={st.id}
+                              aria-pressed={on}
+                              onClick={() =>
+                                setAudience({
+                                  ...audience,
+                                  stageIds: on
+                                    ? audience.stageIds!.filter((x) => x !== st.id)
+                                    : [...(audience.stageIds ?? []), st.id]
+                                })
+                              }
+                              className={cn(
+                                'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[13px]',
+                                on
+                                  ? 'border-accent bg-accent-soft font-medium text-accent-ink'
+                                  : 'border-line-strong text-ink-2 hover:text-ink'
+                              )}
+                            >
+                              <ColorDot color={st.color} />
+                              {st.name} <span className="tabular text-ink-3">{st.count}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
-              {audience.type !== 'groups' && (tags.data ?? []).length > 0 && (
+              {(audience.type === 'tags' || audience.type === 'stages') && (
+                <Field
+                  label={audience.type === 'stages' ? 'Só quem tem a etiqueta (opcional)' : 'Etiquetas'}
+                  hint={
+                    (audience.tags?.length ?? 0) > 1 ? (
+                      <span className="inline-flex items-center gap-2">
+                        Enviar para quem tem
+                        <span role="radiogroup" aria-label="Combinação das etiquetas" className="inline-flex gap-1">
+                          {(
+                            [
+                              ['any', 'qualquer uma'],
+                              ['all', 'todas']
+                            ] as const
+                          ).map(([m, l]) => (
+                            <button
+                              key={m}
+                              role="radio"
+                              aria-checked={(audience.tagMode ?? 'any') === m}
+                              onClick={() => setAudience({ ...audience, tagMode: m })}
+                              className={cn(
+                                'rounded-md border px-2 leading-6',
+                                (audience.tagMode ?? 'any') === m
+                                  ? 'border-accent bg-accent-soft font-medium text-accent-ink'
+                                  : 'border-line text-ink-2'
+                              )}
+                            >
+                              {l}
+                            </button>
+                          ))}
+                        </span>
+                      </span>
+                    ) : undefined
+                  }
+                >
+                  <TagToggles
+                    defs={tagDefs.defs}
+                    value={audience.tags ?? []}
+                    onChange={(t) => setAudience({ ...audience, tags: t })}
+                    empty="Nenhuma etiqueta ainda. Crie em Contatos ou importe contatos com etiquetas."
+                  />
+                </Field>
+              )}
+              {audience.type !== 'groups' && tagDefs.defs.length > 0 && (
                 <Field label="Não enviar para quem tem a etiqueta">
-                  <div className="flex flex-wrap gap-1.5">
-                    {(tags.data ?? []).map((t) => {
-                      const on = audience.excludeTags?.includes(t.tag)
-                      return (
-                        <button
-                          key={t.tag}
-                          aria-pressed={on}
-                          onClick={() =>
-                            setAudience({
-                              ...audience,
-                              excludeTags: on
-                                ? audience.excludeTags!.filter((x) => x !== t.tag)
-                                : [...(audience.excludeTags ?? []), t.tag]
-                            })
-                          }
-                          className={cn(
-                            'h-7 rounded-full border px-2.5 text-[12.5px]',
-                            on ? 'border-bad bg-bad-soft text-bad' : 'border-line text-ink-3 hover:text-ink'
-                          )}
-                        >
-                          {t.tag}
-                        </button>
-                      )
-                    })}
-                  </div>
+                  <TagToggles
+                    defs={tagDefs.defs}
+                    value={audience.excludeTags ?? []}
+                    onChange={(t) => setAudience({ ...audience, excludeTags: t })}
+                    tone="exclude"
+                  />
                 </Field>
               )}
               {isGroups && (
@@ -761,9 +808,14 @@ export function Campanhas(): React.JSX.Element {
   const active = useActiveAccount()
   const accountId = active?.id ?? ''
   const go = useApp((s) => s.go)
+  const [draft, setDraft] = useState(() => {
+    const d = useApp.getState().campaignDraft
+    if (d) useApp.setState({ campaignDraft: null })
+    return d
+  })
   const [view, setView] = useState<
     { mode: 'list' } | { mode: 'edit'; c: Campaign | null } | { mode: 'detail'; c: Campaign }
-  >({ mode: 'list' })
+  >(draft ? { mode: 'edit', c: null } : { mode: 'list' })
   const list = useLoad(
     () => (accountId ? window.api.invoke('campaigns:list', { accountId }) : Promise.resolve([])),
     [accountId]
@@ -778,7 +830,12 @@ export function Campanhas(): React.JSX.Element {
       <Editor
         accountId={accountId}
         initial={view.c}
-        onClose={(saved) => (void list.reload(), setView(saved ? { mode: 'detail', c: saved } : { mode: 'list' }))}
+        draft={view.c ? null : draft}
+        onClose={(saved) => (
+          setDraft(null),
+          void list.reload(),
+          setView(saved ? { mode: 'detail', c: saved } : { mode: 'list' })
+        )}
       />
     )
   if (view.mode === 'detail')

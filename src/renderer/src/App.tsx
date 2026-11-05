@@ -14,6 +14,7 @@ import { Grupos } from './pages/Grupos'
 import { Lembretes } from './pages/Lembretes'
 import { Vendas } from './pages/Vendas'
 import { IA } from './pages/IA'
+import { Funis } from './pages/Funis'
 import { subscribeChatEvents, useChats } from './lib/chatStore'
 import { subscribeAvatarEvents } from './lib/avatars'
 
@@ -42,6 +43,8 @@ function Page(): React.JSX.Element {
       return <Vendas />
     case 'ia':
       return <IA />
+    case 'funis':
+      return <Funis />
   }
 }
 
@@ -74,7 +77,7 @@ export default function App(): React.JSX.Element {
         <div className="drag h-3 shrink-0" />
         <UpdateBanner />
         <LicenseBanner />
-        {page === 'conversas' ? (
+        {page === 'conversas' || page === 'funis' ? (
           <main className="min-h-0 flex-1 border-t border-line">{loaded && <Page />}</main>
         ) : (
           <main className="min-h-0 flex-1 overflow-y-auto">

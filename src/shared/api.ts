@@ -33,6 +33,12 @@ import type {
   ImportPreview,
   ImportResult,
   Person,
+  CardPlacement,
+  Pipeline,
+  PipelineBoard,
+  PipelineStageInput,
+  TagColor,
+  TagDef,
   Reminder,
   SalesSummary,
   TargetStatus,
@@ -135,7 +141,7 @@ export interface ApiMap {
     ]
     ret: { items: Person[]; total: number }
   }
-  'people:tags': { args: [{ accountId: string }]; ret: Array<{ tag: string; count: number }> }
+  'people:tags': { args: [{ accountId: string }]; ret: Array<{ tag: string; count: number; color: string }> }
   'people:fields': { args: [{ accountId: string }]; ret: string[] }
   'people:save': {
     args: [
@@ -160,6 +166,51 @@ export interface ApiMap {
     ret: ImportResult
   }
   'people:export': { args: [{ accountId: string }]; ret: void }
+
+  // Etiquetas
+  'tags:list': { args: [{ accountId: string }]; ret: TagDef[] }
+  'tags:save': {
+    args: [
+      { accountId: string; name: string; color: TagColor; description?: string | null; previousName?: string | null }
+    ]
+    ret: TagDef
+  }
+  'tags:delete': { args: [{ accountId: string; name: string }]; ret: void }
+
+  // Funis (kanban)
+  'pipelines:list': { args: [{ accountId: string }]; ret: Pipeline[] }
+  'pipelines:save': {
+    args: [{ accountId: string; id?: number; name: string; color: TagColor; stages: PipelineStageInput[] }]
+    ret: Pipeline
+  }
+  'pipelines:create-template': { args: [{ accountId: string; templateId: string; name?: string }]; ret: Pipeline }
+  'pipelines:delete': { args: [{ accountId: string; id: number }]; ret: void }
+  'pipelines:reorder': { args: [{ accountId: string; ids: number[] }]; ret: void }
+  'pipelines:board': {
+    args: [{ accountId: string; pipelineId: number; search?: string; tags?: string[] }]
+    ret: PipelineBoard
+  }
+  'pipelines:move-card': { args: [{ accountId: string; cardId: number; stageId: number; index: number }]; ret: void }
+  'pipelines:update-card': {
+    args: [{ accountId: string; cardId: number; valueCents?: number; note?: string | null }]
+    ret: void
+  }
+  'pipelines:remove-cards': { args: [{ accountId: string; cardIds: number[] }]; ret: void }
+  'pipelines:add-people': {
+    args: [{ accountId: string; stageId: number; personIds: number[]; move?: boolean }]
+    ret: { added: number; moved: number; already: number }
+  }
+  'pipelines:add-by-tags': {
+    args: [{ accountId: string; stageId: number; tags: string[] }]
+    ret: { added: number; moved: number; already: number }
+  }
+  'pipelines:add-chat': { args: [{ accountId: string; stageId: number; chatJid: string }]; ret: CardPlacement[] }
+  'pipelines:chat-profile': {
+    args: [{ accountId: string; chatJid: string }]
+    ret: { personId: number | null; tags: string[]; placements: CardPlacement[] }
+  }
+  'pipelines:chat-tags': { args: [{ accountId: string; chatJid: string; tags: string[] }]; ret: string[] }
+  'pipelines:person': { args: [{ accountId: string; personId: number }]; ret: CardPlacement[] }
 
   // Campanhas
   'antiban:get': { args: [{ accountId: string }]; ret: AntiBanSettings }
@@ -383,6 +434,24 @@ export const API_CHANNELS: ApiChannel[] = [
   'people:import-preview',
   'people:import',
   'people:export',
+  'tags:list',
+  'tags:save',
+  'tags:delete',
+  'pipelines:list',
+  'pipelines:save',
+  'pipelines:create-template',
+  'pipelines:delete',
+  'pipelines:reorder',
+  'pipelines:board',
+  'pipelines:move-card',
+  'pipelines:update-card',
+  'pipelines:remove-cards',
+  'pipelines:add-people',
+  'pipelines:add-by-tags',
+  'pipelines:add-chat',
+  'pipelines:chat-profile',
+  'pipelines:chat-tags',
+  'pipelines:person',
   'antiban:get',
   'antiban:set',
   'campaigns:list',

@@ -1,6 +1,6 @@
 # Manual do Disparador
 
-> Versão do app: 0.6.1 · Atualizado em 05/11/2026
+> Versão do app: 0.7.0 · Atualizado em 05/11/2026
 > O nome "Disparador" é provisório.
 
 O Disparador conecta o WhatsApp da sua loja ao computador. Com ele você atende os clientes, guarda todas as conversas no computador e, nas próximas versões, também envia campanhas, gerencia grupos e acompanha as vendas.
@@ -159,6 +159,12 @@ O menu **Contatos** é a base de clientes da loja, usada por campanhas e lembret
   - Números repetidos e inválidos são ignorados e mostrados no resumo.
   - Importar de novo **atualiza** quem já existe, nunca duplica.
 - **Etiquetas:** selecione contatos e aplique ou remova etiquetas. É assim que você escolhe o público das campanhas.
+  - O botão **Etiquetas** abre a lista com cor, descrição e quantos contatos têm cada uma. Lá você cria, muda a cor, renomeia ou apaga.
+  - Renomear uma etiqueta para o nome de outra **junta as duas**.
+  - Renomear ou apagar também atualiza as colunas de funil, os lembretes e as campanhas ainda não enviadas.
+  - "VIP" e "vip" são a mesma etiqueta.
+  - Na ficha do contato, digite para buscar uma etiqueta; **Enter** cria uma nova.
+- **Adicionar ao funil:** com contatos selecionados, coloque todos de uma vez numa coluna de funil.
 - **Não receber:** quem responde **SAIR** (ou "parar", "não quero mais"…) entra sozinho nessa lista e recebe uma confirmação. Você também pode marcar à mão.
 - **Excluir** atende pedidos de exclusão de dados (LGPD). Apaga o contato junto com as conversas, mensagens, fotos e arquivos recebidos e as vendas registradas. Se a pessoa tinha pedido para não receber, só o número fica guardado na lista de bloqueio, para ela nunca mais receber, mesmo se voltar numa planilha.
 - **Exportar** gera um CSV com todos os contatos.
@@ -168,7 +174,11 @@ O menu **Contatos** é a base de clientes da loja, usada por campanhas e lembret
 ## 6. Campanhas
 
 1. **Campanhas → Nova campanha.**
-2. Dê um nome e escolha o **público**: por etiqueta, todos os contatos ou grupos. Dá para excluir uma etiqueta (ex.: não enviar para "Inativo"). O app mostra quantos vão receber.
+2. Dê um nome e escolha o **público**:
+   - **Por etiqueta:** com 2 ou mais etiquetas, escolha se a pessoa precisa ter **qualquer uma** ou **todas**.
+   - **Colunas do funil:** marque uma ou várias colunas, de qualquer funil. Dá para filtrar também por etiqueta.
+   - **Todos os contatos** ou **Grupos**.
+   - Em todos os casos dá para excluir uma etiqueta (ex.: não enviar para "Inativo"). O app mostra quantos vão receber.
 3. Escreva a **mensagem**.
    - Escreva **2 ou mais versões** com palavras diferentes. O app sorteia uma para cada pessoa, e isso reduz bastante o risco de bloqueio.
    - Use `{primeiro_nome}`, `{nome}`, `{loja}` e os campos dos contatos.
@@ -258,6 +268,24 @@ O painel **Vendas** mostra:
 - faturamento pelo WhatsApp, número de vendas, ticket médio e conversão;
 - **de onde vieram as vendas:** a venda conta para a campanha ou o lembrete enviado ao cliente nos 7 dias anteriores, com o valor faturado **por mensagem enviada**;
 - os motivos de perda mais comuns.
+
+### Funis (kanban)
+
+O menu **Funis** organiza os clientes em etapas, como num quadro de post-its.
+
+- **Novo funil:** comece de um modelo (vendas, pedidos e entregas, pós-venda ou em branco). Cada número de WhatsApp pode ter vários funis.
+- **Editar funil:** renomeie, mude cores, reordene com as setas e crie ou apague colunas.
+  - Cada coluna tem um tipo: **em andamento**, **ganho** ou **perdido**. Ganho e perdido aparecem nos totais do topo.
+  - Em ⚙︎:
+    - **Etiqueta automática:** colocada no contato quando o cartão entra na coluna. Se quiser, ela sai quando o cartão sai.
+    - **Alerta de cartão parado:** depois de X dias na coluna, o cartão fica amarelo.
+  - Apagar uma coluna com cartões leva os cartões para a coluna anterior.
+- **Adicionar contatos:** escolha contatos da base ou traga todos que têm uma etiqueta.
+  - Pela conversa: na faixa abaixo do nome, clique em **+ funil**. Se a conversa ainda não é contato, ele é criado com o nome e o número dela.
+- **Mover:** arraste o cartão para outra coluna ou ordem. Também dá pelo próprio cartão, ou pela faixa da conversa clicando na etapa.
+- **Cartão:** valor do negócio, nota, etiquetas, tempo na coluna, última mensagem e o botão **Abrir conversa**.
+- **Disparar para uma coluna:** no menu **⋯** da coluna, **Disparar campanha para a coluna** abre uma campanha nova com a coluna já escolhida. Ela segue todas as regras anti-bloqueio. Se houver filtro de etiquetas no quadro, ele vai junto.
+- Excluir um contato (LGPD) tira os cartões dele de todos os funis.
 
 ---
 

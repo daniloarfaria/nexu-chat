@@ -1,4 +1,5 @@
 import {
+  SquareKanban,
   Bot,
   CalendarClock,
   ChevronsUpDown,
@@ -56,6 +57,7 @@ const NAV: Array<{ title?: string; items: NavItem[] }> = [
   {
     title: 'Vendas',
     items: [
+      { id: 'funis', label: 'Funis', icon: SquareKanban, module: (m) => m.funil },
       { id: 'vendas', label: 'Vendas', icon: TrendingUp, module: (m) => m.vendas },
       { id: 'ia', label: 'Assistente de IA', icon: Bot, module: (m) => m.ia }
     ]
