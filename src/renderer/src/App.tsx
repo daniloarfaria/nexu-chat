@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useApp } from './lib/store'
 import { Sidebar } from './components/Sidebar'
 import { UpdateBanner } from './components/UpdateBanner'
+import { LicenseBanner } from './components/LicenseBanner'
 import { Inicio } from './pages/Inicio'
 import { Contas } from './pages/Contas'
 import { Configuracoes } from './pages/Configuracoes'
@@ -72,6 +73,7 @@ export default function App(): React.JSX.Element {
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="drag h-3 shrink-0" />
         <UpdateBanner />
+        <LicenseBanner />
         {page === 'conversas' ? (
           <main className="min-h-0 flex-1 border-t border-line">{loaded && <Page />}</main>
         ) : (

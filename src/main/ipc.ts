@@ -11,6 +11,7 @@ import { wa } from './wa/manager'
 import { getCachedWaVersion, refreshWaVersion } from './wa/version'
 import { log } from './log'
 import { registerChatIpc } from './ipc-chat'
+import { activateLicense, licenseStatus, removeLicense } from './license'
 import { registerBusinessIpc } from './ipc-business'
 import { checkForUpdates, downloadUpdate, getUpdateStatus, installUpdate } from './updater'
 
@@ -66,6 +67,10 @@ export function registerIpc(getWindow: () => BrowserWindow | null, relaunch: () 
   handle('update:check', null, () => checkForUpdates())
   handle('update:download', null, () => downloadUpdate())
   handle('update:install', null, () => installUpdate())
+
+  handle('license:status', null, () => licenseStatus())
+  handle('license:activate', z.object({ key: z.string().min(20).max(4000) }).strict(), (a) => activateLicense(a.key))
+  handle('license:remove', null, () => removeLicense())
 
   handle('wa:version', null, () => getCachedWaVersion())
   handle('wa:refresh-version', null, () => refreshWaVersion())

@@ -25,6 +25,7 @@ import type {
   EngineState,
   GroupInfo,
   GroupRule,
+  LicenseStatus,
   TranscribeEngine,
   TranscribeMode,
   TranscribeStatus,
@@ -42,6 +43,9 @@ import type {
 export interface ApiMap {
   'app:info': { args: []; ret: AppInfo }
   'app:open-data-folder': { args: []; ret: void }
+  'license:status': { args: []; ret: LicenseStatus }
+  'license:activate': { args: [{ key: string }]; ret: LicenseStatus }
+  'license:remove': { args: []; ret: LicenseStatus }
   'update:status': { args: []; ret: UpdateStatus }
   'update:check': { args: []; ret: UpdateStatus }
   'update:download': { args: []; ret: void }
@@ -329,6 +333,9 @@ export type EventChannel = keyof EventMap
 export const API_CHANNELS: ApiChannel[] = [
   'app:info',
   'app:open-data-folder',
+  'license:status',
+  'license:activate',
+  'license:remove',
   'update:status',
   'update:check',
   'update:download',

@@ -3,6 +3,7 @@
 App desktop para **Mac e Windows** que permite a pequenos negócios (óticas e outros) atender, fazer campanhas e gerir grupos pelo WhatsApp. Tem proteção contra bloqueio, banco de dados local e backup criptografado.
 
 - **Auditoria de segurança e bugs (fase 9):** [docs/AUDITORIA.md](docs/AUDITORIA.md)
+- **Licenciamento (interno):** [docs/LICENCIAMENTO.md](docs/LICENCIAMENTO.md) · `node scripts/licenca.mjs`
 - **Manual do usuário:** [docs/MANUAL.md](docs/MANUAL.md). Atualize a cada função nova.
 - Especificação completa e fases: [docs/ESPECIFICACAO.md](docs/ESPECIFICACAO.md)
 - Contexto de produto (para design): [PRODUCT.md](PRODUCT.md)

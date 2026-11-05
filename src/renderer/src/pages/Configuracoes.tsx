@@ -9,14 +9,16 @@ import {
   type ModuleKey
 } from '@shared/types'
 import { useActiveAccount, useApp } from '../lib/store'
-import { Button, Field, Input, Notice, PageHeader, Section, Switch } from '../components/ui'
+import { Badge, Button, Field, Input, Notice, PageHeader, Section, Switch } from '../components/ui'
 import { useUpdateStatus } from '../lib/useUpdateStatus'
 import { formatBytes, formatDateTime, timeAgo } from '../lib/format'
 import { cn } from '../lib/cn'
 import { Protecao } from './Protecao'
 import { Transcricao } from './Transcricao'
+import { Licenca } from './Licenca'
+import { useLicense } from '../lib/useLicense'
 
-type Tab = 'backup' | 'modulos' | 'protecao' | 'transcricao' | 'sistema'
+type Tab = 'licenca' | 'backup' | 'modulos' | 'protecao' | 'transcricao' | 'sistema'
 
 const FREQ: Array<{ id: BackupSettings['frequency']; label: string }> = [
   { id: 'daily', label: 'Todo dia' },
@@ -279,6 +281,7 @@ function BackupTab(): React.JSX.Element {
 
 function ModulosTab(): React.JSX.Element {
   const active = useActiveAccount()
+  const [license] = useLicense()
   const { reloadAccounts } = useApp()
   if (!active) return <Notice>Crie uma conta para escolher os módulos.</Notice>
 
@@ -303,7 +306,15 @@ function ModulosTab(): React.JSX.Element {
                   <div className="text-[14px] font-medium">{MODULE_INFO[k].label}</div>
                   <div className="text-[13px] text-ink-2">{MODULE_INFO[k].description}</div>
                 </div>
-                <Switch label={MODULE_INFO[k].label} checked={active.modules[k]} onChange={(v) => void toggle(k, v)} />
+                {license && !license.modules.includes(k) ? (
+                  <Badge>fora do seu plano</Badge>
+                ) : (
+                  <Switch
+                    label={MODULE_INFO[k].label}
+                    checked={active.modules[k]}
+                    onChange={(v) => void toggle(k, v)}
+                  />
+                )}
               </li>
             ))}
           </ul>
@@ -419,8 +430,9 @@ function SistemaTab(): React.JSX.Element {
 }
 
 export function Configuracoes(): React.JSX.Element {
-  const [tab, setTab] = useState<Tab>('backup')
+  const [tab, setTab] = useState<Tab>('licenca')
   const tabs: Array<{ id: Tab; label: string }> = [
+    { id: 'licenca', label: 'Licença' },
     { id: 'backup', label: 'Backup' },
     { id: 'modulos', label: 'Módulos' },
     { id: 'protecao', label: 'Proteção anti-bloqueio' },
@@ -446,6 +458,7 @@ export function Configuracoes(): React.JSX.Element {
           </button>
         ))}
       </div>
+      {tab === 'licenca' && <Licenca />}
       {tab === 'backup' && <BackupTab />}
       {tab === 'modulos' && <ModulosTab />}
       {tab === 'protecao' && <Protecao />}

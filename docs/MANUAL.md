@@ -1,6 +1,6 @@
 # Manual do Disparador
 
-> Versão do app: 0.5.0 · Atualizado em 05/11/2026
+> Versão do app: 0.6.0 · Atualizado em 05/11/2026
 > O nome "Disparador" é provisório.
 
 O Disparador conecta o WhatsApp da sua loja ao computador. Com ele você atende os clientes, guarda todas as conversas no computador e, nas próximas versões, também envia campanhas, gerencia grupos e acompanha as vendas.
@@ -22,6 +22,13 @@ O Disparador conecta o WhatsApp da sua loja ao computador. Com ele você atende 
 > Desinstalar o app **não apaga** suas conversas nem a conexão do WhatsApp. Para levar tudo para outro computador, use o **backup** (seção 13).
 
 ---
+
+## Licença
+Em **Configurações → Licença**, cole a chave enviada pela agência e clique em **Ativar**. Não precisa de internet.
+- A tela mostra o plano, os módulos liberados, quantos números de WhatsApp e até quando vale.
+- Perto de vencer, aparece um aviso no topo. Depois do vencimento, os módulos continuam funcionando por mais 7 dias.
+- Sem licença ou com ela vencida, o app continua mostrando as conversas, e seus dados nunca ficam presos.
+- Para renovar ou mudar de plano, cole a chave nova por cima da antiga.
 
 ## 2. Conectar o WhatsApp
 

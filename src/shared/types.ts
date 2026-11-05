@@ -526,3 +526,47 @@ export interface TranscribeStatus {
   local: { ready: boolean; whisper: string | null; model: string | null; ffmpeg: string | null }
   groq: boolean
 }
+
+// ---------- Licença ----------
+
+export type PlanId = 'basico' | 'marketing' | 'completo'
+
+export const PLANS: Record<PlanId, { nome: string; modulos: ModuleKey[] }> = {
+  basico: { nome: 'Básico', modulos: ['conversas'] },
+  marketing: {
+    nome: 'Marketing',
+    modulos: [
+      'conversas',
+      'campanhas',
+      'antiban',
+      'lembretes',
+      'respostasAuto',
+      'gruposEnvio',
+      'gruposExtrair',
+      'gruposCriar',
+      'gruposModeracao'
+    ]
+  },
+  completo: { nome: 'Completo', modulos: [...MODULE_KEYS] }
+}
+
+export interface LicensePayload {
+  v: 1
+  id: string
+  cliente: string
+  documento?: string
+  plano: PlanId
+  contas: number
+  modulos: ModuleKey[]
+  emitida: string // AAAA-MM-DD
+  validade: string | null // AAAA-MM-DD (último dia válido); null = sem vencimento
+}
+
+export interface LicenseStatus {
+  state: 'dev' | 'none' | 'active' | 'grace' | 'expired' | 'invalid'
+  payload: LicensePayload | null
+  daysLeft: number | null // dias até vencer (ou até acabar a tolerância)
+  modules: ModuleKey[] // módulos liberados agora
+  maxAccounts: number
+  message: string
+}

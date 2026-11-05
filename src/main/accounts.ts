@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { DEFAULT_MODULES, MODULE_KEYS, type Account, type Modules } from '@shared/types'
 import { getDb } from './db'
+import { licenseStatus } from './license'
 
 interface Row {
   id: string
@@ -21,6 +22,9 @@ function toAccount(r: Row): Account {
   }
   const modules = { ...DEFAULT_MODULES }
   for (const k of MODULE_KEYS) if (typeof mods[k] === 'boolean') modules[k] = mods[k] as boolean
+  // Só fica ligado o que a licença libera
+  const allowed = licenseStatus().modules
+  for (const k of MODULE_KEYS) if (!allowed.includes(k)) modules[k] = false
   return {
     id: r.id,
     name: r.name,
@@ -42,6 +46,9 @@ export function getAccount(id: string): Account | null {
 }
 
 export function createAccount(name: string, color: string): Account {
+  const max = licenseStatus().maxAccounts
+  const n = (getDb().prepare('SELECT COUNT(*) AS n FROM accounts').get() as { n: number }).n
+  if (n >= max) throw new Error(`Sua licença permite ${max} número(s) de WhatsApp. Fale com a agência para ampliar.`)
   const id = randomUUID()
   getDb()
     .prepare('INSERT INTO accounts (id, name, color, modules, created_at) VALUES (?, ?, ?, ?, ?)')

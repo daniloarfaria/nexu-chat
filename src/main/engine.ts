@@ -8,7 +8,7 @@ import { isOptedOut, markHasWa } from './people'
 import { wa } from './wa/manager'
 import { sendAndStore } from './wa/send'
 import { canonJid } from './wa/store'
-import { listAccounts } from './accounts'
+import { getAccount, listAccounts } from './accounts'
 import { log } from './log'
 
 /**
@@ -117,6 +117,17 @@ class CampaignEngine extends EventEmitter {
     if (!campaign) {
       this.set(accountId, { phase: 'idle', campaignId: null, nextAt: null, message: undefined })
       return // o intervalo de 60 s verifica agendadas
+    }
+    // Licença / módulo desligado: a campanha espera (não perde a fila)
+    const mod = campaign.kind === 'groups' ? 'gruposEnvio' : campaign.kind === 'reminder' ? 'lembretes' : 'campanhas'
+    if (!getAccount(accountId)?.modules[mod]) {
+      this.set(accountId, {
+        phase: 'idle',
+        campaignId: campaign.id,
+        nextAt: null,
+        message: 'Módulo desligado ou fora da licença'
+      })
+      return
     }
     const sock = wa.getSocket(accountId)
     if (!sock) {
