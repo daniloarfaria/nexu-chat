@@ -93,10 +93,21 @@ CSP restrita, nenhum servidor HTTP aberto na rede, nenhum `npm install` em tempo
 - **Análise de conversas:** lê as conversas que viraram venda e as perdidas e aponta o que funcionou (abordagens, objeções frequentes, tempo de resposta, horários).
 - **Playbook de vendas:** monta e atualiza um playbook da loja com abordagens que convertem, respostas para objeções, gatilhos e scripts. O playbook pode ser editado e exportado.
 - **Mensagens personalizadas:** sugere a resposta na conversa (o operador revisa antes de enviar) e gera variações de campanha personalizadas por cliente, a partir do histórico e das compras dele.
-- **Provedor configurável:**
-  - Claude (chave de API da loja ou da agência);
-  - modelo local (Ollama), sem enviar nada para fora;
-  - Claude Code instalado no computador, no caso da agência.
+- **Roteador de modelos com APIs gratuitas** (lista *Awesome Free LLM APIs*), para gastar o mínimo:
+  - provedores compatíveis com a API da OpenAI cadastrados com a chave de cada um: Groq, Google Gemini, OpenRouter (modelos `:free`), Mistral, Cerebras/NVIDIA NIM, Cloudflare Workers AI e outros da lista;
+  - **alterna sozinho entre eles:** quando um atinge o limite (erro 429 ou cota do dia), passa para o próximo da fila e volta ao primeiro quando o limite renova. O app controla quantas requisições por minuto e por dia usou de cada um;
+  - **escolhe o modelo pela tarefa:**
+    - sugestão de resposta curta → modelo rápido (ex.: Groq);
+    - análise de muitas conversas e montagem do playbook → modelo de contexto longo (ex.: Gemini);
+    - textos de campanha → o melhor modelo disponível no momento;
+  - **pagos como reserva opcional:** Claude (chave da agência) só quando todos os gratuitos falharem ou para tarefas marcadas como "qualidade máxima", com teto de gasto mensal;
+  - modelo local (Ollama) como opção de privacidade total;
+  - painel de uso mostrando chamadas por provedor, limite restante e custo do mês (R$ 0 nos gratuitos).
+- **Privacidade nos gratuitos (importante):** vários planos gratuitos usam os dados enviados para treinar modelos. É o caso do Gemini gratuito fora da Europa, do Mistral no modo gratuito e das rotas `:free` do OpenRouter. Por isso:
+  - cada provedor é marcado como "pode treinar com os dados: sim/não";
+  - conversas reais de clientes só vão para provedores marcados "não", ou passam antes por anonimização forte (sem nome, telefone, CPF, endereço, valores);
+  - tarefas sem dados de clientes podem usar qualquer provedor gratuito, como criar o texto de uma campanha a partir de um tema;
+  - a loja escolhe o nível de privacidade nas configurações.
 - **LGPD e privacidade:**
   - liga e desliga por conta;
   - telefones e documentos são mascarados antes de ir para a IA;
