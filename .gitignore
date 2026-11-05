@@ -1,0 +1,27 @@
+node_modules
+dist
+out
+.DS_Store
+.eslintcache
+*.log*
+
+# Bot antigo: sessão do WhatsApp, planilhas e logs com dados de clientes (LGPD)
+legacy/.wwebjs_auth/
+legacy/node_modules/
+legacy/*.xlsx
+legacy/*.txt
+legacy/checkpoint.json
+legacy/*.mp4
+legacy/*.PNG
+!legacy/MANUAL.txt
+
+# Dados do app em desenvolvimento
+.dev-data/
+*.sqlite
+*.sqlite-*
+auth_info*/
+.env
+legacy/visao-system/**/node_modules/
+legacy/scratch/
+dist/
+.eslintcache

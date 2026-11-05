@@ -1,0 +1,56 @@
+# Instaladores: Mac (.dmg Apple Silicon e Intel) e Windows (.exe NSIS).
+# appId NÃO pode mudar depois da primeira instalação nos clientes (mesmo que o nome do app mude).
+appId: br.com.disparador.app
+productName: Disparador
+copyright: Copyright © 2026 Agência Ark
+directories:
+  output: dist
+  buildResources: build
+files:
+  - 'out/**/*'
+  - 'package.json'
+  - 'resources/**/*'
+  - '!**/*.map'
+asar: true
+compression: maximum
+asarUnpack:
+  - resources/**
+npmRebuild: false
+
+mac:
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  category: public.app-category.business
+  icon: build/icon.png
+  darkModeSupport: true
+  hardenedRuntime: false # ligar junto com a notarização quando houver conta Apple Developer
+  identity: '-' # assinatura ad-hoc (sem conta Apple Developer ainda)
+  entitlementsInherit: build/entitlements.mac.plist
+  notarize: false
+dmg:
+  artifactName: ${productName}-${version}-mac-${arch}.${ext}
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.png
+  executableName: Disparador
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
+  deleteAppDataOnUninstall: false # nunca apaga banco/sessões ao desinstalar
+  artifactName: ${productName}-${version}-windows-setup.${ext}
+
+# Atualizações: repositório público só com os instaladores
+publish:
+  provider: github
+  owner: daniloarfaria
+  repo: disparador-releases
+  releaseType: release

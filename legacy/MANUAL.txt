@@ -1,0 +1,67 @@
+====================================================
+      MANUAL DE COMANDOS - AUTOMAÇÃO ÓTICA
+====================================================
+
+Este bot foi desenvolvido para disparos de WhatsApp com
+foco em segurança e facilidade de uso.
+
+----------------------------------------------------
+1. COMANDOS PRINCIPAIS (No Terminal/PowerShell)
+----------------------------------------------------
+
+> npm install
+  Executa apenas uma vez ao instalar o bot. Baixa as 
+  bibliotecas necessárias.
+
+> npm run login
+  Abre o WhatsApp e mostra o QR Code. 
+
+> npm run ui
+  ABRE A INTERFACE VISUAL no seu navegador (Google Chrome).
+  Lá você pode editar as mensagens e resetar o progresso
+  de forma muito mais fácil.
+
+> npm start
+  Inicia o envio das mensagens da planilha.
+  IMPORTANTE: O bot agora tem um limite de 50 ENVIOS
+  por execução para sua segurança.
+
+> npm run logout
+  Desconecta o WhatsApp e apaga a sessão salva.
+  Use quando quiser trocar de número de WhatsApp.
+
+> npm run reset
+  Apaga o progresso atual e faz o bot voltar para
+  a primeira linha da planilha.
+
+----------------------------------------------------
+2. CONFIGURAÇÕES (Arquivo config.json)
+----------------------------------------------------
+
+Abra o arquivo 'config.json' para alterar:
+- templates: Os 3 modelos de mensagens.
+- delays: O tempo (min/max) de espera entre envios.
+- excel: O nome das colunas da sua planilha.
+- mediaFile: Coloque o nome do arquivo com a extensão (ex: "video.mp4" ou "foto.jpg").
+  O arquivo deve estar na mesma pasta do bot. 
+  Deixe vazio "" se quiser enviar apenas texto.
+
+----------------------------------------------------
+3. ARQUIVOS IMPORTANTES
+----------------------------------------------------
+
+- index.js: O "cérebro" da automação.
+- clientes.xlsx: Sua lista de contatos.
+- checkpoint.json: Onde o bot salva o progresso.
+- .wwebjs_auth: Pasta que guarda seu login (não apague).
+
+----------------------------------------------------
+4. DICAS ANTI-BLOQUEIO
+----------------------------------------------------
+
+- Não envie para mais de 100-200 pessoas por dia.
+- Mantenha os intervalos (delays) acima de 60 segundos.
+- Use sempre os 3 modelos de mensagem diferentes.
+- Tente não usar números "virgens" (novos) para disparos em massa.
+
+====================================================

@@ -1,0 +1,7 @@
+out
+legacy
+dist
+pnpm-lock.yaml
+LICENSE.md
+tsconfig.json
+tsconfig.*.json

@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Controle - Automação Ótica</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --secondary: #a855f7;
+            --bg: #0f172a;
+            --card: #1e293b;
+            --text: #f8fafc;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Outfit', sans-serif; background: var(--bg); color: var(--text); padding: 20px; }
+
+        .dashboard { display: grid; grid-template-columns: 1fr 350px; gap: 20px; max-width: 1200px; margin: 0 auto; }
+
+        .card { background: var(--card); padding: 25px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); height: fit-content; }
+
+        h1 { margin-bottom: 20px; background: linear-gradient(to right, var(--primary), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { margin-bottom: 15px; font-size: 1.2rem; color: #94a3b8; }
+
+        .section { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: 600; color: #94a3b8; font-size: 0.9rem; }
+        input, textarea { width: 100%; padding: 12px; background: #0f172a; border: 1px solid #334155; border-radius: 10px; color: white; margin-bottom: 10px; }
+
+        .btn { padding: 12px 20px; border-radius: 10px; border: none; font-weight: 600; cursor: pointer; transition: 0.3s; width: 100%; margin-bottom: 10px; }
+        .btn-start { background: var(--success); color: white; }
+        .btn-stop { background: var(--danger); color: white; }
+        .btn-save { background: var(--primary); color: white; }
+        .btn-reset { background: transparent; border: 1px solid var(--danger); color: var(--danger); }
+
+        #qrcode { background: white; padding: 15px; border-radius: 10px; display: none; justify-content: center; margin-bottom: 15px; }
+        #qrcode img { width: 200px; height: 200px; }
+
+        .console { background: #000; border-radius: 10px; padding: 15px; height: 350px; overflow-y: auto; font-family: monospace; font-size: 0.85rem; border: 1px solid #334155; }
+        .console-line { margin-bottom: 5px; border-bottom: 1px solid #1e293b; padding-bottom: 2px; }
+        .log-info { color: #38bdf8; }
+        .log-success { color: #4ade80; font-weight: 600; }
+        .log-warning { color: #fbbf24; }
+        .log-error { color: #f87171; font-weight: 600; }
+        .log-time { color: #64748b; font-size: 0.75rem; margin-right: 8px; }
+
+        .status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; margin-bottom: 15px; }
+        .status-off { background: #334155; color: #94a3b8; }
+        .status-on { background: rgba(34, 197, 94, 0.2); color: var(--success); }
+
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Coluna Esquerda: Configurações -->
+        <div class="card">
+            <h1>Painel de Automação</h1>
+            <div id="statusBadge" class="status-badge status-off">Status: Desconectado</div>
+
+            <form id="configForm">
+                <div class="section">
+                    <label>Modelos de Mensagem</label>
+                    <textarea id="template1" rows="2" placeholder="Modelo 1"></textarea>
+                    <textarea id="template2" rows="2" placeholder="Modelo 2"></textarea>
+                    <textarea id="template3" rows="2" placeholder="Modelo 3"></textarea>
+                </div>
+
+                <div class="grid">
+                    <div>
+                        <label>Delay Mín (s)</label>
+                        <input type="number" id="minDelay">
+                    </div>
+                    <div>
+                        <label>Delay Máx (s)</label>
+                        <input type="number" id="maxDelay">
+                    </div>
+                </div>
+
+                <div class="section">
+                    <label>Escolher Planilha (Excel)</label>
+                    <select id="excelFile" style="width: 100%; padding: 12px; background: #0f172a; color: white; border: 1px solid #334155; border-radius: 10px; margin-bottom: 15px;"></select>
+                </div>
+
+                <div class="section">
+                    <label>Arquivo de Mídia</label>
+                    <input type="text" id="mediaFile" placeholder="ex: video.mp4">
+                </div>
+
+                <div class="grid">
+                    <div>
+                        <label>Coluna Nome</label>
+                        <input type="text" id="nameColumn">
+                    </div>
+                    <div>
+                        <label>Coluna Telefone</label>
+                        <input type="text" id="phoneColumn">
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-save">Salvar Alterações</button>
+                <button type="button" class="btn btn-reset" onclick="resetCheckpoint()">Limpar Progresso (Reset)</button>
+            </form>
+        </div>
+
+        <!-- Coluna Direita: Controle e Logs -->
+        <div class="card">
+            <h2>Conexão WhatsApp</h2>
+            <div id="statusBadge" class="status-badge status-off">Status: Desconectado</div>
+            
+            <div id="qrcode"></div>
+            
+            <button id="btnLogout" class="btn btn-reset" onclick="logoutBot()" style="border-color: var(--warning); color: var(--warning);">Desconectar / Trocar de Conta</button>
+
+            <h2 style="margin-top: 30px;">Controle de Disparos</h2>
+            <button id="btnStartDisparos" class="btn btn-start" onclick="startDisparos()" disabled style="opacity: 0.5; cursor: not-allowed;">Iniciar Envio de Mensagens</button>
+            <button id="btnStopDisparos" class="btn btn-stop" style="display:none;" onclick="stopBot()">Parar Envio AGORA</button>
+
+            <h2 style="margin-top: 30px;">Console ao Vivo</h2>
+            <div id="console" class="console">
+                <div class="console-line">Aguardando comando...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const qrContainer = document.getElementById('qrcode');
+        const consoleEl = document.getElementById('console');
+        const statusBadge = document.getElementById('statusBadge');
+
+        // Socket Events
+        socket.on('qr', (qr) => {
+            qrContainer.innerHTML = '';
+            qrContainer.style.display = 'flex';
+            new QRCode(qrContainer, { text: qr, width: 200, height: 200 });
+        });
+
+        socket.on('status', (status) => {
+            const btnStartDisp = document.getElementById('btnStartDisparos');
+            const btnStopDisp = document.getElementById('btnStopDisparos');
+
+            if (status === 'connected') {
+                statusBadge.innerText = 'Status: Conectado';
+                statusBadge.className = 'status-badge status-on';
+                qrContainer.style.display = 'none';
+                
+                btnStartDisp.disabled = false; // Ativa o botão de disparos
+                btnStartDisp.style.opacity = '1';
+                btnStartDisp.style.cursor = 'pointer';
+            } else if (status === 'finished' || status === 'disconnected') {
+                if (status === 'disconnected') {
+                    statusBadge.innerText = 'Status: Desconectado';
+                    statusBadge.className = 'status-badge status-off';
+                    btnStartDisp.disabled = true;
+                    btnStartDisp.style.opacity = '0.5';
+                }
+                btnStartDisp.style.display = 'block';
+                btnStopDisp.style.display = 'none';
+            } else if (status === 'running') {
+                btnStartDisp.style.display = 'none';
+                btnStopDisp.style.display = 'block';
+            }
+        });
+
+        socket.on('log', (data) => {
+            const line = document.createElement('div');
+            line.className = `console-line log-${data.type}`;
+            line.innerHTML = `<span class="log-time">${data.time}</span> ${data.msg}`;
+            consoleEl.appendChild(line);
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        });
+
+        // Functions
+        function stopBot() { socket.emit('stop-bot'); }
+        function startDisparos() { socket.emit('start-disparos'); }
+
+        async function logoutBot() {
+            if (confirm('Deseja realmente deslogar? Você precisará escanear o QR Code novamente.')) {
+                const res = await fetch('/api/logout');
+                if (res.ok) {
+                    // Resetar apenas o estado visual do WhatsApp, sem recarregar a página
+                    statusBadge.innerText = 'Status: Desconectado';
+                    statusBadge.className = 'status-badge status-off';
+                    qrContainer.style.display = 'none';
+                    qrContainer.innerHTML = '';
+                    document.getElementById('btnStart').style.display = 'block';
+                    document.getElementById('btnStop').style.display = 'none';
+                    const line = document.createElement('div');
+                    line.className = 'console-line error';
+                    line.innerText = `> ${new Date().toLocaleTimeString()}: Sessão encerrada pelo usuário.`;
+                    consoleEl.appendChild(line);
+                }
+            }
+        }
+
+        async function loadConfig() {
+            // Buscar lista de arquivos Excel
+            const filesRes = await fetch('/api/files');
+            const files = await filesRes.json();
+            const select = document.getElementById('excelFile');
+            select.innerHTML = '';
+            files.forEach(f => {
+                const opt = document.createElement('option');
+                opt.value = f;
+                opt.innerText = f;
+                select.appendChild(opt);
+            });
+
+            // Buscar configurações
+            const res = await fetch('/api/config');
+            const c = await res.json();
+            document.getElementById('template1').value = c.templates[0];
+            document.getElementById('template2').value = c.templates[1];
+            document.getElementById('template3').value = c.templates[2];
+            document.getElementById('minDelay').value = c.delays.min;
+            document.getElementById('maxDelay').value = c.delays.max;
+            document.getElementById('mediaFile').value = c.mediaFile || '';
+            document.getElementById('excelFile').value = c.excel.file;
+            document.getElementById('nameColumn').value = c.excel.nameColumn;
+            document.getElementById('phoneColumn').value = c.excel.phoneColumn;
+        }
+
+        document.getElementById('configForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const config = {
+                templates: [
+                    document.getElementById('template1').value,
+                    document.getElementById('template2').value,
+                    document.getElementById('template3').value
+                ],
+                delays: {
+                    min: parseInt(document.getElementById('minDelay').value),
+                    max: parseInt(document.getElementById('maxDelay').value)
+                },
+                excel: {
+                    file: document.getElementById('excelFile').value,
+                    nameColumn: document.getElementById('nameColumn').value,
+                    phoneColumn: document.getElementById('phoneColumn').value
+                },
+                mediaFile: document.getElementById('mediaFile').value
+            };
+            await fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            });
+            alert('Configurações salvas!');
+        };
+
+        async function resetCheckpoint() {
+            if (confirm('Deseja resetar o progresso?')) {
+                await fetch('/api/reset', { method: 'POST' });
+                alert('Checkpoint resetado!');
+            }
+        }
+
+        loadConfig();
+    </script>
+</body>
+</html>

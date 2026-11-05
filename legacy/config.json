@@ -1,0 +1,17 @@
+{
+  "templates": [
+    "✨ O mês mais esperado do ano chegou e a Black da Equipe da Visão está cheia de oportunidades para você!\n\nDurante todo o mês de novembro, aproveite 10% OFF em semijoias e relógios e encontre o acessório que faltava para completar seu estilo ou surpreender alguém especial!\n\n⏳ Não deixe para depois! \n\nVisite nossa loja ou entre em contato conosco e confira as opções disponíveis.\n📍 Esperamos por você!",
+    "🖤 A Black Friday chegou à Equipe da Visão com uma condição especial para você!\n\nDurante o mês de novembro, nossas semijoias e relógios estão com *10% de desconto*. Aproveite para escolher aquele acessório que você estava querendo ou encontrar uma opção especial para presentear!\n\nSão diversas opções esperando por você. Entre em contato ou venha nos visitar!\n\n📍 Esperamos por você!",
+    "✨ Novembro é mês de aproveitar as ofertas da Black da Equipe da Visão!\n\nQue tal aproveitar para renovar seus acessórios? Durante todo o mês, você garante *10% OFF em semijoias e relógios* aqui na nossa loja.\n\nNão perca essa oportunidade! Venha conferir nossos modelos e escolha seus favoritos.\n\n📍 Estamos esperando sua visita!"
+  ],
+  "delays": {
+    "min": 60,
+    "max": 180
+  },
+  "excel": {
+    "file": "clientes_atualizado.xlsx",
+    "nameColumn": "Nome",
+    "phoneColumn": "Telefone"
+  },
+  "mediaFile": "black_friday_semijoias.PNG"
+}
