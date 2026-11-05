@@ -292,6 +292,19 @@ const MIGRATIONS: string[] = [
     content TEXT NOT NULL,
     updated_at INTEGER NOT NULL
   );
+  `,
+  // v4 — lista de supressão (opt-out) que sobrevive à exclusão do contato
+  `
+  CREATE TABLE suppression (
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    key TEXT NOT NULL,
+    at INTEGER NOT NULL,
+    PRIMARY KEY (account_id, key)
+  );
+  INSERT OR IGNORE INTO suppression (account_id, key, at)
+    SELECT account_id, phone, COALESCE(opt_out_at, 0) FROM people WHERE opt_out = 1;
+  INSERT OR IGNORE INTO suppression (account_id, key, at)
+    SELECT account_id, jid, COALESCE(opt_out_at, 0) FROM people WHERE opt_out = 1 AND jid IS NOT NULL;
   `
 ]
 

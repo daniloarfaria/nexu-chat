@@ -17,6 +17,15 @@ asarUnpack:
   - resources/**
 npmRebuild: false
 
+# Fusíveis do Electron: impedem usar o binário do app como Node genérico ou carregar código fora do pacote
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+
 mac:
   target:
     - target: dmg
@@ -28,6 +37,7 @@ mac:
   identity: '-' # assinatura ad-hoc (sem conta Apple Developer ainda)
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
+    LSFileQuarantineEnabled: true
     NSMicrophoneUsageDescription: O Disparador usa o microfone para gravar mensagens de voz.
   notarize: false
 dmg:

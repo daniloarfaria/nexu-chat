@@ -16,17 +16,32 @@ import type { MessageItem } from '@shared/types'
 export function anonymize(text: string, names: string[] = []): string {
   let t = text
     .replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, '[email]')
-    .replace(/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/g, '[cpf]')
-    .replace(/\b\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}\b/g, '[cnpj]')
-    .replace(/\b(?:\d[ -]?){13,19}\b/g, '[cartao]')
-    .replace(/(\+?\d{2}\s?)?\(?\d{2}\)?\s?9?\d{4}[-\s]?\d{4}\b/g, '[telefone]')
-    .replace(/\b\d{5}-?\d{3}\b/g, '[cep]')
     .replace(/https?:\/\/\S+/g, '[link]')
-  const clean = [...new Set(names.map((n) => n.trim()).filter((n) => n.length >= 3 && !/^\+?\d/.test(n)))]
-  // Nome completo e cada parte (≥ 3 letras) viram [cliente]
-  const parts = [...new Set(clean.flatMap((n) => [n, ...n.split(/\s+/).filter((p) => p.length >= 3)]))].sort(
-    (a, b) => b.length - a.length
-  )
+    // Receita de óculos (dado de saúde): grau esférico/cilíndrico, eixo, adição, DNP
+    .replace(
+      /\b(OD|OE|AO|esf(?:érico|erico)?|cil(?:índrico|indrico)?|eixo|adi[cç][aã]o|DNP|DP)\b\s*[:=]?\s*[+-]?\d{1,3}(?:[.,]\d{1,2})?°?/gi,
+      '[receita]'
+    )
+    .replace(/(?<![\w.,])[+-]\d{1,2}[.,]\d{2}\b/g, '[grau]')
+    .replace(/\b\d{3}[.\s]?\d{3}[.\s]?\d{3}[-.\s]?\d{2}\b/g, '[cpf]')
+    .replace(/\b\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}\b/g, '[cnpj]')
+    .replace(/\b\d{1,2}\.?\d{3}\.?\d{3}-?[\dxX]\b/g, '[rg]')
+    .replace(/\b(?:\d[ -]?){13,19}\b/g, '[cartao]')
+    .replace(/\b\d{5}-?\d{3}\b/g, '[cep]')
+    // Telefones em qualquer formato: +55 (11) 9 8765-4321, 11.98765.4321, 98765 4321…
+    .replace(/\+?\d[\d ().-]{7,}\d/g, (m) => (m.replace(/\D/g, '').length >= 8 ? '[telefone]' : m))
+    .replace(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g, '[data]')
+    // Endereço: "Rua X, 123", "Av. Paulista 1000", "Alameda…"
+    .replace(
+      /\b(rua|r\.|av(?:enida)?\.?|alameda|al\.|travessa|tv\.|rodovia|estrada|pra[cç]a)\s+[^,\n]{2,50}?,?\s*(n[ºo°.]?\s*)?\d{1,5}\b/gi,
+      '[endereco]'
+    )
+  const clean = [...new Set(names.map((n) => n.trim()).filter((n) => n.length >= 2 && !/^\+?\d/.test(n)))]
+  // Nome completo e cada parte (≥ 2 letras, exceto preposições) viram [cliente]
+  const stop = new Set(['da', 'de', 'do', 'das', 'dos', 'e'])
+  const parts = [
+    ...new Set(clean.flatMap((n) => [n, ...n.split(/\s+/).filter((p) => p.length >= 2 && !stop.has(p.toLowerCase()))]))
+  ].sort((a, b) => b.length - a.length)
   for (const p of parts) {
     t = t.replace(
       new RegExp(`(?<![\\p{L}])${p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}])`, 'giu'),
@@ -80,11 +95,15 @@ export async function suggestReply(
   if (!msgs.length) throw new Error('Esta conversa ainda não tem mensagens')
   const person = findPersonByJid(accountId, jid)
   const deals = listDeals(accountId, { chatJid: jid, limit: 5 })
+  const names = namesFor(accountId, jid)
+  const mask = (t: string): string => (anon ? anonymize(t, names) : t)
   const history = deals.length
-    ? 'Histórico de compras pelo WhatsApp: ' +
-      deals
-        .map((d) => (d.status === 'won' ? `comprou ${d.product ?? 'produto'}` : `não comprou (${d.reason})`))
-        .join('; ')
+    ? mask(
+        'Histórico de compras pelo WhatsApp: ' +
+          deals
+            .map((d) => (d.status === 'won' ? `comprou ${d.product ?? 'produto'}` : `não comprou (${d.reason})`))
+            .join('; ')
+      )
     : ''
   const r = await complete({
     task: 'sugerir_resposta',
@@ -92,8 +111,8 @@ export async function suggestReply(
     customerData: true,
     system: `${BASE_RULES}\nLoja: ${name}.${playbook ? `\n\nPlaybook de vendas da loja:\n${playbook.slice(0, 6000)}` : ''}`,
     prompt: `Conversa (mais antiga primeiro):\n${transcript(msgs, name, anon, namesFor(accountId, jid))}\n\n${history}${
-      person?.tags.length ? `\nEtiquetas do cliente: ${person.tags.join(', ')}` : ''
-    }\n\n${goal ? `Objetivo da próxima mensagem: ${goal}\n` : ''}Escreva somente a próxima mensagem da loja, pronta para enviar. Se o cliente aparece como [cliente], não use nome.`,
+      person?.tags.length ? `\nEtiquetas do cliente: ${mask(person.tags.join(', '))}` : ''
+    }\n\n${goal ? `Objetivo da próxima mensagem: ${mask(goal)}\n` : ''}Escreva somente a próxima mensagem da loja, pronta para enviar. Se o cliente aparece como [cliente], não use nome.`,
     maxTokens: 600
   })
   return { text: r.text.replace(/^["']|["']$/g, '').trim(), provider: r.provider }
@@ -154,7 +173,7 @@ export async function buildPlaybook(
           customerData: true,
           system:
             'Você analisa conversas de vendas de uma loja pelo WhatsApp. Responda em português, em tópicos curtos.',
-          prompt: `Resultado: ${d.status === 'won' ? `VENDA${d.product ? ` (${d.product})` : ''}` : `PERDIDA (motivo: ${d.reason})`}\n\nConversa:\n${transcript(
+          prompt: `Resultado: ${d.status === 'won' ? `VENDA${d.product ? ` (${anon ? anonymize(d.product, namesFor(accountId, d.chatJid)) : d.product})` : ''}` : `PERDIDA (motivo: ${d.reason})`}\n\nConversa:\n${transcript(
             msgs,
             name,
             anon,
@@ -173,7 +192,7 @@ export async function buildPlaybook(
   const r = await complete({
     task: 'playbook',
     tier: 'smart',
-    customerData: false, // só resumos já anonimizados
+    customerData: true, // resumos citam frases reais de conversas
     system: `Você é consultor de vendas de pequenos comércios. Escreva em português do Brasil, em Markdown simples (títulos ## e listas).`,
     prompt: `Loja: ${name}.\n${playbook ? `Playbook atual (atualize, mantendo o que continua válido):\n${playbook}\n\n` : ''}Análises de ${notes.length} conversas recentes:\n\n${notes.join('\n\n')}\n\nEscreva o playbook de vendas pelo WhatsApp desta loja com as seções:\n## Abordagens que funcionam\n## Objeções mais comuns e como responder\n## Frases prontas (exemplos reais que funcionaram)\n## O que evitar\n## Quando fazer follow-up\nUse só o que aparece nas análises; não invente números.`,
     maxTokens: 4000

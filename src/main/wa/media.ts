@@ -1,11 +1,12 @@
 import { app, net, protocol } from 'electron'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { execFile } from 'node:child_process'
 import { join, normalize, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { downloadMediaMessage, type WASocket } from 'baileys'
 import type { MediaInfo } from '@shared/types'
-import { getRawMessage, setMediaUrl } from './store'
+import { getRawMessage, setMediaUrl, storeEvents } from './store'
 import { getDb } from '../db'
 import { log } from '../log'
 
@@ -39,13 +40,20 @@ export function registerMediaScheme(): void {
 
 /** Serve só arquivos de dentro da pasta de mídia (sem ../). */
 export function handleMediaProtocol(): void {
-  protocol.handle(MEDIA_SCHEME, (req) => {
+  protocol.handle(MEDIA_SCHEME, async (req) => {
     const url = new URL(req.url)
     const rel = decodeURIComponent(url.pathname).replace(/^\/+/, '')
     const root = mediaRoot()
     const file = normalize(join(root, url.hostname, rel))
     if (!file.startsWith(root + sep) || !existsSync(file)) return new Response('não encontrado', { status: 404 })
-    return net.fetch(pathToFileURL(file).toString(), { headers: req.headers })
+    const res = await net.fetch(pathToFileURL(file).toString(), { headers: req.headers })
+    // Defesa extra: o conteúdo servido nunca executa script e só imagem/áudio/vídeo abrem embutidos
+    const headers = new Headers(res.headers)
+    headers.set('Content-Security-Policy', "default-src 'none'; img-src 'self'; media-src 'self'; sandbox")
+    headers.set('X-Content-Type-Options', 'nosniff')
+    if (!/^(image|audio|video)\//.test(headers.get('content-type') ?? ''))
+      headers.set('Content-Disposition', 'attachment')
+    return new Response(res.body, { status: res.status, headers })
   })
 }
 
@@ -53,17 +61,35 @@ export function mediaUrl(accountId: string, file: string): string {
   return `${MEDIA_SCHEME}://${accountId}/${encodeURIComponent(file)}`
 }
 
+// Extensões aceitas para o arquivo guardado na pasta do app (nada que o navegador execute, como .html/.svg)
+const SAFE_EXT = new Set([
+  ...Object.values(EXT),
+  'jpeg',
+  'mov',
+  'm4v',
+  'opus',
+  'wav',
+  'amr',
+  'doc',
+  'docx',
+  'xls',
+  'xlsx',
+  'ppt',
+  'pptx',
+  'txt',
+  'csv',
+  'zip',
+  'rar',
+  'odt',
+  'ods'
+])
+
 function extFor(media: MediaInfo): string {
   const mime = (media.mimetype ?? '').split(';')[0].trim()
-  if (media.fileName && /\.[a-z0-9]{1,6}$/i.test(media.fileName)) return media.fileName.split('.').pop()!.toLowerCase()
-  return (
-    EXT[mime] ??
-    mime
-      .split('/')[1]
-      ?.replace(/[^a-z0-9]/gi, '')
-      .slice(0, 6) ??
-    'bin'
-  )
+  const fromName = media.fileName?.split('.').pop()?.toLowerCase()
+  if (fromName && SAFE_EXT.has(fromName)) return fromName
+  if (EXT[mime]) return EXT[mime]
+  return 'bin'
 }
 
 const inflight = new Map<string, Promise<MediaInfo>>()
@@ -136,3 +162,42 @@ export function shouldAutoDownload(type: string, media: MediaInfo | null): boole
   if (type === 'image' || type === 'audio') return size < 5_000_000
   return false
 }
+
+/** Nome seguro para sugerir ao salvar um arquivo recebido. */
+export function safeFileName(name: string | undefined, fallback: string): string {
+  const base = (name ?? '').split(/[\\/]/).pop() ?? ''
+  const clean = base
+    // eslint-disable-next-line no-control-regex -- remover caracteres de controle é o objetivo
+    .replace(/[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069<>:"|?*]/g, '_')
+    .replace(/^\.+/, '')
+    .trim()
+    .slice(0, 120)
+  return clean || fallback
+}
+
+/** Marca o arquivo como baixado da internet (Windows: Zone.Identifier; Mac: quarentena). */
+export function markDownloaded(path: string): void {
+  try {
+    if (process.platform === 'win32') {
+      writeFileSync(path + ':Zone.Identifier', '[ZoneTransfer]\r\nZoneId=3\r\n')
+    } else if (process.platform === 'darwin') {
+      const ts = Math.floor(Date.now() / 1000).toString(16)
+      execFile('xattr', ['-w', 'com.apple.quarantine', `0081;${ts};Disparador;`, path], () => undefined)
+    }
+  } catch {
+    /* sem a marca o arquivo ainda é salvo */
+  }
+}
+
+export function deleteMediaFiles(accountId: string, files: string[]): void {
+  const dir = join(mediaRoot(), accountId)
+  for (const f of files) {
+    if (!/^[\w.-]+$/.test(f)) continue
+    rmSync(join(dir, f), { force: true })
+  }
+}
+
+// Mensagem apagada para todos: some também o arquivo
+storeEvents.on('purge-media', ({ accountId, file }: { accountId: string; file: string }) =>
+  deleteMediaFiles(accountId, [file])
+)

@@ -15,6 +15,7 @@ import * as deals from './deals'
 import * as ai from './ai/router'
 import * as assistant from './ai/assistant'
 import { wa } from './wa/manager'
+import { deleteMediaFiles } from './wa/media'
 import { sendAndStore } from './wa/send'
 import { renderTemplate, OPT_OUT_FOOTER, firstName } from '@shared/rules'
 
@@ -101,9 +102,10 @@ export function registerBusinessIpc(handle: Handle, getWindow: () => BrowserWind
       .strict(),
     (a) => people.savePerson(a.accountId, a)
   )
-  handle('people:delete', z.object({ accountId, ids: z.array(id).max(50_000) }).strict(), (a) =>
-    people.deletePeople(a.accountId, a.ids)
-  )
+  handle('people:delete', z.object({ accountId, ids: z.array(id).max(50_000) }).strict(), (a) => {
+    const { mediaFiles } = people.deletePeople(a.accountId, a.ids)
+    deleteMediaFiles(a.accountId, mediaFiles)
+  })
   handle('people:opt-out', z.object({ accountId, ids: z.array(id).max(50_000), value: z.boolean() }).strict(), (a) =>
     people.setOptOut(a.accountId, a.ids, a.value)
   )
@@ -201,14 +203,15 @@ export function registerBusinessIpc(handle: Handle, getWindow: () => BrowserWind
   )
   handle('campaigns:start', z.object({ id }).strict(), (a) => {
     const c = campaignOf(a.id)
-    need(c.accountId, c.kind === 'groups' ? 'gruposEnvio' : 'campanhas', 'lembretes')
+    need(c.accountId, c.kind === 'groups' ? 'gruposEnvio' : c.kind === 'reminder' ? 'lembretes' : 'campanhas')
     const r = C.startCampaign(a.id)
     engine.kick(c.accountId)
     return r
   })
   handle('campaigns:pause', z.object({ id }).strict(), (a) => {
+    const c = campaignOf(a.id)
     C.pauseCampaign(a.id, null)
-    engine.kick(campaignOf(a.id).accountId)
+    engine.kick(c.accountId)
     return campaignOf(a.id)
   })
   handle('campaigns:cancel', z.object({ id }).strict(), (a) => {
@@ -334,7 +337,7 @@ export function registerBusinessIpc(handle: Handle, getWindow: () => BrowserWind
         })
         phones = [...phones, ...items.map((p) => p.phone)]
       }
-      return groups.createGroup(sock(a.accountId), a.accountId, {
+      return groups.createGroup(sock(a.accountId), a.accountId, (acc) => wa.getSocket(acc), {
         subject: a.subject,
         description: a.description,
         phones,

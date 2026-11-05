@@ -4,7 +4,7 @@ import { is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { openDb, closeDb } from './db'
 import { initLog, log } from './log'
-import { registerIpc } from './ipc'
+import { registerIpc, trustedSender } from './ipc'
 import { listAccounts } from './accounts'
 import { wa } from './wa/manager'
 import { refreshWaVersion } from './wa/version'
@@ -67,10 +67,16 @@ if (!app.requestSingleInstanceLock()) {
       if (/^https?:\/\//.test(url)) void shell.openExternal(url)
       return { action: 'deny' }
     })
-    mainWindow.webContents.on('will-navigate', (e, url) => {
+    const blockNav = (e: { preventDefault: () => void }, url: string): void => {
       const dev = process.env['ELECTRON_RENDERER_URL']
-      if (!(dev && url.startsWith(dev))) e.preventDefault()
+      if (!(dev && !app.isPackaged && url.startsWith(dev))) e.preventDefault()
+    }
+    mainWindow.webContents.on('will-navigate', (e, url) => blockNav(e, url))
+    mainWindow.webContents.on('will-frame-navigate', (e) => {
+      if (!e.isMainFrame) e.preventDefault()
     })
+    mainWindow.webContents.on('will-redirect', (e, url) => blockNav(e, url))
+    mainWindow.webContents.on('will-attach-webview', (e) => e.preventDefault())
 
     if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
       void mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
@@ -82,15 +88,17 @@ if (!app.requestSingleInstanceLock()) {
   // Conversa aberta na tela (para não notificar o que o usuário já está vendo)
   let focusedChat: { accountId: string; jid: string } | null = null
   ipcMain.on('ui:focused-chat', (e, v: unknown) => {
-    const url = e.senderFrame?.url ?? ''
-    const dev = process.env['ELECTRON_RENDERER_URL']
-    if (!url.startsWith('file://') && !(dev && url.startsWith(dev))) return
-    const ok = !!v && typeof v === 'object' && typeof (v as { jid?: unknown }).jid === 'string'
-    focusedChat = ok ? (v as { accountId: string; jid: string }) : null
+    if (!trustedSender(e)) return
+    const o = v as { accountId?: unknown; jid?: unknown } | null
+    focusedChat =
+      o && typeof o.accountId === 'string' && typeof o.jid === 'string' && o.jid.length < 120 && o.accountId.length < 60
+        ? { accountId: o.accountId, jid: o.jid }
+        : null
   })
 
   function notify(accountId: string, m: MessageItem): void {
     if (!Notification.isSupported()) return
+    if (Date.now() / 1000 - m.ts > 10 * 60) return // acumuladas com o app fechado: só contam como não lidas
     const win = mainWindow
     const visible = !!win && win.isFocused() && focusedChat?.accountId === accountId && focusedChat.jid === m.chatJid
     if (visible) return

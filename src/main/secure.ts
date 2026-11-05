@@ -6,8 +6,21 @@ import { log } from './log'
 
 let warned = false
 
+function strongEncryption(): boolean {
+  if (!safeStorage.isEncryptionAvailable()) return false
+  // No Linux sem chaveiro, o Electron "criptografa" com uma senha fixa: não conta como proteção
+  if (process.platform !== 'linux') return true
+  try {
+    return (
+      (safeStorage as unknown as { getSelectedStorageBackend(): string }).getSelectedStorageBackend() !== 'basic_text'
+    )
+  } catch {
+    return false
+  }
+}
+
 export function seal(plain: Buffer): Buffer {
-  if (safeStorage.isEncryptionAvailable()) {
+  if (strongEncryption()) {
     return Buffer.concat([Buffer.from([1]), safeStorage.encryptString(plain.toString('base64'))])
   }
   if (!warned) {

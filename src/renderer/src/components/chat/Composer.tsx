@@ -76,6 +76,18 @@ function ComposerInner({ jid, disabled }: { jid: string; disabled?: string | nul
   useEffect(() => {
     ta.current?.focus()
   }, [replyTo])
+  // Ao trocar de conversa ou sair da tela no meio de uma gravação: desliga o microfone
+  useEffect(
+    () => () => {
+      const cur = recRef.current
+      if (cur) {
+        cur.recorder.stream.getTracks().forEach((t) => t.stop())
+        if (cur.recorder.state !== 'inactive') cur.recorder.stop()
+        recRef.current = null
+      }
+    },
+    []
+  )
   useEffect(() => {
     if (editing) return
     try {

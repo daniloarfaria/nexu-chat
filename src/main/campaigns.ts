@@ -205,10 +205,13 @@ export function deleteCampaign(id: number): void {
 export function countAudience(accountId: string, a: CampaignAudience): { total: number; optedOut: number } {
   const { sql, args } = audienceSql(accountId, a)
   const r = getDb()
-    .prepare(`SELECT COUNT(*) AS total, SUM(opt_out) AS optedOut FROM people p WHERE ${sql}`)
+    .prepare(`SELECT COUNT(*) AS total, SUM(${OPTED_SQL}) AS optedOut FROM people p WHERE ${sql}`)
     .get(...args) as { total: number; optedOut: number | null }
   return { total: r.total, optedOut: r.optedOut ?? 0 }
 }
+
+// Pediu para sair: marcado no contato ou presente na lista de supressão (número ou JID)
+const OPTED_SQL = `(p.opt_out = 1 OR EXISTS (SELECT 1 FROM suppression s WHERE s.account_id = p.account_id AND (s.key = p.phone OR s.key = p.jid)))`
 
 function audienceSql(accountId: string, a: CampaignAudience): { sql: string; args: Array<string | number> } {
   const where = ['p.account_id = ?']
@@ -223,8 +226,8 @@ function audienceSql(accountId: string, a: CampaignAudience): { sql: string; arg
   }
   if (a.type === 'list') {
     const ids = (a.personIds ?? []).slice(0, 50_000)
-    where.push(ids.length ? `p.id IN (${ids.map(() => '?').join(',')})` : '0')
-    args.push(...ids)
+    where.push('p.id IN (SELECT value FROM json_each(?))')
+    args.push(JSON.stringify(ids))
   }
   if (a.excludeTags?.length) {
     where.push(
@@ -264,7 +267,9 @@ function buildTargets(c: Campaign): void {
     }
     const { sql, args } = audienceSql(c.accountId, c.audience)
     const people = db
-      .prepare(`SELECT id, phone, jid, name, birthday, fields, opt_out FROM people p WHERE ${sql} ORDER BY p.id`)
+      .prepare(
+        `SELECT id, phone, jid, name, birthday, fields, ${OPTED_SQL} AS opt_out FROM people p WHERE ${sql} ORDER BY p.id`
+      )
       .all(...args) as Array<{
       id: number
       phone: string
@@ -424,7 +429,7 @@ export function exportReport(campaignId: number): string {
   const esc = (v: unknown): string => {
     let s = String(v ?? '')
     if (/^[=+\-@\t\r]/.test(s)) s = "'" + s
-    return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+    return /[";\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
   }
   const head = ['Nome', 'Telefone', 'Situação', 'Enviada em', 'Entregue em', 'Lida em', 'Respondeu em', 'Erro']
   const lines = rows.map((r) =>
@@ -477,4 +482,14 @@ export function lastTouch(
       .get(accountId, jid, phone, Date.now() - withinDays * 86_400_000) as
       { id: number; name: string; kind: Campaign['kind'] } | undefined) ?? null
   )
+}
+
+/** Envios com idade mínima e quantos deles tiveram resposta (para o monitor de saúde). */
+export function replyHealth(campaignId: number, minAgeMs: number): { sent: number; replied: number } {
+  const r = getDb()
+    .prepare(
+      "SELECT COUNT(*) AS sent, SUM(replied_at IS NOT NULL) AS replied FROM campaign_targets WHERE campaign_id = ? AND status = 'sent' AND sent_at < ?"
+    )
+    .get(campaignId, Date.now() - minAgeMs) as { sent: number; replied: number | null }
+  return { sent: r.sent, replied: r.replied ?? 0 }
 }

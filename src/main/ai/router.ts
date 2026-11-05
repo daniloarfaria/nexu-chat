@@ -180,15 +180,15 @@ export function saveProvider(p: {
 }): AiProvider {
   const db = getDb()
   const preset = p.preset !== 'custom' ? PRESETS[p.preset] : null
-  const baseUrl = (p.baseUrl ?? preset?.baseUrl ?? '').trim().replace(/\/+$/, '')
-  if (!/^https?:\/\//.test(baseUrl)) throw new Error('Endereço da API inválido')
-  if (/^http:\/\//.test(baseUrl) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?/.test(baseUrl)) {
-    throw new Error('Use https (http só é aceito para modelos no próprio computador)')
-  }
-  const key = p.apiKey === undefined ? undefined : p.apiKey ? sealString(p.apiKey.trim()) : null
-  if (p.id) {
-    const cur = db.prepare('SELECT * FROM ai_providers WHERE id = ?').get(p.id) as unknown as Row | undefined
-    if (!cur) throw new Error('Provedor não encontrado')
+  const cur = p.id
+    ? (db.prepare('SELECT * FROM ai_providers WHERE id = ?').get(p.id) as unknown as Row | undefined)
+    : undefined
+  if (p.id && !cur) throw new Error('Provedor não encontrado')
+  const baseUrl = validateBaseUrl(p.baseUrl ?? cur?.base_url ?? preset?.baseUrl ?? '')
+  let key = p.apiKey === undefined ? undefined : p.apiKey ? sealString(p.apiKey.trim()) : null
+  // Endereço mudou de servidor: a chave antiga não vai junto (precisa ser informada de novo)
+  if (cur && key === undefined && new URL(baseUrl).origin !== new URL(cur.base_url).origin) key = null
+  if (p.id && cur) {
     db.prepare(
       `UPDATE ai_providers SET name = ?, base_url = ?, api_key = ?, model_fast = ?, model_smart = ?, trains_on_data = ?, enabled = ?, priority = ?, cooldown_until = 0 WHERE id = ?`
     ).run(
@@ -224,6 +224,24 @@ export function saveProvider(p: {
       Date.now()
     ).lastInsertRowid
   return listProviders().find((x) => x.id === Number(id))!
+}
+
+/** Só https; http apenas para modelos no próprio computador. Sem usuário/senha na URL. */
+export function validateBaseUrl(raw: string): string {
+  let u: URL
+  try {
+    u = new URL(raw.trim())
+  } catch {
+    throw new Error('Endereço da API inválido')
+  }
+  if (u.username || u.password) throw new Error('O endereço não pode conter usuário ou senha')
+  if (u.protocol === 'http:') {
+    if (!['localhost', '127.0.0.1', '[::1]'].includes(u.hostname))
+      throw new Error('Use https (http só é aceito para modelos no próprio computador)')
+  } else if (u.protocol !== 'https:') throw new Error('Endereço da API inválido')
+  u.hash = ''
+  u.search = ''
+  return u.toString().replace(/\/+$/, '')
 }
 
 export function deleteProvider(id: number): void {

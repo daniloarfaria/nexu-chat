@@ -8,7 +8,7 @@ import { getAccount } from './accounts'
 import { wa } from './wa/manager'
 import * as store from './wa/store'
 import * as send from './wa/send'
-import { ensureMedia } from './wa/media'
+import { ensureMedia, markDownloaded, safeFileName } from './wa/media'
 import type { Handle } from './ipc'
 
 const accountId = z.string().uuid()
@@ -51,9 +51,10 @@ export function registerChatIpc(handle: Handle, getWindow: () => BrowserWindow |
       return store.listChats(a.accountId, a)
     }
   )
-  handle('chats:get', z.object({ accountId, jids: z.array(jid).max(200) }).strict(), (a) =>
-    store.getChats(a.accountId, a.jids)
-  )
+  handle('chats:get', z.object({ accountId, jids: z.array(jid).max(200) }).strict(), (a) => {
+    account(a.accountId)
+    return store.getChats(a.accountId, a.jids)
+  })
   handle('chats:read', z.object({ accountId, jid }).strict(), async (a) => {
     account(a.accountId)
     await send.readChat(wa.getSocket(a.accountId), a.accountId, a.jid)
@@ -167,9 +168,13 @@ export function registerChatIpc(handle: Handle, getWindow: () => BrowserWindow |
     const src = join(app.getPath('userData'), 'media', a.accountId, m.file)
     if (!existsSync(src)) throw new Error('Arquivo não encontrado')
     const win = getWindow()
-    const opts = { defaultPath: join(app.getPath('downloads'), m.fileName ?? m.file) }
+    // Nome vem do remetente: nada de pastas, caracteres de controle ou truques de direção do texto
+    const opts = { defaultPath: join(app.getPath('downloads'), safeFileName(m.fileName, m.file)) }
     const r = await (win ? dialog.showSaveDialog(win, opts) : dialog.showSaveDialog(opts))
-    if (!r.canceled && r.filePath) copyFileSync(src, r.filePath)
+    if (!r.canceled && r.filePath) {
+      copyFileSync(src, r.filePath)
+      markDownloaded(r.filePath) // mantém os avisos do sistema ao abrir arquivos vindos da internet
+    }
   })
 
   handle('sync:state', z.object({ accountId }).strict(), (a) => store.getSyncState(a.accountId))

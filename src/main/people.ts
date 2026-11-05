@@ -72,7 +72,7 @@ export function getPerson(accountId: string, id: number): Person | null {
 }
 
 export function findPersonByJid(accountId: string, jid: string): Person | null {
-  const phone = jid.endsWith('@s.whatsapp.net') ? jid.split('@')[0] : null
+  const phone = jid.endsWith('@s.whatsapp.net') ? jid.split('@')[0] : /^\d{8,15}$/.test(jid) ? jid : null
   const r = getDb()
     .prepare(`${SELECT} WHERE p.account_id = ? AND (p.jid = ? OR p.phone = ?) LIMIT 1`)
     .get(accountId, jid, phone ?? '§') as Row | undefined
@@ -166,46 +166,123 @@ export function bulkTag(accountId: string, ids: number[], tag: string, add: bool
   })
 }
 
-export function deletePeople(accountId: string, ids: number[]): void {
+/** Chaves que identificam a pessoa: número e JIDs conhecidos (inclusive LID mapeado). */
+function identityKeys(accountId: string, jidOrPhone: string): string[] {
+  const keys = new Set<string>([jidOrPhone])
+  const phone = jidOrPhone.endsWith('@s.whatsapp.net')
+    ? jidOrPhone.split('@')[0]
+    : /^\d+$/.test(jidOrPhone)
+      ? jidOrPhone
+      : null
+  if (phone) {
+    keys.add(phone)
+    keys.add(`${phone}@s.whatsapp.net`)
+    const lids = getDb()
+      .prepare('SELECT lid FROM lid_map WHERE account_id = ? AND pn = ?')
+      .all(accountId, `${phone}@s.whatsapp.net`) as Array<{ lid: string }>
+    for (const l of lids) keys.add(l.lid)
+  }
+  if (jidOrPhone.endsWith('@lid')) {
+    const pn = getDb().prepare('SELECT pn FROM lid_map WHERE account_id = ? AND lid = ?').get(accountId, jidOrPhone) as
+      { pn: string } | undefined
+    if (pn) {
+      keys.add(pn.pn)
+      keys.add(pn.pn.split('@')[0])
+    }
+  }
+  return [...keys]
+}
+
+function suppress(accountId: string, keys: string[]): void {
+  const ins = getDb().prepare('INSERT OR IGNORE INTO suppression (account_id, key, at) VALUES (?, ?, ?)')
+  for (const k of keys) ins.run(accountId, k, Date.now())
+}
+
+/**
+ * Exclusão a pedido (LGPD): apaga contato, conversas, mensagens, mídias, vendas e histórico de envios.
+ * Se a pessoa tinha pedido para não receber, só o número fica na lista de supressão.
+ */
+export function deletePeople(accountId: string, ids: number[]): { mediaFiles: string[] } {
   const db = getDb()
+  const mediaFiles: string[] = []
   transaction(db, () => {
-    for (const id of ids) db.prepare('DELETE FROM people WHERE id = ? AND account_id = ?').run(id, accountId)
+    for (const id of ids) {
+      const p = db
+        .prepare('SELECT phone, jid, opt_out FROM people WHERE id = ? AND account_id = ?')
+        .get(id, accountId) as { phone: string; jid: string | null; opt_out: number } | undefined
+      if (!p) continue
+      const keys = identityKeys(accountId, p.phone)
+      if (p.jid) for (const k of identityKeys(accountId, p.jid)) keys.push(k)
+      const jids = [...new Set(keys.filter((k) => k.includes('@')))]
+      for (const jid of jids) {
+        const media = db
+          .prepare('SELECT media FROM messages WHERE account_id = ? AND chat_jid = ? AND media IS NOT NULL')
+          .all(accountId, jid) as Array<{ media: string }>
+        for (const m of media) {
+          const f = (JSON.parse(m.media) as { file?: string }).file
+          if (f) mediaFiles.push(f)
+        }
+        for (const t of ['messages', 'messages_fts'])
+          db.prepare(`DELETE FROM ${t} WHERE account_id = ? AND chat_jid = ?`).run(accountId, jid)
+        db.prepare('DELETE FROM chats WHERE account_id = ? AND jid = ?').run(accountId, jid)
+        db.prepare('DELETE FROM contacts WHERE account_id = ? AND jid = ?').run(accountId, jid)
+        db.prepare('DELETE FROM deals WHERE account_id = ? AND chat_jid = ?').run(accountId, jid)
+        db.prepare('DELETE FROM auto_log WHERE account_id = ? AND jid = ?').run(accountId, jid)
+        db.prepare('DELETE FROM group_warnings WHERE account_id = ? AND participant = ?').run(accountId, jid)
+        db.prepare('DELETE FROM lid_map WHERE account_id = ? AND (lid = ? OR pn = ?)').run(accountId, jid, jid)
+      }
+      db.prepare(
+        `UPDATE campaign_targets SET name = NULL, phone = NULL, jid = NULL, vars = NULL, error = NULL
+         WHERE person_id = ? AND campaign_id IN (SELECT id FROM campaigns WHERE account_id = ?)`
+      ).run(id, accountId)
+      if (p.opt_out) suppress(accountId, [p.phone])
+      db.prepare('DELETE FROM people WHERE id = ? AND account_id = ?').run(id, accountId)
+    }
   })
+  return { mediaFiles }
 }
 
 export function setOptOut(accountId: string, ids: number[], value: boolean): void {
   const db = getDb()
   transaction(db, () => {
-    for (const id of ids)
-      db.prepare('UPDATE people SET opt_out = ?, opt_out_at = ? WHERE id = ? AND account_id = ?').run(
+    for (const id of ids) {
+      const p = db.prepare('SELECT phone, jid FROM people WHERE id = ? AND account_id = ?').get(id, accountId) as
+        { phone: string; jid: string | null } | undefined
+      if (!p) continue
+      db.prepare('UPDATE people SET opt_out = ?, opt_out_at = ? WHERE id = ?').run(
         value ? 1 : 0,
         value ? Date.now() : null,
-        id,
-        accountId
+        id
+      )
+      const keys = [...identityKeys(accountId, p.phone), ...(p.jid ? identityKeys(accountId, p.jid) : [])]
+      if (value) suppress(accountId, keys)
+      else
+        for (const k of keys) db.prepare('DELETE FROM suppression WHERE account_id = ? AND key = ?').run(accountId, k)
+    }
+  })
+}
+
+/** Marca opt-out pelo número/JID (resposta "SAIR"), inclusive quando só se conhece o LID. */
+export function optOutByJid(accountId: string, jid: string): void {
+  const db = getDb()
+  transaction(db, () => {
+    suppress(accountId, identityKeys(accountId, jid))
+    const p = findPersonByJid(accountId, jid)
+    if (p)
+      db.prepare('UPDATE people SET opt_out = 1, opt_out_at = ?, jid = COALESCE(jid, ?) WHERE id = ?').run(
+        Date.now(),
+        jid,
+        p.id
       )
   })
 }
 
-/** Marca opt-out pelo número/JID (resposta "SAIR"). Cria o contato se não existir. */
-export function optOutByJid(accountId: string, jid: string): void {
-  const phone = jid.endsWith('@s.whatsapp.net') ? jid.split('@')[0] : null
-  const db = getDb()
-  const p = findPersonByJid(accountId, jid)
-  if (p) {
-    db.prepare('UPDATE people SET opt_out = 1, opt_out_at = ?, jid = COALESCE(jid, ?) WHERE id = ?').run(
-      Date.now(),
-      jid,
-      p.id
-    )
-  } else if (phone) {
-    db.prepare(
-      'INSERT INTO people (account_id, phone, jid, opt_out, opt_out_at, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?, ?) ON CONFLICT DO UPDATE SET opt_out = 1'
-    ).run(accountId, phone, jid, Date.now(), Date.now(), Date.now())
-  }
-}
-
-export function isOptedOut(accountId: string, jid: string): boolean {
-  return !!findPersonByJid(accountId, jid)?.optOut
+export function isOptedOut(accountId: string, jidOrPhone: string): boolean {
+  const keys = identityKeys(accountId, jidOrPhone)
+  const hit = getDb()
+    .prepare(`SELECT 1 FROM suppression WHERE account_id = ? AND key IN (${keys.map(() => '?').join(',')}) LIMIT 1`)
+    .get(accountId, ...keys)
+  return !!hit || !!findPersonByJid(accountId, jidOrPhone)?.optOut
 }
 
 export function exportCsv(accountId: string): string {
@@ -214,7 +291,7 @@ export function exportCsv(accountId: string): string {
   const esc = (v: unknown): string => {
     let s = String(v ?? '')
     if (/^[=+\-@\t\r]/.test(s)) s = "'" + s // evita fórmula maliciosa ao abrir no Excel
-    return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+    return /[";\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
   }
   const head = ['Nome', 'Telefone', 'Aniversário', 'Etiquetas', 'Não receber', ...fieldNames]
   const lines = items.map((p) =>
@@ -241,7 +318,8 @@ function guess(headers: string[], words: string[]): number | null {
 
 export function previewImport(data: Uint8Array, sheetName?: string): ImportPreview {
   if (data.length > 30 * 1024 * 1024) throw new Error('Planilha maior que 30 MB')
-  const wb = XLSX.read(data, { type: 'array', cellDates: true, dense: true })
+  // sheetRows limita o que é lido (evita travar com planilha gigante ou maliciosa)
+  const wb = XLSX.read(data, { type: 'array', cellDates: true, dense: true, sheetRows: MAX_ROWS + 2 })
   const sheet = sheetName && wb.SheetNames.includes(sheetName) ? sheetName : wb.SheetNames[0]
   if (!sheet) throw new Error('Planilha vazia')
   const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[sheet], {
@@ -252,7 +330,7 @@ export function previewImport(data: Uint8Array, sheetName?: string): ImportPrevi
   })
   if (!rows.length) throw new Error('A aba escolhida está vazia')
   if (rows.length > MAX_ROWS + 1) throw new Error(`Máximo de ${MAX_ROWS.toLocaleString('pt-BR')} linhas por importação`)
-  const width = Math.max(...rows.slice(0, 50).map((r) => r.length))
+  const width = Math.min(200, Math.max(...rows.slice(0, 50).map((r) => r.length)))
   const headers = Array.from({ length: width }, (_, i) => String(rows[0][i] ?? '').trim() || `Coluna ${i + 1}`)
   const body = rows.slice(1)
   const token = randomUUID()

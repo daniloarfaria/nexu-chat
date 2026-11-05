@@ -111,6 +111,10 @@ function mergeChat(accountId: string, from: string, to: string): void {
     from
   )
   db.prepare('DELETE FROM messages WHERE account_id = ? AND chat_jid = ?').run(accountId, from)
+  // Evita resultado duplicado na busca: remove do índice as cópias que já existem na conversa de destino
+  db.prepare(
+    'DELETE FROM messages_fts WHERE account_id = ? AND chat_jid = ? AND id IN (SELECT id FROM messages_fts WHERE account_id = ? AND chat_jid = ?)'
+  ).run(accountId, from, accountId, to)
   db.prepare('UPDATE messages_fts SET chat_jid = ? WHERE account_id = ? AND chat_jid = ?').run(to, accountId, from)
   db.prepare('DELETE FROM chats WHERE account_id = ? AND jid = ?').run(accountId, from)
   storeEvents.emit('merged', { accountId, from, to })
@@ -153,7 +157,7 @@ export function saveChats(accountId: string, chats: Partial<Chat>[], fromUpdate 
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(account_id, jid) DO UPDATE SET
        name = COALESCE(excluded.name, chats.name),
-       unread = CASE WHEN ? THEN excluded.unread ELSE chats.unread END,
+       unread = CASE WHEN ? THEN (CASE WHEN excluded.unread = 1 AND chats.unread > 0 THEN chats.unread ELSE excluded.unread END) ELSE chats.unread END,
        last_ts = MAX(chats.last_ts, excluded.last_ts),
        archived = CASE WHEN ? THEN excluded.archived ELSE chats.archived END,
        pinned = CASE WHEN ? THEN excluded.pinned ELSE chats.pinned END,
@@ -165,22 +169,27 @@ export function saveChats(accountId: string, chats: Partial<Chat>[], fromUpdate 
       if (!c.id || c.id === STATUS_JID || c.id.endsWith('@newsletter') || c.id.endsWith('@broadcast')) continue
       const jid = canonJid(accountId, c.id, (c as { pnJid?: string }).pnJid)
       const ts = Number(c.conversationTimestamp ?? c.lastMessageRecvTimestamp ?? 0)
+      // Em chats.update o Baileys manda unreadCount como incremento (+1), que o saveMessages já conta.
+      // Só valem: 0 (lida em outro aparelho) e -1 (marcada como não lida). No histórico, é o total.
+      const u = c.unreadCount
+      const setUnread = fromUpdate ? u === 0 || (u != null && u < 0) : u != null
+      const unreadValue = u != null && u < 0 ? 1 : Math.max(0, u ?? 0)
       up.run(
         accountId,
         jid,
         c.name ?? null,
         isJidGroup(jid) ? 1 : 0,
-        Math.max(0, c.unreadCount ?? 0),
+        unreadValue,
         ts,
         c.archived ? 1 : 0,
         c.pinned ? Number(c.pinned) : 0,
         Number(c.muteEndTime ?? 0),
         c.readOnly ? 1 : 0,
-        c.unreadCount != null ? 1 : fromUpdate ? 0 : 1,
-        c.archived != null ? 1 : 0,
-        c.pinned != null ? 1 : 0,
-        c.muteEndTime != null ? 1 : 0,
-        c.readOnly != null ? 1 : 0
+        setUnread ? 1 : 0,
+        'archived' in c ? 1 : 0,
+        'pinned' in c ? 1 : 0, // null = desafixada
+        'muteEndTime' in c ? 1 : 0, // null = sem silêncio
+        'readOnly' in c ? 1 : 0
       )
       touch(accountId, jid)
     }
@@ -237,7 +246,10 @@ export function saveMessages(accountId: string, msgs: WAMessage[], opts: SaveOpt
        media = CASE WHEN messages.media IS NULL THEN excluded.media ELSE messages.media END`
   )
   const fts = db.prepare('INSERT INTO messages_fts (text, account_id, chat_jid, id) VALUES (?, ?, ?, ?)')
-  const exists = db.prepare('SELECT 1 FROM messages WHERE account_id = ? AND chat_jid = ? AND id = ?')
+  const exists = db.prepare('SELECT type, deleted FROM messages WHERE account_id = ? AND chat_jid = ? AND id = ?')
+  const fill = db.prepare(
+    'UPDATE messages SET type = ?, text = ?, media = ?, extra = ?, quoted_id = ? WHERE account_id = ? AND chat_jid = ? AND id = ?'
+  )
   const chatUp = db.prepare(
     `INSERT INTO chats (account_id, jid, name, is_group, unread, last_ts, last_preview, last_from_me)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -272,7 +284,22 @@ export function saveMessages(accountId: string, msgs: WAMessage[], opts: SaveOpt
       const fromMe = key.fromMe ? 1 : 0
       const sender = fromMe ? null : key.participant ? canonJid(accountId, key.participant, k.participantAlt) : chat
       const ts = Number(m.messageTimestamp ?? 0) || Math.floor(Date.now() / 1000)
-      const isNew = !exists.get(accountId, chat, key.id)
+      const prev = exists.get(accountId, chat, key.id) as { type: string; deleted: number } | undefined
+      // Aviso "não pôde ser lida" (mensagem ainda cifrada) substituído pelo conteúdo real: conta como nova
+      const upgraded = !!prev && prev.type === 'system' && p.type !== 'system' && !prev.deleted
+      const isNew = !prev || upgraded
+      if (upgraded) {
+        fill.run(
+          p.type,
+          p.text,
+          p.media ? JSON.stringify(p.media) : null,
+          p.extra ? JSON.stringify(p.extra) : null,
+          p.quotedId,
+          accountId,
+          chat,
+          key.id
+        )
+      }
       ins.run(
         accountId,
         chat,
@@ -330,11 +357,15 @@ function applyMutation(accountId: string, chat: string, mut: ReturnType<typeof m
       mut.targetId
     )
   } else if (mut.kind === 'revoke') {
-    db.prepare('UPDATE messages SET deleted = 1, text = NULL WHERE account_id = ? AND chat_jid = ? AND id = ?').run(
-      accountId,
-      chat,
-      mut.targetId
-    )
+    const old = db
+      .prepare('SELECT media FROM messages WHERE account_id = ? AND chat_jid = ? AND id = ?')
+      .get(accountId, chat, mut.targetId) as { media: string | null } | undefined
+    const file = old?.media ? (JSON.parse(old.media) as { file?: string }).file : undefined
+    if (file) storeEvents.emit('purge-media', { accountId, file })
+    // Apagada para todos: não guarda mais o conteúdo (nem o original bruto)
+    db.prepare(
+      'UPDATE messages SET deleted = 1, text = NULL, raw = NULL, media = NULL, extra = NULL WHERE account_id = ? AND chat_jid = ? AND id = ?'
+    ).run(accountId, chat, mut.targetId)
     db.prepare('DELETE FROM messages_fts WHERE account_id = ? AND chat_jid = ? AND id = ?').run(
       accountId,
       chat,

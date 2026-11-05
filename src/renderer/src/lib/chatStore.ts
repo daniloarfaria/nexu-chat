@@ -35,13 +35,15 @@ function sortChats(list: ChatItem[]): ChatItem[] {
   return list.sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.lastTs - a.lastTs)
 }
 
+const fold = (t: string): string => t.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim()
+
 function matches(c: ChatItem, filter: ChatFilter, search: string): boolean {
   if (filter === 'archived' ? !c.archived : c.archived) return false
   if (filter === 'unread' && c.unread === 0) return false
   if (filter === 'groups' && !c.isGroup) return false
   if (!c.lastTs) return false
-  const q = search.trim().toLowerCase()
-  if (q && !c.name.toLowerCase().includes(q) && !(c.phone ?? '').includes(q.replace(/\D/g, '') || '§')) return false
+  const q = fold(search)
+  if (q && !fold(c.name).includes(q) && !(c.phone ?? '').includes(search.replace(/\D/g, '') || '§')) return false
   return true
 }
 
@@ -98,7 +100,9 @@ export const useChats = create<ChatState>((set, get) => ({
     try {
       const offset = reset ? 0 : chats.length
       const page = await window.api.invoke('chats:list', { accountId, filter, search, limit: PAGE, offset })
-      if (get().accountId !== accountId) return
+      // Resposta antiga (conta, filtro ou busca mudaram enquanto carregava): descarta
+      const now = get()
+      if (now.accountId !== accountId || now.filter !== filter || now.search !== search) return
       const merged = reset ? page : [...chats, ...page.filter((p) => !chats.some((c) => c.jid === p.jid))]
       set({ chats: merged, hasMore: page.length === PAGE })
     } finally {
@@ -126,14 +130,29 @@ export const useChats = create<ChatState>((set, get) => ({
     const { accountId, messages, hasOlder } = get()
     if (!accountId || hasOlder[jid] === false) return false
     const cur = messages[jid] ?? []
-    const before = cur[0]?.ts ?? null
-    const older = await window.api.invoke('messages:list', { accountId, jid, before, limit: MSG_PAGE })
+    // Busca "até" o segundo da mais antiga (inclusive) para não pular mensagens do mesmo segundo
     const known = new Set(cur.map((m) => m.id))
+    let before = cur[0]?.ts ?? null
+    let fresh: typeof cur = []
+    let full = false
+    for (let i = 0; i < 3 && !fresh.length; i++) {
+      const older = await window.api.invoke('messages:list', {
+        accountId,
+        jid,
+        before: before ? before + 1 : null,
+        limit: MSG_PAGE
+      })
+      fresh = older.filter((m) => !known.has(m.id))
+      full = older.length === MSG_PAGE
+      if (!fresh.length && full && before)
+        before = before - 1 // página inteira já conhecida: avança um segundo
+      else break
+    }
     set((s) => ({
-      messages: { ...s.messages, [jid]: [...older.filter((m) => !known.has(m.id)), ...(s.messages[jid] ?? [])] },
-      hasOlder: { ...s.hasOlder, [jid]: older.length === MSG_PAGE }
+      messages: { ...s.messages, [jid]: [...fresh, ...(s.messages[jid] ?? [])] },
+      hasOlder: { ...s.hasOlder, [jid]: full || fresh.length > 0 }
     }))
-    return older.length > 0
+    return fresh.length > 0
   },
 
   setReply: (replyTo) => set({ replyTo, editing: null }),

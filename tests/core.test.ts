@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { encryptBackup, decryptBackup, isBackupDue } from '../src/main/backup-core'
+import { encryptBackup, encryptBackupV1, decryptBackup, isBackupDue } from '../src/main/backup-core'
 import { parseWaVersion } from '../src/main/wa/version-parse'
 import { maskPhone } from '../src/main/log'
 
@@ -10,6 +10,17 @@ test('backup: cifra e decifra com a senha certa', async () => {
   const enc = await encryptBackup(fakeDb, 'senha-forte-123')
   assert.ok(!enc.includes(Buffer.from('SQLite format 3')), 'conteúdo não pode aparecer em claro')
   assert.deepEqual(await decryptBackup(enc, 'senha-forte-123'), fakeDb)
+})
+
+test('backup: ainda abre o formato antigo (v1)', async () => {
+  const enc = await encryptBackupV1(fakeDb, 'senha-forte-123')
+  assert.deepEqual(await decryptBackup(enc, 'senha-forte-123'), fakeDb)
+})
+
+test('backup: cabeçalho adulterado (parâmetros) é recusado', async () => {
+  const enc = await encryptBackup(fakeDb, 'senha-forte-123')
+  enc[9] = 9 // troca r
+  await assert.rejects(decryptBackup(enc, 'senha-forte-123'))
 })
 
 test('backup: senha errada é recusada', async () => {

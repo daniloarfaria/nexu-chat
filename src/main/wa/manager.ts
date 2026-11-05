@@ -68,6 +68,12 @@ class WhatsAppManager extends EventEmitter {
       }
       this.sessions.set(accountId, s)
     }
+    // Cancela uma reconexão agendada para não abrir duas conexões ao mesmo tempo
+    if (s.timer) {
+      clearTimeout(s.timer)
+      s.timer = null
+    }
+    if (s.sock) this.teardown(s)
     s.stopped = false
     s.pairingPhone = opts.pairingPhone?.replace(/\D/g, '') || undefined
     await this.start(accountId, s)
@@ -97,7 +103,10 @@ class WhatsAppManager extends EventEmitter {
     let pairingRequested = false
     let qrShown = false
 
-    sock.ev.on('creds.update', saveCreds)
+    // Credenciais só do socket atual (um antigo não regrava depois de sair/excluir)
+    sock.ev.on('creds.update', () => {
+      if (s.sock === sock) saveCreds()
+    })
     attachStore(accountId, sock)
 
     sock.ev.on('connection.update', async (u) => {
@@ -190,6 +199,7 @@ class WhatsAppManager extends EventEmitter {
     const sock = s.sock
     s.sock = null
     try {
+      ;(sock?.ev as unknown as { removeAllListeners(): void } | undefined)?.removeAllListeners()
       sock?.end(undefined)
     } catch {
       /* ignora */

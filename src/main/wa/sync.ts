@@ -48,7 +48,13 @@ export function attachStore(accountId: string, sock: WASocket): void {
 
   ev.on('messages.upsert', ({ messages, type }) => {
     try {
-      const fresh = saveMessages(accountId, messages, { live: type === 'notify', ownJid: own() })
+      // 'append' também traz o que chegou com o app fechado/desconectado: trata como novo se for recente
+      const recent = (m: (typeof messages)[number]): boolean =>
+        Date.now() / 1000 - Number(m.messageTimestamp ?? 0) < 24 * 3600
+      const live = type === 'notify' ? messages : messages.filter(recent)
+      const old = type === 'notify' ? [] : messages.filter((m) => !recent(m))
+      if (old.length) saveMessages(accountId, old, { live: false, ownJid: own() })
+      const fresh = saveMessages(accountId, live, { live: true, ownJid: own() })
       for (const m of fresh) {
         storeEvents.emit('incoming', { accountId, message: m })
         if (shouldAutoDownload(m.type, m.media)) {
@@ -64,9 +70,6 @@ export function attachStore(accountId: string, sock: WASocket): void {
     for (const u of updates) {
       if (!u.key.id || !u.key.remoteJid) continue
       if (u.update.status != null) updateStatus(accountId, u.key.remoteJid, u.key.id, u.update.status)
-      if (u.update.message || u.update.messageStubType) {
-        saveMessages(accountId, [{ key: u.key, ...u.update } as never], { live: false, ownJid: own() })
-      }
     }
   })
 

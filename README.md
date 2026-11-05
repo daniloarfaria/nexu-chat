@@ -2,6 +2,7 @@
 
 App desktop para **Mac e Windows** que permite a pequenos negócios (óticas e outros) atender, fazer campanhas e gerir grupos pelo WhatsApp. Tem proteção contra bloqueio, banco de dados local e backup criptografado.
 
+- **Auditoria de segurança e bugs (fase 9):** [docs/AUDITORIA.md](docs/AUDITORIA.md)
 - **Manual do usuário:** [docs/MANUAL.md](docs/MANUAL.md). Atualize a cada função nova.
 - Especificação completa e fases: [docs/ESPECIFICACAO.md](docs/ESPECIFICACAO.md)
 - Contexto de produto (para design): [PRODUCT.md](PRODUCT.md)
@@ -24,6 +25,8 @@ npm run build:mac    # gera .dmg (arm64 e x64) em dist/
 ```
 
 O `.exe` de Windows é gerado pelo GitHub Actions (Actions → Build → *Run workflow*). O makensis não roda nativo em Mac Apple Silicon.
+
+> O app instalado tem os fusíveis do Electron (sem RunAsNode/inspetor). Testes de interface com Playwright (`tests/e2e`) rodam na versão não empacotada.
 
 > Rodando pelo terminal do VS Code: o VS Code define `ELECTRON_RUN_AS_NODE=1`. Use `env -u ELECTRON_RUN_AS_NODE npm run dev`.
 

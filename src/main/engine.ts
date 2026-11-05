@@ -23,6 +23,7 @@ interface Runner {
   busy: boolean
   sinceLongPause: number
   failStreak: number
+  failCampaign: number | null
   state: EngineState
 }
 
@@ -37,6 +38,7 @@ class CampaignEngine extends EventEmitter {
         busy: false,
         sinceLongPause: 0,
         failStreak: 0,
+        failCampaign: null,
         state: { accountId, campaignId: null, phase: 'idle', nextAt: null, sentToday: 0, limitToday: 0 }
       }
       this.runners.set(accountId, r)
@@ -138,8 +140,9 @@ class CampaignEngine extends EventEmitter {
       return this.schedule(accountId, ms)
     }
 
-    // Saúde: taxa de resposta muito baixa → pausa para proteger o número
-    const st = campaign.stats
+    // Saúde: taxa de resposta muito baixa → pausa para proteger o número.
+    // Conta só envios com mais de 2 h (tempo para o cliente responder).
+    const st = C.replyHealth(campaign.id, 2 * 3600_000)
     if (s.minReplyRate > 0 && st.sent >= 30 && (st.replied / st.sent) * 100 < s.minReplyRate) {
       C.pauseCampaign(
         campaign.id,
@@ -157,6 +160,10 @@ class CampaignEngine extends EventEmitter {
       return this.kick(accountId)
     }
 
+    if (r.failCampaign !== campaign.id) {
+      r.failCampaign = campaign.id
+      r.failStreak = 0
+    }
     const result = await this.sendOne(sock, accountId, campaign, target, s.typing)
     this.changed(campaign.id)
 
@@ -198,6 +205,10 @@ class CampaignEngine extends EventEmitter {
           C.markTarget(c.id, t.seq, 'opted_out')
           return 'skip'
         }
+        if (!jid && t.phone && isOptedOut(accountId, t.phone)) {
+          C.markTarget(c.id, t.seq, 'opted_out')
+          return 'skip'
+        }
         if (!jid) {
           const [res] = (await sock.onWhatsApp(t.phone ?? '')) ?? []
           if (!res?.exists) {
@@ -224,6 +235,8 @@ class CampaignEngine extends EventEmitter {
         await sleep(Math.min(8000, 1500 + text.length * 35) * randomBetween(0.7, 1.2))
         await sock.sendPresenceUpdate('paused', jid!).catch(() => undefined)
       }
+      // Pausada ou cancelada enquanto "digitava": não envia
+      if (C.getCampaign(c.id)?.status !== 'running') return 'skip'
 
       let content: AnyMessageContent
       if (c.media) {

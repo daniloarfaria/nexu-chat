@@ -175,7 +175,9 @@ async function onIncoming(accountId: string, m: MessageItem): Promise<void> {
   if ((account.modules.campanhas || account.modules.lembretes) && isOptOut(m.text)) {
     const already = isOptedOut(accountId, m.chatJid)
     optOutByJid(accountId, m.chatJid)
-    if (!already) await reply(sock, accountId, m.chatJid, OPT_OUT_CONFIRM).catch(() => undefined)
+    // Só confirma depois de gravado
+    if (!already && isOptedOut(accountId, m.chatJid))
+      await reply(sock, accountId, m.chatJid, OPT_OUT_CONFIRM).catch(() => undefined)
     return
   }
 

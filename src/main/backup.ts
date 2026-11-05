@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { join, basename } from 'node:path'
-import { tmpdir } from 'node:os'
+import { join, basename, dirname } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import type { BackupFile, BackupSettings } from '@shared/types'
-import { getDb, getSetting, setSetting } from './db'
+import { getDb, getDbPath, getSetting, setSetting } from './db'
 import { sealString, unsealString } from './secure'
 import { log } from './log'
 import { BACKUP_EXT, decryptBackup, encryptBackup, isBackupDue } from './backup-core'
@@ -64,12 +64,17 @@ export function runBackup(): Promise<string> {
       const password = getPassword()
 
       // Cópia consistente do banco, mesmo com o app em uso
-      const tmp = join(tmpdir(), `dsp-${process.pid}-${Date.now()}.sqlite`)
-      getDb().exec(`VACUUM INTO '${tmp.replace(/'/g, "''")}'`)
-      const data = await encryptBackup(readFileSync(tmp), password)
-      rmSync(tmp, { force: true })
+      // Cópia temporária fica na pasta do app (não na pasta temporária do sistema) e sempre é apagada
+      const tmp = join(dirname(getDbPath()), `.backup-${process.pid}-${Date.now()}.sqlite`)
+      let data: Buffer
+      try {
+        getDb().exec(`VACUUM INTO '${tmp.replace(/'/g, "''")}'`)
+        data = await encryptBackup(readFileSync(tmp), password)
+      } finally {
+        rmSync(tmp, { force: true })
+      }
 
-      const name = `backup-${stamp()}${BACKUP_EXT}`
+      const name = `backup-${installId()}-${stamp()}${BACKUP_EXT}`
       const dest = join(settings.folder, name)
       writeFileSync(dest + '.part', data)
       renameSync(dest + '.part', dest) // nunca deixa um backup pela metade com o nome final
@@ -99,8 +104,10 @@ export function listBackups(folder = getBackupSettings().folder): BackupFile[] {
     .sort((a, b) => b.createdAt - a.createdAt)
 }
 
+/** Apaga só os backups antigos DESTE computador (a pasta pode ser compartilhada). */
 function prune(folder: string, keep: number): void {
-  const files = listBackups(folder)
+  const mine = `backup-${installId()}-`
+  const files = listBackups(folder).filter((f) => f.name.startsWith(mine))
   for (const f of files.slice(Math.max(1, keep))) {
     rmSync(join(folder, basename(f.name)), { force: true })
   }
@@ -117,10 +124,34 @@ export async function prepareRestore(file: string, password: string, dbPath: str
 }
 
 export function applyPendingRestore(dbPath: string): boolean {
+  cleanupOldCopies(dbPath)
   const pending = dbPath + '.restore'
   if (!existsSync(pending)) return false
   if (existsSync(dbPath)) renameSync(dbPath, `${dbPath}.antes-restauracao-${stamp()}`)
   for (const ext of ['-wal', '-shm']) rmSync(dbPath + ext, { force: true })
   renameSync(pending, dbPath)
   return true
+}
+
+function installId(): string {
+  let id = getSetting<string | null>('installId', null)
+  if (!id) {
+    id = randomUUID().slice(0, 8)
+    setSetting('installId', id)
+  }
+  return id
+}
+
+/** Cópias sem criptografia de antes de uma restauração: guarda por 7 dias e só a mais recente. */
+function cleanupOldCopies(dbPath: string): void {
+  const dir = dirname(dbPath)
+  const base = basename(dbPath)
+  const copies = readdirSync(dir)
+    .filter((f) => f.startsWith(`${base}.antes-restauracao-`) || (f.startsWith('.backup-') && f.endsWith('.sqlite')))
+    .map((f) => ({ f, t: statSync(join(dir, f)).mtimeMs }))
+    .sort((a, b) => b.t - a.t)
+  copies.forEach((c, i) => {
+    const temp = c.f.startsWith('.backup-')
+    if (temp || i > 0 || Date.now() - c.t > 7 * 86_400_000) rmSync(join(dir, c.f), { force: true })
+  })
 }

@@ -329,3 +329,66 @@ describe('IA', () => {
     expect(r[0].name).toBe('claude')
   })
 })
+
+describe('anonimização reforçada', () => {
+  test('receita, telefones em vários formatos, endereço, RG e datas', () => {
+    const t = anonymize(
+      'Receita: OD -2,50 OE -1,75 eixo 90. Liga 11 9 8765-4321 ou 11.98765.4321. Moro na Rua das Flores, 123. RG 12.345.678-9, nasci 05/03/1985. Fala com o Jo!',
+      ['Jo Lima']
+    )
+    expect(t).not.toMatch(/-2,50|-1,75|8765|Flores|12\.345|1985|\bJo\b/)
+  })
+})
+
+describe('provedor de IA', () => {
+  test('endereço: https, http só local, sem truques de host', async () => {
+    const { validateBaseUrl } = await import('../src/main/ai/router')
+    expect(validateBaseUrl('https://api.groq.com/openai/v1/')).toBe('https://api.groq.com/openai/v1')
+    expect(validateBaseUrl('http://localhost:11434/v1')).toBe('http://localhost:11434/v1')
+    expect(() => validateBaseUrl('http://localhost.atacante.com/v1')).toThrow()
+    expect(() => validateBaseUrl('http://127.0.0.1.nip.io/v1')).toThrow()
+    expect(() => validateBaseUrl('https://user:pw@x.com')).toThrow()
+    expect(() => validateBaseUrl('file:///etc/passwd')).toThrow()
+  })
+})
+
+describe('LGPD: supressão e exclusão', () => {
+  test('SAIR por LID sem número fica gravado e bloqueia o envio quando o número é descoberto', () => {
+    const LID = '99887766554433@lid'
+    people.optOutByJid(ACC, LID)
+    expect(people.isOptedOut(ACC, LID)).toBe(true)
+    // depois o WhatsApp revela o número desse LID
+    getDb()
+      .prepare('INSERT INTO lid_map (account_id, lid, pn) VALUES (?, ?, ?)')
+      .run(ACC, LID, '5511987650077@s.whatsapp.net')
+    expect(people.isOptedOut(ACC, '5511987650077@s.whatsapp.net')).toBe(true)
+  })
+
+  test('excluir contato apaga dados e mantém o opt-out; reimportar não volta a receber', async () => {
+    const p = people.savePerson(ACC, { name: 'Ana', phone: '11987650001', tags: ['VIP'] })
+    const jid = '5511987650001@s.whatsapp.net'
+    people.setOptOut(ACC, [p.id], true)
+    const store = await import('../src/main/wa/store')
+    store.saveMessages(
+      ACC,
+      [
+        {
+          key: { remoteJid: jid, fromMe: false, id: 'Z1' },
+          messageTimestamp: 1_790_000_000,
+          message: { conversation: 'oi' }
+        } as never
+      ],
+      { live: false }
+    )
+    saveDeal(ACC, { chatJid: jid, status: 'won', amountCents: 100 })
+    people.deletePeople(ACC, [p.id])
+    const n = (sql: string): number => (getDb().prepare(sql).get() as { n: number }).n
+    expect(n('SELECT COUNT(*) AS n FROM messages')).toBe(0)
+    expect(n('SELECT COUNT(*) AS n FROM chats')).toBe(0)
+    expect(n('SELECT COUNT(*) AS n FROM deals')).toBe(0)
+    expect(n('SELECT COUNT(*) AS n FROM people')).toBe(0)
+    // volta pela planilha
+    people.savePerson(ACC, { name: 'Ana', phone: '11987650001', tags: ['VIP'] })
+    expect(C.countAudience(ACC, { type: 'tags', tags: ['VIP'] })).toEqual({ total: 1, optedOut: 1 })
+  })
+})

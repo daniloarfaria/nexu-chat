@@ -290,6 +290,12 @@ export function Grupos(): React.JSX.Element {
               size="sm"
               loading={busy === 'x'}
               onClick={async () => {
+                if (
+                  !confirm(
+                    'Membros de grupos não necessariamente autorizaram receber promoções da loja (LGPD). Eles serão copiados com a etiqueta do grupo. Envie campanhas para eles só se tiverem relação com a loja. Continuar?'
+                  )
+                )
+                  return
                 const r = await run('x', () => window.api.invoke('groups:extract', { accountId, jids: [...selected] }))
                 if (r)
                   setMsg(

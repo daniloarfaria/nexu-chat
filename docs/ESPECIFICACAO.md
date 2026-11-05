@@ -131,7 +131,7 @@ CSP restrita, nenhum servidor HTTP aberto na rede, nenhum `npm install` em tempo
 6. ✅ **Lembretes recorrentes.**
 7. ✅ **Vendas** (marcar venda/perdida, retorno por campanha, painel).
 8. ✅ **Assistente de IA** (análise, playbook, mensagens personalizadas).
-9. **Auditoria final** (security-audit, code-review, testes), assinatura opcional, publicação.
+9. ✅ **Auditoria final** (security-audit, code-review, testes), assinatura opcional, publicação.
 
 ## 6. Riscos
 - Uso de cliente não oficial viola os Termos do WhatsApp: sempre há risco de banimento; o app reduz, não elimina.

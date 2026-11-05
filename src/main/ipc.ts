@@ -1,5 +1,6 @@
-import { app, dialog, ipcMain, shell, BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+import { app, dialog, ipcMain, shell, BrowserWindow } from 'electron'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { z } from 'zod'
 import { MODULE_KEYS } from '@shared/types'
 import type { ApiChannel, ApiMap } from '@shared/api'
@@ -18,11 +19,14 @@ export type Handle = <C extends ApiChannel>(channel: C, schema: z.ZodTypeAny | n
 type Handler<C extends ApiChannel> = (...args: ApiMap[C]['args']) => Promise<ApiMap[C]['ret']> | ApiMap[C]['ret']
 
 // Só aceita chamadas da nossa própria janela (arquivo local ou servidor de dev)
-function trustedSender(e: IpcMainInvokeEvent): boolean {
-  const url = e.senderFrame?.url ?? ''
-  if (url.startsWith('file://')) return true
+// Só a janela principal do app, e só a página do próprio app (nada de outros arquivos locais ou iframes)
+export function trustedSender(e: { senderFrame: Electron.WebFrameMain | null }): boolean {
+  const frame = e.senderFrame
+  if (!frame || frame.parent) return false
+  const url = frame.url.split('#')[0].split('?')[0]
+  if (url === pathToFileURL(join(__dirname, '../renderer/index.html')).href) return true
   const dev = process.env['ELECTRON_RENDERER_URL']
-  return !!dev && url.startsWith(dev)
+  return !!dev && !app.isPackaged && url.startsWith(dev)
 }
 
 function handle<C extends ApiChannel>(channel: C, schema: z.ZodTypeAny | null, fn: Handler<C>): void {

@@ -1,6 +1,6 @@
 # Manual do Disparador
 
-> Versão do app: 0.3.1 · Atualizado em 05/11/2026
+> Versão do app: 0.4.0 · Atualizado em 05/11/2026
 > O nome "Disparador" é provisório.
 
 O Disparador conecta o WhatsApp da sua loja ao computador. Com ele você atende os clientes, guarda todas as conversas no computador e, nas próximas versões, também envia campanhas, gerencia grupos e acompanha as vendas.
@@ -140,7 +140,8 @@ O menu **Contatos** é a base de clientes da loja, usada por campanhas e lembret
   - Importar de novo **atualiza** quem já existe, nunca duplica.
 - **Etiquetas:** selecione contatos e aplique ou remova etiquetas. É assim que você escolhe o público das campanhas.
 - **Não receber:** quem responde **SAIR** (ou "parar", "não quero mais"…) entra sozinho nessa lista e recebe uma confirmação. Você também pode marcar à mão.
-- **Excluir** atende pedidos de exclusão de dados (LGPD). **Exportar** gera um CSV com todos os contatos.
+- **Excluir** atende pedidos de exclusão de dados (LGPD). Apaga o contato junto com as conversas, mensagens, fotos e arquivos recebidos e as vendas registradas. Se a pessoa tinha pedido para não receber, só o número fica guardado na lista de bloqueio, para ela nunca mais receber, mesmo se voltar numa planilha.
+- **Exportar** gera um CSV com todos os contatos.
 
 ---
 
@@ -309,7 +310,9 @@ No rodapé do menu: ☀ claro, ☾ escuro ou **automático** (segue o computador
 
 - Conversas, contatos e mídias ficam no computador da loja. Nada é enviado para servidores da agência.
 - A conexão do WhatsApp fica guardada **criptografada** com a proteção do sistema (Keychain no Mac, DPAPI no Windows).
-- Os registros técnicos do app escondem os números de telefone.
+- Os registros técnicos do app escondem números de telefone, nomes e textos de mensagens.
+- Mensagens apagadas para todos são removidas também do computador e dos backups seguintes.
+- Documentos salvos a partir das conversas recebem a marca de "baixado da internet": o Windows/Office e o Mac continuam avisando antes de abrir arquivos perigosos.
 - Envie mensagens de marketing só para clientes que já compraram. Quem responde SAIR vai automaticamente para a lista de não receber.
 - A IA recebe as conversas anonimizadas por padrão (seção 12).
 

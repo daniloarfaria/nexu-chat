@@ -148,17 +148,37 @@ describe('motor de campanhas', () => {
     expect(c.pausedReason).toMatch(/falhas seguidas/)
   })
 
-  test('pausa automática por baixa taxa de resposta', async () => {
+  test('pausa por baixa taxa de resposta só conta envios com tempo para resposta', async () => {
     const id = campaign()
     C.setAntiBan(ACC, { minReplyRate: 20 })
-    // simula 30 envios sem resposta
     const db = getDb()
-    for (let i = 0; i < 30; i++)
-      db.prepare(
-        "INSERT INTO campaign_targets (campaign_id, seq, phone, status, sent_at) VALUES (?, ?, ?, 'sent', ?)"
-      ).run(id, 100 + i, `55119876${i}`, Date.now())
+    const add = (n: number, at: number): void => {
+      for (let i = 0; i < n; i++)
+        db.prepare(
+          "INSERT INTO campaign_targets (campaign_id, seq, phone, status, sent_at) VALUES (?, ?, ?, 'sent', ?)"
+        ).run(id, 1000 + (at % 7) + i * 10 + n, `5511${at}${i}`, at)
+    }
+    add(30, Date.now()) // recentes: ainda não deu tempo de responder
+    await step()
+    expect(C.getCampaign(id)!.status).toBe('running')
+    add(31, Date.now() - 3 * 3600_000) // antigos, sem resposta
     await step()
     expect(C.getCampaign(id)!.status).toBe('paused')
     expect(C.getCampaign(id)!.pausedReason).toMatch(/proteger o número/)
   })
+
+  test('pausar durante a digitação não envia', async () => {
+    const id = campaign()
+    C.setAntiBan(ACC, { typing: true })
+    const e = engine as unknown as {
+      runner(a: string): object
+      step(a: string, r: object): Promise<void>
+      stop(a: string): void
+    }
+    const p = e.step(ACC, e.runner(ACC))
+    C.pauseCampaign(id, null)
+    await p
+    e.stop(ACC)
+    expect(sent).toHaveLength(0)
+  }, 15000)
 })

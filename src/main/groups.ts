@@ -138,6 +138,7 @@ export function extractMembers(
 export async function createGroup(
   sock: WASocket,
   accountId: string,
+  getSocket: (accountId: string) => WASocket | null,
   input: { subject: string; description?: string; phones: string[]; adminsOnly?: boolean }
 ): Promise<{ jid: string; inviteLink: string | null; queued: number }> {
   const phones = [...new Set(input.phones.map((p) => normalizePhone(p)).filter(Boolean) as string[])]
@@ -147,6 +148,9 @@ export async function createGroup(
   const first = jids.slice(0, 5)
   const rest = jids.slice(5)
   const g = await sock.groupCreate(input.subject.trim().slice(0, 100), first)
+  const firstBlocked = (g.participants ?? []).filter(
+    (p) => (p as { error?: string }).error && (p as { error?: string }).error !== '200'
+  ).length
   if (input.description)
     await sock.groupUpdateDescription(g.id, input.description.slice(0, 2000)).catch(() => undefined)
   if (input.adminsOnly) await sock.groupSettingUpdate(g.id, 'announcement').catch(() => undefined)
@@ -160,14 +164,18 @@ export async function createGroup(
   // Restante em segundo plano
   void (async () => {
     let done = first.length
-    const blocked: string[] = []
+    const blocked: string[] = Array(firstBlocked).fill('')
     for (let i = 0; i < rest.length; i += 5) {
       await sleep(randomBetween(30_000, 60_000))
       const batch = rest.slice(i, i + 5)
+      // Usa a conexão atual (pode ter reconectado durante a espera)
+      const cur = getSocket(accountId)
       try {
-        const r = await sock.groupParticipantsUpdate(g.id, batch, 'add')
+        if (!cur) throw new Error('WhatsApp desconectado')
+        const r = await cur.groupParticipantsUpdate(g.id, batch, 'add')
         for (const x of r) if (x.status !== '200') blocked.push(x.jid ?? '')
       } catch (e) {
+        blocked.push(...batch)
         log.warn('Falha ao adicionar participantes', { erro: (e as Error).message })
       }
       done += batch.length
