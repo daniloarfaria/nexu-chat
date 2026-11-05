@@ -539,6 +539,7 @@ export function unreadTotal(accountId: string): number {
 
 interface MsgRow {
   rid: number
+  transcript: string | null
   chat_jid: string
   id: string
   from_me: number
@@ -562,6 +563,7 @@ function toMsg(r: MsgRow): MessageItem {
   return {
     id: r.id,
     rid: r.rid,
+    transcript: r.transcript,
     chatJid: r.chat_jid,
     fromMe: !!r.from_me,
     sender: r.sender,
@@ -580,7 +582,7 @@ function toMsg(r: MsgRow): MessageItem {
 }
 
 const MSG_SELECT = `SELECT m.rowid AS rid, m.chat_jid, m.id, m.from_me, m.sender, m.sender_name, m.ts, m.type, m.text, m.media, m.extra,
-  m.quoted_id, m.status, m.reactions, m.edited, m.deleted, co.name AS c_name
+  m.quoted_id, m.status, m.reactions, m.edited, m.deleted, m.transcript, co.name AS c_name
   FROM messages m LEFT JOIN contacts co ON co.account_id = m.account_id AND co.jid = m.sender`
 
 /** Página de mensagens antes do cursor (horário, posição): nunca pula nem repete, mesmo no mesmo segundo. */
@@ -760,4 +762,9 @@ export function reparseUnsupported(): number {
     }
   })
   return changed
+}
+
+/** Avisa a interface que uma mensagem mudou (ex.: transcrição pronta). */
+export function touchMessage(accountId: string, chatJid: string, id: string): void {
+  touch(accountId, chatJid, id)
 }

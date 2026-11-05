@@ -25,6 +25,9 @@ import type {
   EngineState,
   GroupInfo,
   GroupRule,
+  TranscribeEngine,
+  TranscribeMode,
+  TranscribeStatus,
   ImportMapping,
   ImportPreview,
   ImportResult,
@@ -108,6 +111,10 @@ export interface ApiMap {
   'media:save-as': { args: [{ accountId: string; jid: string; id: string }]; ret: void }
   'sync:state': { args: [{ accountId: string }]; ret: SyncState }
   'avatars:get': { args: [{ accountId: string; jids: string[] }]; ret: Record<string, string | null> }
+  'transcribe:message': { args: [{ accountId: string; jid: string; id: string }]; ret: string }
+  'transcribe:status': { args: []; ret: TranscribeStatus }
+  'transcribe:save': { args: [{ mode?: TranscribeMode; engine?: TranscribeEngine }]; ret: TranscribeStatus }
+  'transcribe:pick': { args: [{ what: 'whisper' | 'model' | 'ffmpeg' }]; ret: TranscribeStatus }
   'chats:new': { args: [{ accountId: string; phone: string }]; ret: string }
 
   // Contatos
@@ -355,6 +362,10 @@ export const API_CHANNELS: ApiChannel[] = [
   'media:save-as',
   'sync:state',
   'avatars:get',
+  'transcribe:message',
+  'transcribe:status',
+  'transcribe:save',
+  'transcribe:pick',
   'people:list',
   'people:tags',
   'people:fields',

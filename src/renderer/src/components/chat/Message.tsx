@@ -186,29 +186,74 @@ function Sticker({ m }: { m: MessageItem }): React.JSX.Element {
   )
 }
 
+function Transcript({ m }: { m: MessageItem }): React.JSX.Element | null {
+  const accountId = useChats((s) => s.accountId)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  if (m.transcript) {
+    return (
+      <p
+        className="mt-1.5 max-w-[260px] border-t border-black/5 pt-1.5 text-[13px] text-ink-2 italic dark:border-white/10"
+        data-selectable
+      >
+        “{m.transcript}”
+      </p>
+    )
+  }
+  if (!accountId) return null
+  return (
+    <div className="mt-1">
+      <button
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true)
+          setError(null)
+          try {
+            await window.api.invoke('transcribe:message', { accountId, jid: m.chatJid, id: m.id })
+          } catch (e) {
+            setError((e as Error).message)
+          } finally {
+            setBusy(false)
+          }
+        }}
+        className="flex items-center gap-1 text-[12px] font-medium text-accent-ink hover:underline disabled:opacity-60"
+      >
+        <FileText className="size-3.5" /> {busy ? 'Transcrevendo…' : 'Transcrever'}
+      </button>
+      {error && <p className="mt-0.5 max-w-[260px] text-[12px] text-bad">{error}</p>}
+    </div>
+  )
+}
+
 function AudioMsg({ m }: { m: MessageItem }): React.JSX.Element {
   const { media, loading, error, load } = useMedia(m)
   const voice = m.type === 'voice'
-  if (media?.url) return <audio src={media.url} controls preload="metadata" className="h-10 w-[260px]" />
   return (
-    <button
-      onClick={() => void load()}
-      className="flex w-[260px] items-center gap-3 rounded-lg bg-black/5 px-3 py-2.5 text-left dark:bg-white/5"
-    >
-      <span className="grid size-9 place-items-center rounded-full bg-accent text-on-accent">
-        {loading ? (
-          <span className="size-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-        ) : voice ? (
-          <Mic className="size-4" />
-        ) : (
-          <Music className="size-4" />
-        )}
-      </span>
-      <span className="flex-1 text-[13px]">
-        {voice ? 'Mensagem de voz' : 'Áudio'} <span className="tabular text-ink-2">{duration(media?.seconds)}</span>
-        {error && <span className="block text-[12px] text-bad">{error}</span>}
-      </span>
-    </button>
+    <div>
+      {media?.url ? (
+        <audio src={media.url} controls preload="metadata" className="h-10 w-[260px]" />
+      ) : (
+        <button
+          onClick={() => void load()}
+          className="flex w-[260px] items-center gap-3 rounded-lg bg-black/5 px-3 py-2.5 text-left dark:bg-white/5"
+        >
+          <span className="grid size-9 place-items-center rounded-full bg-accent text-on-accent">
+            {loading ? (
+              <span className="size-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+            ) : voice ? (
+              <Mic className="size-4" />
+            ) : (
+              <Music className="size-4" />
+            )}
+          </span>
+          <span className="flex-1 text-[13px]">
+            {voice ? 'Mensagem de voz' : 'Áudio'} <span className="tabular text-ink-2">{duration(media?.seconds)}</span>
+            {error && <span className="block text-[12px] text-bad">{error}</span>}
+          </span>
+        </button>
+      )}
+      <Transcript m={m} />
+    </div>
   )
 }
 

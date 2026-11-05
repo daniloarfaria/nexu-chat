@@ -315,6 +315,10 @@ const MIGRATIONS: string[] = [
     checked_at INTEGER NOT NULL,
     PRIMARY KEY (account_id, jid)
   );
+  `,
+  // v6 — transcrição de áudios (Whisper)
+  `
+  ALTER TABLE messages ADD COLUMN transcript TEXT;
   `
 ]
 

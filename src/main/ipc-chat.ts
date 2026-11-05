@@ -10,6 +10,7 @@ import * as store from './wa/store'
 import * as send from './wa/send'
 import { ensureMedia, markDownloaded, safeFileName } from './wa/media'
 import { getAvatars } from './wa/avatars'
+import { setTranscribeSettings, transcribe, transcribeStatus } from './wa/transcribe'
 import type { Handle } from './ipc'
 
 const accountId = z.string().uuid()
@@ -180,6 +181,48 @@ export function registerChatIpc(handle: Handle, getWindow: () => BrowserWindow |
   })
 
   handle('sync:state', z.object({ accountId }).strict(), (a) => store.getSyncState(a.accountId))
+  handle('transcribe:message', z.object({ accountId, jid, id: msgId }).strict(), (a) => {
+    account(a.accountId)
+    return transcribe(wa.getSocket(a.accountId), a.accountId, a.jid, a.id)
+  })
+  handle('transcribe:status', null, () => transcribeStatus())
+  handle(
+    'transcribe:save',
+    z
+      .object({
+        mode: z.enum(['off', 'manual', 'auto']).optional(),
+        engine: z.enum(['auto', 'local', 'groq']).optional()
+      })
+      .strict(),
+    (a) => {
+      setTranscribeSettings(a)
+      return transcribeStatus()
+    }
+  )
+  handle('transcribe:pick', z.object({ what: z.enum(['whisper', 'model', 'ffmpeg']) }).strict(), async (a) => {
+    const win = getWindow()
+    const opts = {
+      title:
+        a.what === 'model'
+          ? 'Escolha o modelo do Whisper (ggml-*.bin)'
+          : a.what === 'whisper'
+            ? 'Escolha o whisper-cli'
+            : 'Escolha o ffmpeg',
+      properties: ['openFile' as const],
+      ...(a.what === 'model' ? { filters: [{ name: 'Modelo Whisper', extensions: ['bin'] }] } : {})
+    }
+    const r = await (win ? dialog.showOpenDialog(win, opts) : dialog.showOpenDialog(opts))
+    if (!r.canceled && r.filePaths[0]) {
+      setTranscribeSettings(
+        a.what === 'model'
+          ? { modelPath: r.filePaths[0] }
+          : a.what === 'whisper'
+            ? { whisperPath: r.filePaths[0] }
+            : { ffmpegPath: r.filePaths[0] }
+      )
+    }
+    return transcribeStatus()
+  })
   handle('avatars:get', z.object({ accountId, jids: z.array(jid).max(200) }).strict(), (a) => {
     account(a.accountId)
     return getAvatars(a.accountId, a.jids)

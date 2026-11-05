@@ -3,6 +3,8 @@ import { getAccount } from '../accounts'
 import { listMessages, getChats, phoneOf } from '../wa/store'
 import { listDeals } from '../deals'
 import { complete, getAiSettings } from './router'
+import { transcribeMissing } from '../wa/transcribe'
+import { wa } from '../wa/manager'
 import { findPersonByJid } from '../people'
 import type { MessageItem } from '@shared/types'
 
@@ -57,7 +59,8 @@ function transcript(msgs: MessageItem[], storeName: string, anon: boolean, names
     .filter((m) => m.type !== 'system' && !m.deleted)
     .map((m) => {
       const who = m.fromMe ? storeName : 'Cliente'
-      const body = m.text ?? `[${m.type}]`
+      // Áudios entram pela transcrição (Whisper), quando houver
+      const body = m.text ?? (m.transcript ? `[áudio] ${m.transcript}` : `[${m.type}]`)
       const line = `${who}: ${body}`
       return anon ? anonymize(line, names) : line
     })
@@ -92,6 +95,7 @@ export async function suggestReply(
 ): Promise<{ text: string; provider: string }> {
   const { name, playbook } = storeContext(accountId)
   const anon = getAiSettings().privacy !== 'livre'
+  await transcribeMissing(wa.getSocket(accountId), accountId, jid, 4).catch(() => undefined)
   const msgs = listMessages(accountId, jid, null, 30)
   if (!msgs.length) throw new Error('Esta conversa ainda não tem mensagens')
   const person = findPersonByJid(accountId, jid)
@@ -166,6 +170,8 @@ export async function buildPlaybook(
   const notes: string[] = []
   let done = 0
   for (const d of picked) {
+    // Áudios da conversa viram texto para a IA entender a negociação
+    await transcribeMissing(wa.getSocket(accountId), accountId, d.chatJid, 15).catch(() => undefined)
     const msgs = listMessages(accountId, d.chatJid, Math.floor(d.createdAt / 1000) + 3600, 40)
     if (msgs.length >= 2) {
       try {

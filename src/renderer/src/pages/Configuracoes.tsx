@@ -14,8 +14,9 @@ import { useUpdateStatus } from '../lib/useUpdateStatus'
 import { formatBytes, formatDateTime, timeAgo } from '../lib/format'
 import { cn } from '../lib/cn'
 import { Protecao } from './Protecao'
+import { Transcricao } from './Transcricao'
 
-type Tab = 'backup' | 'modulos' | 'protecao' | 'sistema'
+type Tab = 'backup' | 'modulos' | 'protecao' | 'transcricao' | 'sistema'
 
 const FREQ: Array<{ id: BackupSettings['frequency']; label: string }> = [
   { id: 'daily', label: 'Todo dia' },
@@ -423,6 +424,7 @@ export function Configuracoes(): React.JSX.Element {
     { id: 'backup', label: 'Backup' },
     { id: 'modulos', label: 'Módulos' },
     { id: 'protecao', label: 'Proteção anti-bloqueio' },
+    { id: 'transcricao', label: 'Transcrição de áudio' },
     { id: 'sistema', label: 'Sistema' }
   ]
   return (
@@ -447,6 +449,7 @@ export function Configuracoes(): React.JSX.Element {
       {tab === 'backup' && <BackupTab />}
       {tab === 'modulos' && <ModulosTab />}
       {tab === 'protecao' && <Protecao />}
+      {tab === 'transcricao' && <Transcricao />}
       {tab === 'sistema' && <SistemaTab />}
     </div>
   )

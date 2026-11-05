@@ -14,6 +14,7 @@ import {
 } from './store'
 import { ensureMedia, shouldAutoDownload } from './media'
 import { invalidateAvatar } from './avatars'
+import { maybeAutoTranscribe } from './transcribe'
 import { log } from '../log'
 
 /** Liga os eventos do Baileys ao banco local. */
@@ -63,7 +64,9 @@ export function attachStore(accountId: string, sock: WASocket): void {
       for (const m of fresh) {
         storeEvents.emit('incoming', { accountId, message: m })
         if (shouldAutoDownload(m.type, m.media)) {
-          ensureMedia(sock, accountId, m.chatJid, m.id).catch(() => undefined)
+          ensureMedia(sock, accountId, m.chatJid, m.id)
+            .then(() => maybeAutoTranscribe(sock, accountId, m.chatJid, m.id, m.type))
+            .catch(() => undefined)
         }
       }
     } catch (e) {

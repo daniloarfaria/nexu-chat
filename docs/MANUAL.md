@@ -1,6 +1,6 @@
 # Manual do Disparador
 
-> Versão do app: 0.4.1 · Atualizado em 05/11/2026
+> Versão do app: 0.5.0 · Atualizado em 05/11/2026
 > O nome "Disparador" é provisório.
 
 O Disparador conecta o WhatsApp da sua loja ao computador. Com ele você atende os clientes, guarda todas as conversas no computador e, nas próximas versões, também envia campanhas, gerencia grupos e acompanha as vendas.
@@ -110,6 +110,14 @@ Atalhos:
 - Vídeos, documentos e mídias do histórico mostram o botão **Baixar**. Clique para abrir.
 - Clique em uma foto para ampliar. Clique em um documento para salvar no computador.
 - Mensagens de **visualização única** só podem ser abertas no celular.
+
+### Transcrição de áudios
+Embaixo de cada áudio ou mensagem de voz aparece **Transcrever**. O texto fica salvo na conversa, entra na busca e é usado pela IA nas sugestões de resposta e no playbook.
+- Em **Configurações → Transcrição de áudio** você escolhe:
+  - **quando:** pelo botão, automático para toda mensagem de voz recebida, ou desligado;
+  - **onde:** no computador ou na Groq.
+- **No computador (Whisper):** o áudio não sai daqui. O app encontra sozinho o whisper-cli, o modelo e o ffmpeg; se não achar, use **Escolher**.
+- **Na Groq:** gratuito e não treina com os dados. Usa a mesma chave da Groq cadastrada no Assistente de IA.
 
 ### Notificações
 Quando chega mensagem e você não está olhando aquela conversa, aparece uma notificação. Clique nela para abrir a conversa. Conversas silenciadas ou arquivadas não notificam.

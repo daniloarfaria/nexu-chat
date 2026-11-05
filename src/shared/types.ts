@@ -175,6 +175,7 @@ export interface MessageExtra {
 export interface MessageItem {
   id: string
   rid?: number // posição no banco (cursor da paginação)
+  transcript?: string | null // transcrição do áudio (Whisper)
   chatJid: string
   fromMe: boolean
   sender: string | null
@@ -505,4 +506,23 @@ export interface GroupRule {
   antiLink: boolean
   bannedWords: string[]
   maxWarnings: number
+}
+
+// ---------- Transcrição de áudio ----------
+
+export type TranscribeMode = 'off' | 'manual' | 'auto'
+export type TranscribeEngine = 'auto' | 'local' | 'groq'
+
+export interface TranscribeSettings {
+  mode: TranscribeMode
+  engine: TranscribeEngine
+  whisperPath: string | null // whisper-cli (whisper.cpp)
+  modelPath: string | null // ggml-*.bin
+  ffmpegPath: string | null
+}
+
+export interface TranscribeStatus {
+  settings: TranscribeSettings
+  local: { ready: boolean; whisper: string | null; model: string | null; ffmpeg: string | null }
+  groq: boolean
 }
