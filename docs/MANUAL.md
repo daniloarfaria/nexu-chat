@@ -142,6 +142,7 @@ Em **Configurações → Módulos** você liga e desliga as funções de cada co
 | Respostas automáticas | Responder sozinho por palavra-chave, fora do horário e boas-vindas (seção 8) |
 | Grupos (envio, extrair membros, criar, moderação) | Cada função liga separada (seção 9) |
 | Lembretes | Aniversário, pós-venda, revisão anual (seção 10) |
+| Status do WhatsApp | Postar texto, foto ou vídeo no status, agora ou agendado (seção "Status", logo depois de Lembretes). Vem desligado; faz parte do plano Marketing |
 | Vendas | Marcar o que virou venda e ver o retorno (seção 11) |
 | Assistente de IA | Sugestões de resposta, versões de campanha e playbook (seção 12) |
 
@@ -254,6 +255,36 @@ Mensagens automáticas em datas de cada cliente, enviadas **uma vez por pessoa**
 - **Todo ano na data:** ex.: revisão anual de grau um ano depois da compra.
 
 Use os modelos prontos. A lista mostra quantos contatos recebem **hoje**. Os envios saem no horário escolhido, respeitando a Proteção anti-bloqueio, e aparecem em Campanhas como "Lembrete: …".
+
+---
+
+## Status
+
+Poste no **status do WhatsApp** da loja pelo computador. Ligue o módulo **Status do WhatsApp** em Configurações → Módulos; a página **Status** aparece no menu, em Marketing.
+
+**Criar um status:** clique em **Novo status** e escolha:
+- **Texto:** até 700 letras, com cor de fundo e tipo de letra.
+- **Foto:** JPG, PNG ou WEBP, até 16 MB, com legenda opcional.
+- **Vídeo:** MP4 de até 90 segundos e 16 MB, com legenda opcional. Vídeo maior ou mais longo é recusado: corte antes de postar.
+
+A prévia ao lado mostra como fica.
+
+**Quem vê:**
+- **Todos os contatos com WhatsApp;**
+- **Só quem tem uma etiqueta;** ou
+- **Todos menos quem tem uma etiqueta** (ex.: todos menos "Fornecedor").
+
+Ficam sempre de fora quem pediu para não receber mensagens e quem ainda não tem WhatsApp confirmado. O app confirma o WhatsApp de um contato quando ele conversa com a loja ou recebe uma campanha. A tela mostra quantas pessoas vão poder ver.
+
+**Lista grande:** acima de 1.000 pessoas, a tela avisa. O WhatsApp envia a postagem para cada aparelho de cada pessoa da lista, então ela demora mais e pesa no celular. Dá para postar mesmo assim; se puder, use uma etiqueta para um público menor.
+
+**Quando:** **Agora** (precisa estar conectado) ou **Agendar** para uma data e hora. O app precisa estar aberto na hora marcada. Se o WhatsApp estiver desconectado, o status sai assim que conectar. Se passar mais de 24 horas da hora marcada sem conexão, a postagem não sai e aparece como **Falhou**.
+
+**Limite por dia:** por padrão, até **10 postagens por dia** por conta (contando as já postadas e as agendadas para o mesmo dia). Mude o número no topo da página (de 1 a 50). Postar demais seguido pode fazer o WhatsApp tratar o número como robô.
+
+**Histórico:** a lista mostra cada postagem com a situação (**Agendado**, **Postando**, **Postado**, **Falhou** ou **Cancelado**), o público, quantas pessoas e a data. Postagens agendadas podem ser **canceladas** antes da hora. O status some do WhatsApp em 24 horas, como qualquer status. Os arquivos de foto e vídeo ficam guardados no computador por 7 dias e depois são apagados.
+
+**Quem viu:** por enquanto o app não mostra quem viu. Confira no celular.
 
 ---
 
