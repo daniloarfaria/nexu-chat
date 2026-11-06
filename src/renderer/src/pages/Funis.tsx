@@ -24,7 +24,7 @@ import { Button, Empty, Input, Notice } from '../components/ui'
 import { Avatar } from '../components/chat/Avatar'
 import { ColorDot, TagChip, TagToggles } from '../components/tags'
 import { TAG_HEX, useTagDefs } from '../lib/tagColors'
-import { AddPeopleDrawer, CardDrawer, NewPipelineDrawer, PipelineEditor } from './funis/drawers'
+import { AddPeopleDrawer, CardWindow, NewPipelineDrawer, PipelineEditor } from './funis/drawers'
 
 const DAY = 86_400_000
 
@@ -410,7 +410,7 @@ function Board({
       </div>
 
       {card && (
-        <CardDrawer
+        <CardWindow
           key={card.id}
           accountId={accountId}
           card={card}
@@ -418,7 +418,10 @@ function Board({
           tagDefs={tagDefs}
           onMove={(stageId) => void move(card.id, stageId, (byStage.get(stageId) ?? []).length)}
           onChanged={() => void reload()}
-          onClose={() => setOpenCard(null)}
+          onClose={() => {
+            setOpenCard(null)
+            void board.reload() // atualiza não lidas e última mensagem do cartão
+          }}
         />
       )}
       {editing && (

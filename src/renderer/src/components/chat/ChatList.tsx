@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Archive, BellOff, CheckCheck, Loader2, MessageSquarePlus, Pin, Search, X } from 'lucide-react'
 import type { ChatFilter } from '@shared/types'
-import { useChats } from '../../lib/chatStore'
+import { useChatStore } from '../../lib/chatStore'
 import { cn } from '../../lib/cn'
 import { Avatar } from './Avatar'
 import { chatTime } from './time'
@@ -15,7 +15,7 @@ const FILTERS: Array<{ id: ChatFilter; label: string }> = [
 ]
 
 function NewChat({ onClose }: { onClose: () => void }): React.JSX.Element {
-  const { accountId, select, loadChats } = useChats()
+  const { accountId, select, loadChats } = useChatStore()
   const [phone, setPhone] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -57,7 +57,7 @@ function NewChat({ onClose }: { onClose: () => void }): React.JSX.Element {
 
 export function ChatList(): React.JSX.Element {
   const { chats, filter, search, setFilter, setSearch, selected, select, loadChats, hasMore, loadingChats, sync } =
-    useChats()
+    useChatStore()
   const sentinel = useRef<HTMLDivElement>(null)
   const [newChat, setNewChat] = useState(false)
 

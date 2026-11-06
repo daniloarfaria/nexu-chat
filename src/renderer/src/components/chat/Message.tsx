@@ -24,7 +24,7 @@ import {
 } from 'lucide-react'
 import type { MediaInfo, MessageItem } from '@shared/types'
 import { cn } from '../../lib/cn'
-import { useChats } from '../../lib/chatStore'
+import { useChatStore } from '../../lib/chatStore'
 import { formatBytes } from '../../lib/format'
 import { duration, msgTime } from './time'
 import { Avatar } from './Avatar'
@@ -46,7 +46,7 @@ function useMedia(m: MessageItem): {
   error: string | null
   load: () => Promise<MediaInfo | null>
 } {
-  const accountId = useChats((s) => s.accountId)
+  const accountId = useChatStore((s) => s.accountId)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const load = async (): Promise<MediaInfo | null> => {
@@ -127,7 +127,11 @@ function Visual({ m }: { m: MessageItem }): React.JSX.Element {
           aria-label="Foto ampliada"
           className="fixed inset-0 z-50 grid place-items-center bg-black/85 p-8"
           onClick={() => setZoom(false)}
-          onKeyDown={(e) => e.key === 'Escape' && setZoom(false)}
+          onKeyDown={(e) => {
+            if (e.key !== 'Escape') return
+            e.stopPropagation() // fecha só a foto, não a janela em volta
+            setZoom(false)
+          }}
           tabIndex={-1}
           ref={(el) => el?.focus()}
         >
@@ -187,7 +191,7 @@ function Sticker({ m }: { m: MessageItem }): React.JSX.Element {
 }
 
 function Transcript({ m }: { m: MessageItem }): React.JSX.Element | null {
-  const accountId = useChats((s) => s.accountId)
+  const accountId = useChatStore((s) => s.accountId)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   if (m.transcript) {
@@ -258,7 +262,7 @@ function AudioMsg({ m }: { m: MessageItem }): React.JSX.Element {
 }
 
 function DocumentMsg({ m }: { m: MessageItem }): React.JSX.Element {
-  const accountId = useChats((s) => s.accountId)
+  const accountId = useChatStore((s) => s.accountId)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const media = m.media
@@ -450,7 +454,7 @@ export const Message = memo(function Message({
   isGroup: boolean
   onJump: (id: string) => void
 }): React.JSX.Element {
-  const { accountId, setReply, setEditing } = useChats()
+  const { accountId, setReply, setEditing } = useChatStore()
   const [picker, setPicker] = useState(false)
   const [openedAt] = useState(() => Date.now() / 1000)
 

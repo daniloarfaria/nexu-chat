@@ -284,7 +284,13 @@ O menu **Funis** organiza os clientes em etapas, como num quadro de post-its.
 - **Adicionar contatos:** escolha contatos da base ou traga todos que têm uma etiqueta.
   - Pela conversa: na faixa abaixo do nome, clique em **+ funil**. Se a conversa ainda não é contato, ele é criado com o nome e o número dela.
 - **Mover:** arraste o cartão para outra coluna ou ordem. Também dá pelo próprio cartão, ou pela faixa da conversa clicando na etapa.
-- **Cartão:** valor do negócio, nota, etiquetas, tempo na coluna, última mensagem e o botão **Abrir conversa**.
+- **Cartão:** clique no cartão para abrir a janela dele no meio da tela.
+  - **À esquerda**, a conversa completa: histórico (role para cima para ver as mais antigas), caixa de mensagem, anexos e áudio. Dá para responder dali mesmo.
+  - **À direita**, os dados do cartão: coluna, etiquetas, valor do negócio, nota, tempo na coluna e em que outros funis o contato está.
+  - Contato que ainda não conversou: a conversa aparece vazia e você pode mandar a primeira mensagem.
+  - A conversa aberta na tela **Conversas** não muda.
+  - **Esc**, o **X** ou um clique fora fecham a janela. O quadro continua onde estava, com a mesma rolagem e os mesmos filtros.
+  - **Abrir na tela Conversas** leva para a conversa na tela inteira.
 - **Disparar para uma coluna:** no menu **⋯** da coluna, **Disparar campanha para a coluna** abre uma campanha nova com a coluna já escolhida. Ela segue todas as regras anti-bloqueio. Se houver filtro de etiquetas no quadro, ele vai junto.
 - Excluir um contato (LGPD) tira os cartões dele de todos os funis.
 
