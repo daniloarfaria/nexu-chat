@@ -274,7 +274,7 @@ A prévia ao lado mostra como fica.
 - **Só quem tem uma etiqueta;** ou
 - **Todos menos quem tem uma etiqueta** (ex.: todos menos "Fornecedor").
 
-Ficam sempre de fora quem pediu para não receber mensagens e quem ainda não tem WhatsApp confirmado. O app confirma o WhatsApp de um contato quando ele conversa com a loja ou recebe uma campanha. A tela mostra quantas pessoas vão poder ver.
+Ficam sempre de fora quem pediu para não receber mensagens e quem ainda não tem WhatsApp confirmado. O app confirma o WhatsApp de um contato quando envia uma campanha para ele ou quando o contato é criado a partir de uma conversa ou de um grupo. Contatos só importados da planilha entram depois da primeira campanha. A tela mostra quantas pessoas vão poder ver.
 
 **Lista grande:** acima de 1.000 pessoas, a tela avisa. O WhatsApp envia a postagem para cada aparelho de cada pessoa da lista, então ela demora mais e pesa no celular. Dá para postar mesmo assim; se puder, use uma etiqueta para um público menor.
 

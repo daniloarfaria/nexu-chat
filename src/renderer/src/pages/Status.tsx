@@ -316,7 +316,7 @@ function NewStatus({ accountId, onDone }: { accountId: string; onDone: () => voi
               <strong className="tabular text-ink">{count.data.total}</strong> pessoa(s) vão poder ver.
               {count.data.optedOut > 0 && ` ${count.data.optedOut} pediram para não receber e ficam de fora.`}
               {count.data.semWhatsapp > 0 &&
-                ` ${count.data.semWhatsapp} ainda não têm WhatsApp confirmado (o app confirma ao enviar uma campanha) e ficam de fora.`}
+                ` ${count.data.semWhatsapp} ainda não têm WhatsApp confirmado (o app confirma ao enviar a primeira campanha) e ficam de fora.`}
             </p>
           )}
           {count.data?.large && (
