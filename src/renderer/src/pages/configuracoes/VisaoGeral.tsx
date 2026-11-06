@@ -1,10 +1,10 @@
 import { ArrowRight, DatabaseBackup, ShieldCheck, Smartphone } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { BackupSettings } from '@shared/types'
-import { useActiveAccount, useApp } from '../lib/store'
-import { Button, Notice, PageHeader } from '../components/ui'
-import { StatusPill } from '../components/StatusPill'
-import { formatPhone, timeAgo } from '../lib/format'
+import { useApp } from '../../lib/store'
+import { Button, Notice } from '../../components/ui'
+import { StatusPill } from '../../components/StatusPill'
+import { formatPhone, timeAgo } from '../../lib/format'
 
 const SOURCE_LABEL = {
   wppconnect: 'WPPConnect',
@@ -13,9 +13,8 @@ const SOURCE_LABEL = {
   padrao: 'versão padrão'
 } as const
 
-export function Inicio(): React.JSX.Element {
+export function VisaoGeral({ setTab }: { setTab: (t: 'backup') => void }): React.JSX.Element {
   const { accounts, states, go, waVersion } = useApp()
-  const active = useActiveAccount()
   const [backup, setBackup] = useState<BackupSettings | null>(null)
 
   useEffect(() => {
@@ -23,17 +22,10 @@ export function Inicio(): React.JSX.Element {
     return window.api.on('backup:done', setBackup)
   }, [])
 
-  const hello = (() => {
-    const h = new Date().getHours()
-    return h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite'
-  })()
-
   const backupOk = backup?.folder && backup.passwordSet && backup.frequency !== 'off'
 
   return (
     <div>
-      <PageHeader title={hello} description={active ? `Você está em ${active.name}.` : undefined} />
-
       {accounts.length === 0 ? (
         <div className="flex items-center gap-5 rounded-xl border border-line bg-panel p-6 shadow-card">
           <Smartphone className="size-8 shrink-0 text-accent" strokeWidth={1.6} />
@@ -90,7 +82,7 @@ export function Inicio(): React.JSX.Element {
                 </div>
               )}
               {!backupOk && (
-                <Button size="sm" className="mt-3" onClick={() => go('configuracoes')}>
+                <Button size="sm" className="mt-3" onClick={() => setTab('backup')}>
                   Configurar backup
                 </Button>
               )}

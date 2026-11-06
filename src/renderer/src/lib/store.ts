@@ -2,7 +2,6 @@ import { create } from 'zustand'
 import type { Account, AccountState, CampaignAudience, WaVersionInfo } from '@shared/types'
 
 export type PageId =
-  | 'inicio'
   | 'conversas'
   | 'contatos'
   | 'campanhas'
@@ -54,7 +53,7 @@ export function applyTheme(t: Theme): void {
 }
 
 export const useApp = create<AppState>((set, get) => ({
-  page: 'inicio',
+  page: 'conversas',
   accounts: [],
   states: {},
   activeAccountId: null,

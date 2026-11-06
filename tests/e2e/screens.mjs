@@ -25,8 +25,8 @@ for (const theme of ['light', 'dark']) {
     localStorage.setItem('theme', t)
     document.documentElement.dataset.theme = t
   }, theme)
-  await win.getByRole('button', { name: 'Início' }).click()
-  await shot(`${theme}-inicio-vazio`)
+  await win.getByRole('button', { name: 'Conversas' }).click()
+  await shot(`${theme}-conversas-vazio`)
   await win
     .getByRole('button', { name: 'Gerenciar contas' })
     .or(win.getByRole('button', { name: 'Adicionar conta' }))
@@ -47,8 +47,9 @@ for (const theme of ['light', 'dark']) {
   await shot(`${theme}-config-sistema`)
   await win.getByRole('button', { name: 'Conversas' }).click()
   await shot(`${theme}-conversas`)
-  await win.getByRole('button', { name: 'Início' }).click()
-  await shot(`${theme}-inicio`)
+  await win.getByRole('button', { name: 'Configurações' }).click()
+  await win.getByRole('tab', { name: 'Visão geral' }).click()
+  await shot(`${theme}-config-visao-geral`)
 }
 // Desconecta a conta de teste antes de sair (não vincula nenhum número)
 console.log(JSON.stringify({ errors }))

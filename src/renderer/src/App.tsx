@@ -1,9 +1,9 @@
 import { useEffect } from 'react'
-import { useApp } from './lib/store'
+import { useActiveAccount, useApp } from './lib/store'
+import { homePage } from './lib/home'
 import { Sidebar } from './components/Sidebar'
 import { UpdateBanner } from './components/UpdateBanner'
 import { LicenseBanner } from './components/LicenseBanner'
-import { Inicio } from './pages/Inicio'
 import { Contas } from './pages/Contas'
 import { Configuracoes } from './pages/Configuracoes'
 import { Conversas } from './pages/Conversas'
@@ -22,8 +22,6 @@ import { Novidades } from './components/Novidades'
 function Page(): React.JSX.Element {
   const page = useApp((s) => s.page)
   switch (page) {
-    case 'inicio':
-      return <Inicio />
     case 'contas':
       return <Contas />
     case 'configuracoes':
@@ -51,6 +49,13 @@ function Page(): React.JSX.Element {
 
 export default function App(): React.JSX.Element {
   const { init, loaded, page } = useApp()
+  const active = useActiveAccount()
+  const conversasLiberado = active?.modules.conversas ?? true
+
+  // Tela inicial é Conversas; se o módulo ou a licença a desligou, cai numa página permitida
+  useEffect(() => {
+    if (loaded && page === 'conversas' && !conversasLiberado) useApp.getState().go(homePage(active?.modules))
+  }, [loaded, page, conversasLiberado, active?.modules])
 
   useEffect(() => {
     let cleanup: (() => void) | undefined

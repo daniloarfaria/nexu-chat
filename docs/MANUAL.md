@@ -62,6 +62,8 @@ Crie uma conta para cada número. Para trocar de loja, use o seletor no alto do 
 
 O menu **Conversas** funciona como o WhatsApp do computador, mas tudo fica **salvo no seu computador**, mesmo o que for apagado do celular.
 
+**Conversas é a tela que abre quando você inicia o app.** Se ainda não houver número conectado, ela mostra "Conecte seu WhatsApp" com um botão que leva direto a **Contas**. O resumo que antes ficava na tela Início (números conectados, último backup e versão do WhatsApp Web) agora está em **Configurações → Visão geral**.
+
 ### Histórico
 - O WhatsApp só envia o histórico de conversas antigas **no momento em que o aparelho é vinculado**. Enquanto isso acontece, aparece no alto da lista o aviso "Sincronizando histórico…", com a contagem de mensagens.
 - Quanto tempo de histórico vem depende do celular. Normalmente são meses.
