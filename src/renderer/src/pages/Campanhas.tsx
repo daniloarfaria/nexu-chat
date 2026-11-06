@@ -807,7 +807,7 @@ function Detail({
 export function Campanhas(): React.JSX.Element {
   const active = useActiveAccount()
   const accountId = active?.id ?? ''
-  const go = useApp((s) => s.go)
+  const goSettings = useApp((s) => s.goSettings)
   const [draft, setDraft] = useState(() => {
     const d = useApp.getState().campaignDraft
     if (d) useApp.setState({ campaignDraft: null })
@@ -855,7 +855,7 @@ export function Campanhas(): React.JSX.Element {
         description="Envios para sua base de clientes com intervalos e limites que protegem o número."
         actions={
           <>
-            <Button onClick={() => go('configuracoes')}>Proteção anti-bloqueio</Button>
+            <Button onClick={() => goSettings('protecao')}>Proteção anti-bloqueio</Button>
             <Button variant="primary" onClick={() => setView({ mode: 'edit', c: null })}>
               <Plus className="size-4" /> Nova campanha
             </Button>

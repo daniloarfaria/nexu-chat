@@ -48,7 +48,7 @@ function Page(): React.JSX.Element {
 }
 
 export default function App(): React.JSX.Element {
-  const { init, loaded, page } = useApp()
+  const { init, loaded, page, settingsTab } = useApp()
   const active = useActiveAccount()
   const conversasLiberado = active?.modules.conversas ?? true
 
@@ -91,7 +91,7 @@ export default function App(): React.JSX.Element {
           <main className="min-h-0 flex-1 border-t border-line">{loaded && <Page />}</main>
         ) : (
           <main className="min-h-0 flex-1 overflow-y-auto">
-            <div key={page} className="mx-auto w-full max-w-[1080px] px-8 pt-6 pb-12">
+            <div key={`${page}:${settingsTab ?? ''}`} className="mx-auto w-full max-w-[1080px] px-8 pt-6 pb-12">
               {loaded ? <Page /> : <div className="h-40 animate-pulse rounded-xl bg-sunken" />}
             </div>
           </main>

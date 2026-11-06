@@ -1,7 +1,7 @@
 import { ArrowRight, DatabaseBackup, ShieldCheck, Smartphone } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { BackupSettings } from '@shared/types'
-import { useApp } from '../../lib/store'
+import { useApp, type SettingsTab } from '../../lib/store'
 import { Button, Notice } from '../../components/ui'
 import { StatusPill } from '../../components/StatusPill'
 import { formatPhone, timeAgo } from '../../lib/format'
@@ -13,7 +13,7 @@ const SOURCE_LABEL = {
   padrao: 'versão padrão'
 } as const
 
-export function VisaoGeral({ setTab }: { setTab: (t: 'backup') => void }): React.JSX.Element {
+export function VisaoGeral({ setTab }: { setTab: (t: SettingsTab) => void }): React.JSX.Element {
   const { accounts, states, go, waVersion } = useApp()
   const [backup, setBackup] = useState<BackupSettings | null>(null)
 
