@@ -41,10 +41,13 @@ export function recommend(hw: HardwareInfo): AiRecommendation {
   if (!supported) reasons.push('Este sistema ainda não tem a IA no computador. Use a IA gratuita na nuvem.')
   const disk = hw.freeDiskGb
   const diskOk = disk == null || disk >= needGb(lightModel().size)
-  if (supported && !diskOk) reasons.push(`Pouco espaço livre no disco (${disk} GB). A IA no computador precisa de 1,5 GB.`)
+  if (supported && !diskOk)
+    reasons.push(`Pouco espaço livre no disco (${disk} GB). A IA no computador precisa de 1,5 GB.`)
   const memOk = hw.totalMemGb >= MIN_RAM_LOCAL_GB - 0.5 // "8 GB" às vezes aparece como 7,9
   if (supported && !memOk)
-    reasons.push(`O computador tem ${hw.totalMemGb} GB de memória. Com menos de ${MIN_RAM_LOCAL_GB} GB a IA local deixa tudo lento.`)
+    reasons.push(
+      `O computador tem ${hw.totalMemGb} GB de memória. Com menos de ${MIN_RAM_LOCAL_GB} GB a IA local deixa tudo lento.`
+    )
   const localRecommended = supported && diskOk && memOk
   const offerMedium =
     localRecommended &&

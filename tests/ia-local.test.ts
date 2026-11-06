@@ -7,7 +7,13 @@ import { join } from 'node:path'
 import type { HardwareInfo } from '../src/shared/types'
 import { recommend, engineThreads } from '../src/main/ai/local/hardware'
 import { ChecksumError, downloadVerified } from '../src/main/ai/local/download'
-import { engineArgs, LocalEngine, type EngineChild, type EngineDeps, type EngineSpec } from '../src/main/ai/local/engine'
+import {
+  engineArgs,
+  LocalEngine,
+  type EngineChild,
+  type EngineDeps,
+  type EngineSpec
+} from '../src/main/ai/local/engine'
 import { ENGINE_ASSETS, LOCAL_MODELS } from '../src/main/ai/local/catalog'
 import { candidates } from '../src/main/ai/router'
 import type { AiProvider } from '../src/shared/types'
@@ -114,7 +120,13 @@ describe('download conferido por SHA-256', () => {
   test('arquivo certo: fica no lugar e mostra o progresso', async () => {
     const dest = join(dir(), 'modelo.gguf')
     const seen: number[] = []
-    await downloadVerified({ url: `${base}/m`, dest, sha256: sha, allowLocalHttp: true, onProgress: (r) => seen.push(r) })
+    await downloadVerified({
+      url: `${base}/m`,
+      dest,
+      sha256: sha,
+      allowLocalHttp: true,
+      onProgress: (r) => seen.push(r)
+    })
     expect(readFileSync(dest).equals(content)).toBe(true)
     expect(existsSync(`${dest}.part`)).toBe(false)
     expect(seen.at(-1)).toBe(content.length)
@@ -189,7 +201,12 @@ function fakeDeps(): EngineDeps & { children: FakeChild[]; specs: EngineSpec[] }
   }
 }
 
-const spec = (model = 'leve.gguf'): EngineSpec => ({ binary: '/x/llama-server', modelPath: model, ctx: 4096, threads: 4 })
+const spec = (model = 'leve.gguf'): EngineSpec => ({
+  binary: '/x/llama-server',
+  modelPath: model,
+  ctx: 4096,
+  threads: 4
+})
 
 describe('gerente do motor local', () => {
   afterEach(() => vi.useRealTimers())
@@ -305,10 +322,18 @@ describe('gerente do motor local', () => {
     expect(val('--cache-ram')).toBe('0')
     expect(val('--api-key')).toBe('chave')
     expect(a).toContain('--no-webui')
+    expect(a).toContain('--no-repack')
   })
 })
 
 // ---------- Roteador ----------
+
+test('script de medição usa os mesmos arquivos e argumentos do app', () => {
+  const script = readFileSync(join(__dirname, '../scripts/medir-ia-local.mjs'), 'utf8')
+  for (const f of [...Object.values(ENGINE_ASSETS), ...LOCAL_MODELS]) expect(script).toContain(f.sha256)
+  for (const m of LOCAL_MODELS) expect(script).toContain(m.url)
+  for (const a of engineArgs(spec(), 1, 'k').filter((x) => x.startsWith('--'))) expect(script).toContain(`'${a}'`)
+})
 
 describe('roteador com IA no computador', () => {
   const p = (x: Partial<AiProvider>): AiProvider => ({

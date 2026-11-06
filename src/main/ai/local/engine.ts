@@ -48,6 +48,7 @@ export function engineArgs(spec: EngineSpec, port: number, apiKey: string): stri
     '--parallel', '1', // uma conversa por vez
     '--load-mode', 'mmap', // o sistema pode devolver a memória do modelo
     '--cache-ram', '0', // sem cache de prompts na memória (padrão seria até 8 GB)
+    '--no-repack', // sem cópia reorganizada dos pesos: no modo só processador o pico caiu de 1,35 GB para 0,99 GB
     '--no-webui',
     '--no-slots',
     ...(spec.extraArgs ?? [])

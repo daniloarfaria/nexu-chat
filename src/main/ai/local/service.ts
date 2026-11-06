@@ -138,11 +138,7 @@ async function installEngine(signal: AbortSignal, progress: (p: LocalAiProgress)
   setState({ engineVersion: ENGINE_VERSION, engineBinary: relative(baseDir(), bin) })
 }
 
-async function installModel(
-  id: string,
-  signal: AbortSignal,
-  progress: (p: LocalAiProgress) => void
-): Promise<void> {
+async function installModel(id: string, signal: AbortSignal, progress: (p: LocalAiProgress) => void): Promise<void> {
   if (modelInstalled(id)) return
   const m = modelById(id)!
   await downloadVerified({
@@ -181,8 +177,14 @@ export async function installLocal(
   if (tier === 'medio' && !st.recommendation.offerMedium)
     throw new Error('O modelo médio precisa de 16 GB de memória ou mais')
   const ctrl = new AbortController()
+  let last = 0
   const progress = (p: LocalAiProgress): void => {
+    const changed = installing?.progress.stage !== p.stage
     if (installing) installing.progress = p
+    // no máximo 4 avisos por segundo para a tela (o download chama a cada pedaço recebido)
+    const now = Date.now()
+    if (!changed && now - last < 250 && p.received < p.total) return
+    last = now
     onProgress(p)
   }
   installing = { progress: { stage: 'motor', label: 'Começando', received: 0, total: 0 }, abort: ctrl }

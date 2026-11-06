@@ -122,7 +122,7 @@ export async function downloadVerified(o: DownloadOptions): Promise<string> {
       await fetchPart(o, part)
       break
     } catch (e) {
-      if (o.signal?.aborted) throw new Error('Download cancelado')
+      if (o.signal?.aborted) throw new Error('Download cancelado', { cause: e })
       if (e instanceof ChecksumError || attempt >= retries) throw e
       // internet caiu: espera um pouco e continua de onde parou
       await new Promise((r) => setTimeout(r, Math.min(2000 * 2 ** attempt, 15_000)))
