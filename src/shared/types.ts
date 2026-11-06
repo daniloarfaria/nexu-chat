@@ -471,7 +471,7 @@ export const PAYMENT_METHODS = [
 
 // ---------- Assistente de IA ----------
 
-export type AiPreset = 'groq' | 'gemini' | 'openrouter' | 'mistral' | 'ollama' | 'claude' | 'custom'
+export type AiPreset = 'groq' | 'gemini' | 'openrouter' | 'mistral' | 'ollama' | 'claude' | 'local' | 'custom'
 export type AiPrivacy = 'estrita' | 'anonimizar' | 'livre'
 
 export interface AiProvider {
@@ -505,6 +505,77 @@ export interface AiUsageEntry {
   customerData: boolean
   charsSent: number
   at: number
+}
+
+// ---------- Contexto do negócio (IA) ----------
+
+/** O que a IA sabe da loja. Um por número de WhatsApp (settings `ai.context.<accountId>`). */
+export interface BusinessContext {
+  about: string // o que a loja vende e para quem
+  products: string // produtos e serviços, com preço e prazo
+  hours: string // horário de funcionamento e endereço
+  payment: string // formas de pagamento
+  policies: string // troca, garantia e entrega
+  faq: string // perguntas frequentes
+  tone: string // tom de voz
+  forbidden: string // o que a IA não pode falar
+  updatedAt: number | null
+}
+export type BusinessContextField = Exclude<keyof BusinessContext, 'updatedAt'>
+
+// ---------- IA no computador (motor local) ----------
+
+export type LocalModelTier = 'leve' | 'medio'
+
+export interface HardwareInfo {
+  platform: string
+  arch: string
+  totalMemGb: number
+  freeMemGb: number
+  cpus: number
+  cpuModel: string
+  freeDiskGb: number | null
+}
+
+export interface AiRecommendation {
+  /** O sistema tem motor pronto para baixar (Mac Apple Silicon/Intel, Windows 64 bits). */
+  localSupported: boolean
+  /** Memória e disco dão conta do modelo leve. */
+  localRecommended: boolean
+  /** Modelo médio aparece como opção (16 GB ou mais). */
+  offerMedium: boolean
+  /** Sugestão principal: as duas juntas (local principal, nuvem reserva) ou só a nuvem. */
+  primary: 'ambas' | 'nuvem'
+  reasons: string[]
+  slowWarning: boolean
+}
+
+export interface LocalModelInfo {
+  id: string
+  tier: LocalModelTier
+  name: string
+  sizeMb: number
+  installed: boolean
+  offered: boolean
+}
+
+export interface LocalAiProgress {
+  stage: 'motor' | 'modelo' | 'conferindo' | 'preparando'
+  label: string
+  received: number
+  total: number
+}
+
+export interface LocalAiStatus {
+  hardware: HardwareInfo
+  recommendation: AiRecommendation
+  engineInstalled: boolean
+  engineVersion: string
+  models: LocalModelInfo[]
+  mediumEnabled: boolean
+  running: boolean
+  installing: LocalAiProgress | null
+  diskUsedMb: number
 }
 
 // ---------- Grupos ----------

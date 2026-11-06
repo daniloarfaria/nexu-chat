@@ -18,6 +18,9 @@ import type {
   AiSettings,
   AiUsageEntry,
   AutoRule,
+  BusinessContext,
+  LocalAiProgress,
+  LocalAiStatus,
   Campaign,
   CampaignAudience,
   CampaignTarget,
@@ -378,6 +381,14 @@ export interface ApiMap {
   'ai:playbook': { args: [{ accountId: string }]; ret: { content: string; updatedAt: number } | null }
   'ai:playbook-build': { args: [{ accountId: string }]; ret: string }
   'ai:playbook-save': { args: [{ accountId: string; content: string }]; ret: void }
+  'ai:context-get': { args: [{ accountId: string }]; ret: BusinessContext }
+  'ai:context-save': { args: [{ accountId: string; context: Partial<BusinessContext> }]; ret: BusinessContext }
+  'ai:context-fill': { args: [{ accountId: string; text: string }]; ret: Partial<BusinessContext> }
+  'ai:local-status': { args: []; ret: LocalAiStatus }
+  'ai:local-install': { args: [{ tier: 'leve' | 'medio' }]; ret: LocalAiStatus }
+  'ai:local-cancel': { args: []; ret: void }
+  'ai:local-medium-off': { args: []; ret: LocalAiStatus }
+  'ai:local-remove': { args: []; ret: LocalAiStatus }
 
   'backup:get': { args: []; ret: BackupSettings }
   'backup:update': {
@@ -417,6 +428,7 @@ export interface EventMap {
     finished?: boolean
   }
   'ai:progress': { accountId: string; done: number; total: number }
+  'ai:local-progress': LocalAiProgress | null
   'avatars:changed': { accountId: string; avatars: Record<string, string | null> }
   'status:changed': { accountId: string }
 }
@@ -551,6 +563,14 @@ export const API_CHANNELS: ApiChannel[] = [
   'ai:playbook',
   'ai:playbook-build',
   'ai:playbook-save',
+  'ai:context-get',
+  'ai:context-save',
+  'ai:context-fill',
+  'ai:local-status',
+  'ai:local-install',
+  'ai:local-cancel',
+  'ai:local-medium-off',
+  'ai:local-remove',
   'backup:get',
   'backup:update',
   'backup:choose-folder',
@@ -575,6 +595,7 @@ export const EVENT_CHANNELS: EventChannel[] = [
   'campaign:changed',
   'groups:progress',
   'ai:progress',
+  'ai:local-progress',
   'avatars:changed',
   'status:changed'
 ]

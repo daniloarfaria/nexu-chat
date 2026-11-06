@@ -329,8 +329,38 @@ O menu **Funis** organiza os clientes em etapas, como num quadro de post-its.
 
 ## 12. Assistente de IA
 
-### Configurar (gratuito)
-Em **Assistente de IA → Provedores**, adicione pelo menos dois provedores gratuitos. Cada um tem o link para criar a chave:
+### Configurar IA em um passo
+O botão **Configurar IA**, no alto da página **Assistente de IA**, abre uma tela só:
+1. O app olha o computador (memória, processador e espaço livre) e mostra a recomendação.
+2. **IA no computador** (privada, grátis, funciona sem internet):
+   - clique em **Instalar IA no computador**. O app baixa o motor (llama.cpp) e um modelo leve (Gemma 3 1B, cerca de 800 MB) e confere cada arquivo antes de usar. Não pede senha de administrador;
+   - se a internet cair, clique de novo: o download continua de onde parou. **Parar download** guarda o que já baixou;
+   - a IA no computador só liga quando alguma tarefa precisa dela e desliga sozinha depois de 5 minutos parada. Desligada, não gasta memória. Ela faz uma tarefa por vez e usa no máximo metade do processador;
+   - fica com as tarefas rápidas (entender o que o cliente quer, etiquetar, tirar datas). As que pedem texto bom (sugestões de resposta, versões de campanha, playbook, preencher o contexto) vão primeiro para a nuvem, e a IA no computador fica de reserva;
+   - pedido grande demais para a IA no computador vai direto para a nuvem;
+   - computadores com 16 GB de memória ou mais podem ligar também o **modelo médio** (Qwen3 4B, cerca de 2,4 GB), que escreve melhor. Com ele ligado, as sugestões de resposta e os textos também são feitos no computador, e a nuvem fica de reserva;
+   - **Remover IA local** apaga todos os arquivos dela.
+3. **IA gratuita na nuvem (Groq):** clique em **abrir o site do Groq**, crie a chave, cole e clique em **Salvar e testar**.
+
+O recomendado é usar as duas: a IA no computador como principal para as tarefas rápidas e a nuvem como reserva. Em computador mais fraco, a IA no computador responde devagar.
+
+### Meu negócio
+Na aba **Meu negócio** você conta para a IA como é a loja. Vale para o número de WhatsApp escolhido. Os campos:
+- o que a loja vende e para quem;
+- produtos e serviços, com preço e prazo;
+- horário de funcionamento e endereço;
+- formas de pagamento;
+- troca, garantia e entrega;
+- perguntas frequentes;
+- tom de voz;
+- o que a IA **não** pode falar.
+
+**Preencher com a IA:** cole o texto do site ou do Instagram da loja e a IA separa nos campos. Revise e clique em **Salvar**.
+
+A IA usa esse contexto nas sugestões de resposta, nas versões de campanha e no playbook, e é orientada a não inventar preço, prazo ou desconto que não esteja escrito ali. Se o texto ficar muito grande, a IA recebe só uma parte: corta primeiro as perguntas frequentes e o tom de voz. O que ela não pode falar nunca é cortado.
+
+### Provedores (manual)
+Em **Assistente de IA → Provedores**, dá para adicionar outros provedores. Cada um tem o link para criar a chave:
 - **Groq:** rápido, cerca de 1.000 pedidos por dia, não treina com seus dados;
 - **Google Gemini:** no plano grátis pode usar os textos para melhorar produtos;
 - **OpenRouter**, **Mistral**, ou **Ollama** (roda no próprio computador);
