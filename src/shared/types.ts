@@ -14,7 +14,8 @@ export const MODULE_KEYS = [
   'lembretes',
   'vendas',
   'funil',
-  'ia'
+  'ia',
+  'status'
 ] as const
 
 export type ModuleKey = (typeof MODULE_KEYS)[number]
@@ -32,6 +33,11 @@ export const MODULE_INFO: Record<ModuleKey, { label: string; description: string
   lembretes: {
     label: 'Lembretes recorrentes',
     description: 'Aniversário, pós-venda, revisão anual',
+    group: 'Marketing'
+  },
+  status: {
+    label: 'Status do WhatsApp',
+    description: 'Postar texto, foto ou vídeo no status, agora ou agendado',
     group: 'Marketing'
   },
   gruposEnvio: { label: 'Envio para grupos', description: 'Campanhas para vários grupos', group: 'Grupos' },
@@ -59,7 +65,8 @@ export const DEFAULT_MODULES: Modules = {
   lembretes: false,
   vendas: true,
   funil: true,
-  ia: false
+  ia: false,
+  status: false
 }
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'qr' | 'connected' | 'logged_out'
@@ -556,7 +563,8 @@ export const PLANS: Record<PlanId, { nome: string; modulos: ModuleKey[] }> = {
       'gruposExtrair',
       'gruposCriar',
       'gruposModeracao',
-      'funil'
+      'funil',
+      'status'
     ]
   },
   completo: { nome: 'Completo', modulos: [...MODULE_KEYS] }
@@ -752,3 +760,42 @@ export const PIPELINE_TEMPLATES: PipelineTemplate[] = [
     ]
   }
 ]
+
+// ---------- Status do WhatsApp ----------
+
+export type StatusKind = 'texto' | 'imagem' | 'video'
+export type StatusPostState = 'agendado' | 'enviando' | 'enviado' | 'falhou' | 'cancelado'
+
+/** Quem vê o status: todos os contatos com WhatsApp, só quem tem a etiqueta, ou todos menos quem tem a etiqueta. */
+export interface StatusAudience {
+  modo: 'todos' | 'etiqueta' | 'todos_menos'
+  tags: string[]
+}
+
+export interface StatusMedia {
+  name: string
+  mime: string
+  file: string
+  size: number
+}
+
+export interface StatusPost {
+  id: number
+  accountId: string
+  kind: StatusKind
+  text: string | null
+  media: StatusMedia | null
+  background: string | null
+  font: number | null
+  audience: StatusAudience
+  scheduledAt: number
+  status: StatusPostState
+  error: string | null
+  sentAt: number | null
+  recipientsCount: number | null
+  createdAt: number
+}
+
+export interface StatusSettings {
+  dailyLimit: number
+}

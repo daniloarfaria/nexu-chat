@@ -12,6 +12,7 @@ import { Campanhas } from './pages/Campanhas'
 import { Automacoes } from './pages/Automacoes'
 import { Grupos } from './pages/Grupos'
 import { Lembretes } from './pages/Lembretes'
+import { Status } from './pages/Status'
 import { Vendas } from './pages/Vendas'
 import { IA } from './pages/IA'
 import { Funis } from './pages/Funis'
@@ -38,6 +39,8 @@ function Page(): React.JSX.Element {
       return <Grupos />
     case 'lembretes':
       return <Lembretes />
+    case 'status':
+      return <Status />
     case 'vendas':
       return <Vendas />
     case 'ia':

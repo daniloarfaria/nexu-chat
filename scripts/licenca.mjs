@@ -32,7 +32,8 @@ const PLANS = {
     'gruposExtrair',
     'gruposCriar',
     'gruposModeracao',
-    'funil'
+    'funil',
+    'status'
   ],
   completo: [
     'conversas',
@@ -46,7 +47,8 @@ const PLANS = {
     'lembretes',
     'vendas',
     'funil',
-    'ia'
+    'ia',
+    'status'
   ]
 }
 

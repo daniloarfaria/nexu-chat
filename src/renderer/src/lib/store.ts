@@ -8,6 +8,7 @@ export type PageId =
   | 'grupos'
   | 'automacoes'
   | 'lembretes'
+  | 'status'
   | 'vendas'
   | 'funis'
   | 'ia'

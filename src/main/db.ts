@@ -378,6 +378,28 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX cards_stage ON pipeline_cards (stage_id, position);
   CREATE INDEX cards_person ON pipeline_cards (person_id);
+  `,
+  // status
+  `
+  CREATE TABLE status_posts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    text TEXT,
+    media TEXT,
+    background TEXT,
+    font INTEGER,
+    audience TEXT NOT NULL,
+    scheduled_at INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'agendado',
+    error TEXT,
+    sent_at INTEGER,
+    recipients_count INTEGER,
+    message_id TEXT,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX status_posts_due ON status_posts (status, scheduled_at);
+  CREATE INDEX status_posts_account ON status_posts (account_id, created_at);
   `
 ]
 
