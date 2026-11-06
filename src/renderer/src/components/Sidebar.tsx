@@ -3,6 +3,7 @@ import {
   Bot,
   CalendarClock,
   ChevronsUpDown,
+  CircleDashed,
   Contact,
   House,
   Megaphone,
@@ -48,6 +49,7 @@ const NAV: Array<{ title?: string; items: NavItem[] }> = [
     items: [
       { id: 'campanhas', label: 'Campanhas', icon: Megaphone, module: (m) => m.campanhas },
       { id: 'lembretes', label: 'Lembretes', icon: CalendarClock, module: (m) => m.lembretes },
+      { id: 'status', label: 'Status', icon: CircleDashed, module: (m) => m.status },
       {
         id: 'grupos',
         label: 'Grupos',

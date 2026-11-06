@@ -292,7 +292,11 @@ export function cancelStatusPost(accountId: string, id: number): StatusPost {
   return getStatusPost(id)!
 }
 
-function finish(id: number, status: StatusPostState, extra: { error?: string; recipients?: number; messageId?: string } = {}): void {
+function finish(
+  id: number,
+  status: StatusPostState,
+  extra: { error?: string; recipients?: number; messageId?: string } = {}
+): void {
   getDb()
     .prepare(
       'UPDATE status_posts SET status = ?, error = ?, sent_at = ?, recipients_count = COALESCE(?, recipients_count), message_id = COALESCE(?, message_id) WHERE id = ?'
@@ -413,9 +417,7 @@ export function cleanupStatusMedia(now = Date.now()): void {
     .all(now - MEDIA_KEEP_MS) as Array<{ id: number; media: string }>
   for (const r of rows) {
     removeMedia(JSON.parse(r.media) as StatusMedia)
-    getDb()
-      .prepare(`UPDATE status_posts SET media = json_set(media, '$.file', '') WHERE id = ?`)
-      .run(r.id)
+    getDb().prepare(`UPDATE status_posts SET media = json_set(media, '$.file', '') WHERE id = ?`).run(r.id)
   }
 }
 

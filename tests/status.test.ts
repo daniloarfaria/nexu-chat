@@ -182,7 +182,13 @@ describe('postagem', () => {
   test('postar agora com a conta desconectada avisa', () => {
     connected = false
     expect(() =>
-      S.createStatusPost({ accountId: ACC, kind: 'texto', text: 'Oi', audience: { modo: 'todos', tags: [] }, scheduledAt: null })
+      S.createStatusPost({
+        accountId: ACC,
+        kind: 'texto',
+        text: 'Oi',
+        audience: { modo: 'todos', tags: [] },
+        scheduledAt: null
+      })
     ).toThrow(/não está conectado/)
   })
 
@@ -228,7 +234,13 @@ describe('postagem', () => {
   })
 
   test('app fechou no meio da postagem: vira falha, não reposta', () => {
-    const p = S.createStatusPost({ accountId: ACC, kind: 'texto', text: 'Oi', audience: { modo: 'todos', tags: [] }, scheduledAt: null })
+    const p = S.createStatusPost({
+      accountId: ACC,
+      kind: 'texto',
+      text: 'Oi',
+      audience: { modo: 'todos', tags: [] },
+      scheduledAt: null
+    })
     getDb().prepare("UPDATE status_posts SET status = 'enviando', sent_at = ? WHERE id = ?").run(Date.now(), p.id)
     expect(S.recoverInterrupted()).toBe(1)
     expect(S.getStatusPost(p.id)!.status).toBe('falhou')
@@ -294,7 +306,13 @@ describe('lista grande', () => {
     const c = S.countStatusAudience(ACC, { modo: 'todos', tags: [] })
     expect(c.large).toBe(true)
     expect(c.limit).toBe(S.STATUS_LARGE_AUDIENCE)
-    S.createStatusPost({ accountId: ACC, kind: 'texto', text: 'Oi', audience: { modo: 'todos', tags: [] }, scheduledAt: null })
+    S.createStatusPost({
+      accountId: ACC,
+      kind: 'texto',
+      text: 'Oi',
+      audience: { modo: 'todos', tags: [] },
+      scheduledAt: null
+    })
     await S.runDueStatus(ACC)
     expect(calls).toHaveLength(1)
   })

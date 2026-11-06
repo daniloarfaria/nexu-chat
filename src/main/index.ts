@@ -19,6 +19,7 @@ import type { Campaign, EngineState, MessageItem, SyncState } from '@shared/type
 import { engine } from './engine'
 import { startAutomation } from './automation'
 import { startReminders } from './reminders'
+import { startStatus, statusEvents } from './status'
 import { groupEvents } from './groups'
 import { avatarEvents, setAvatarSocketGetter } from './wa/avatars'
 
@@ -228,6 +229,8 @@ if (!app.requestSingleInstanceLock()) {
     }
     engine.startAll()
     startReminders()
+    startStatus()
+    statusEvents.on('changed', (p: unknown) => send('status:changed', p))
     // Ao conectar, retoma campanhas paradas por falta de conexão
     wa.on('state', (s) => s.status === 'connected' && engine.kick(s.accountId))
 
