@@ -127,7 +127,11 @@ function Visual({ m }: { m: MessageItem }): React.JSX.Element {
           aria-label="Foto ampliada"
           className="fixed inset-0 z-50 grid place-items-center bg-black/85 p-8"
           onClick={() => setZoom(false)}
-          onKeyDown={(e) => e.key === 'Escape' && setZoom(false)}
+          onKeyDown={(e) => {
+            if (e.key !== 'Escape') return
+            e.stopPropagation() // fecha só a foto, não a janela em volta
+            setZoom(false)
+          }}
           tabIndex={-1}
           ref={(el) => el?.focus()}
         >

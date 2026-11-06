@@ -16,7 +16,16 @@ import { dayKey, dayLabel } from './time'
  * Lê o estado do contexto, então serve tanto para a tela Conversas quanto para a janela do funil.
  * `embedded`: dentro de outra janela (sem a faixa de etiquetas e funis, que a janela já mostra).
  */
-export function ChatView({ jid, embedded }: { jid: string; embedded?: boolean }): React.JSX.Element {
+export function ChatView({
+  jid,
+  embedded,
+  fallbackName
+}: {
+  jid: string
+  embedded?: boolean
+  /** Nome a mostrar quando a conversa ainda não existe (ex.: contato do funil que nunca conversou). */
+  fallbackName?: string
+}): React.JSX.Element {
   const { messages, chats, loadOlder, hasOlder } = useChatStore()
   const account = useActiveAccount()
   const state = useApp((s) => (s.activeAccountId ? s.states[s.activeAccountId] : undefined))
@@ -78,11 +87,19 @@ export function ChatView({ jid, embedded }: { jid: string; embedded?: boolean })
           embedded ? 'pr-4' : 'pr-16'
         )}
       >
-        <Avatar id={jid} name={chat?.name ?? ''} group={chat?.isGroup} size={36} />
+        <Avatar id={jid} name={chat?.name ?? fallbackName ?? ''} group={chat?.isGroup} size={36} />
         <div className="min-w-0">
-          <div className="truncate text-[15px] font-semibold">{chat?.name ?? formatPhone(jid.split('@')[0])}</div>
+          <div className="truncate text-[15px] font-semibold">
+            {chat?.name ?? fallbackName ?? formatPhone(jid.split('@')[0])}
+          </div>
           <div className="tabular truncate text-[12.5px] text-ink-2">
-            {chat?.isGroup ? 'Grupo' : chat?.phone ? formatPhone(chat.phone) : ''}
+            {chat?.isGroup
+              ? 'Grupo'
+              : chat?.phone
+                ? formatPhone(chat.phone)
+                : fallbackName
+                  ? formatPhone(jid.split('@')[0])
+                  : ''}
           </div>
         </div>
         {account?.modules.vendas && !chat?.isGroup && <DealBar key={jid} accountId={account.id} jid={jid} />}

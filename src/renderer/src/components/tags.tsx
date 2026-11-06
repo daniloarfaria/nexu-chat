@@ -160,7 +160,10 @@ export function TagPicker({
               if (hi < options.length && options[hi]) pick(options[hi].name)
               else if (canCreate) pick(term)
             } else if (e.key === 'Backspace' && !q && value.length) onChange(value.slice(0, -1))
-            else if (e.key === 'Escape') setOpen(false)
+            else if (e.key === 'Escape' && open) {
+              e.stopPropagation() // fecha só a lista, não a janela em volta
+              setOpen(false)
+            }
           }}
           placeholder={value.length ? '' : placeholder}
           className="h-6 min-w-24 flex-1 bg-transparent text-[13.5px] text-ink placeholder:text-ink-3 focus:outline-none"

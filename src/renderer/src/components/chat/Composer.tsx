@@ -408,7 +408,8 @@ function ComposerInner({ jid, disabled }: { jid: string; disabled?: string | nul
                   e.preventDefault()
                   void submit()
                 }
-                if (e.key === 'Escape') {
+                if (e.key === 'Escape' && (replyTo || editing)) {
+                  e.stopPropagation() // cancela a resposta/edição sem fechar a janela em volta
                   setReply(null)
                   setEditing(null)
                 }

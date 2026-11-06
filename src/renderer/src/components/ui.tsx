@@ -1,4 +1,12 @@
-import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from 'react'
+import {
+  forwardRef,
+  useEffect,
+  useRef,
+  useState,
+  type ButtonHTMLAttributes,
+  type InputHTMLAttributes,
+  type ReactNode
+} from 'react'
 import { Loader2 } from 'lucide-react'
 import { cn } from '../lib/cn'
 
@@ -295,6 +303,102 @@ export function Drawer({
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">{children}</div>
         {footer && <footer className="flex shrink-0 justify-end gap-2 border-t border-line px-5 py-3">{footer}</footer>}
+      </div>
+    </div>
+  )
+}
+
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+/**
+ * Janela flutuante no meio da tela. Esc ou clique fora fecha; o Tab fica preso dentro dela
+ * e, ao fechar, o foco volta para onde estava (ex.: o cartão que abriu a janela).
+ */
+export function Modal({
+  label,
+  onClose,
+  children,
+  className
+}: {
+  /** Nome lido pelo leitor de tela. */
+  label: string
+  onClose: () => void
+  children: ReactNode
+  className?: string
+}): React.JSX.Element {
+  const box = useRef<HTMLDivElement>(null)
+  const backdrop = useRef<HTMLDivElement>(null)
+  // Guardado já na primeira renderização: os filhos (ex.: a caixa de mensagem) pegam o foco antes dos efeitos daqui
+  const [before] = useState(() => document.activeElement as HTMLElement | null)
+  const close = useRef(onClose)
+  useEffect(() => {
+    close.current = onClose
+  }, [onClose])
+
+  useEffect(() => {
+    const el = box.current
+    // Algum filho (ex.: a caixa de mensagem) já pode ter pegado o foco; se não, foca a janela
+    if (el && !el.contains(document.activeElement)) el.focus()
+    if (el && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      const ease = 'cubic-bezier(0.2, 0.8, 0.2, 1)'
+      el.animate(
+        [
+          { opacity: 0, transform: 'translateY(8px) scale(0.985)' },
+          { opacity: 1, transform: 'none' }
+        ],
+        {
+          duration: 180,
+          easing: ease
+        }
+      )
+      backdrop.current?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: ease })
+    }
+    return () => {
+      if (before?.isConnected) before.focus()
+    }
+  }, [before])
+
+  function onKeyDown(e: React.KeyboardEvent): void {
+    if (e.key === 'Escape') {
+      e.stopPropagation()
+      close.current()
+      return
+    }
+    if (e.key !== 'Tab' || !box.current) return
+    const items = [...box.current.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((n) => n.offsetParent !== null)
+    if (!items.length) {
+      e.preventDefault()
+      return
+    }
+    const first = items[0]
+    const last = items[items.length - 1]
+    const at = document.activeElement
+    if (e.shiftKey && (at === first || at === box.current)) {
+      e.preventDefault()
+      last.focus()
+    } else if (!e.shiftKey && at === last) {
+      e.preventDefault()
+      first.focus()
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-40 grid place-items-center p-4">
+      <div ref={backdrop} aria-hidden className="absolute inset-0 bg-black/40" onClick={() => close.current()} />
+      <div
+        ref={box}
+        role="dialog"
+        aria-modal="true"
+        aria-label={label}
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
+        className={cn(
+          'relative flex max-h-full flex-col overflow-hidden rounded-2xl border border-line bg-panel shadow-pop focus:outline-none',
+          className
+        )}
+      >
+        {children}
       </div>
     </div>
   )
