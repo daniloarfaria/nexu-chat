@@ -15,7 +15,7 @@ import {
   Trash2,
   X
 } from 'lucide-react'
-import { useChats } from '../../lib/chatStore'
+import { useChatStore } from '../../lib/chatStore'
 import { useActiveAccount } from '../../lib/store'
 import { cn } from '../../lib/cn'
 import { Button, Input } from '../ui'
@@ -36,13 +36,13 @@ function readDraft(key: string): string {
 
 /** O componente é recriado (key) ao trocar de conversa ou entrar em edição, zerando o estado. */
 export function Composer({ jid, disabled }: { jid: string; disabled?: string | null }): React.JSX.Element {
-  const editingId = useChats((s) => s.editing?.id ?? '')
-  const accountId = useChats((s) => s.accountId ?? '')
+  const editingId = useChatStore((s) => s.editing?.id ?? '')
+  const accountId = useChatStore((s) => s.accountId ?? '')
   return <ComposerInner key={`${accountId}|${jid}|${editingId}`} jid={jid} disabled={disabled} />
 }
 
 function ComposerInner({ jid, disabled }: { jid: string; disabled?: string | null }): React.JSX.Element {
-  const { accountId, replyTo, editing, setReply, setEditing } = useChats()
+  const { accountId, replyTo, editing, setReply, setEditing } = useChatStore()
   const iaOn = !!useActiveAccount()?.modules.ia
   const [suggesting, setSuggesting] = useState(false)
 
@@ -468,7 +468,7 @@ function ExtraForm({
   jid: string
   onClose: () => void
 }): React.JSX.Element {
-  const accountId = useChats((s) => s.accountId)
+  const accountId = useChatStore((s) => s.accountId)
   const [a, setA] = useState('')
   const [b, setB] = useState('')
   const [opts, setOpts] = useState(['', ''])
