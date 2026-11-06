@@ -18,6 +18,7 @@ import type {
   AiSettings,
   AiUsageEntry,
   AutoRule,
+  BusinessContext,
   Campaign,
   CampaignAudience,
   CampaignTarget,
@@ -349,6 +350,9 @@ export interface ApiMap {
   'ai:playbook': { args: [{ accountId: string }]; ret: { content: string; updatedAt: number } | null }
   'ai:playbook-build': { args: [{ accountId: string }]; ret: string }
   'ai:playbook-save': { args: [{ accountId: string; content: string }]; ret: void }
+  'ai:context-get': { args: [{ accountId: string }]; ret: BusinessContext }
+  'ai:context-save': { args: [{ accountId: string; context: Partial<BusinessContext> }]; ret: BusinessContext }
+  'ai:context-fill': { args: [{ accountId: string; text: string }]; ret: Partial<BusinessContext> }
 
   'backup:get': { args: []; ret: BackupSettings }
   'backup:update': {
@@ -515,6 +519,9 @@ export const API_CHANNELS: ApiChannel[] = [
   'ai:playbook',
   'ai:playbook-build',
   'ai:playbook-save',
+  'ai:context-get',
+  'ai:context-save',
+  'ai:context-fill',
   'backup:get',
   'backup:update',
   'backup:choose-folder',

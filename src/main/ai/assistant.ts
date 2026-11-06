@@ -6,7 +6,8 @@ import { complete, getAiSettings } from './router'
 import { transcribeMissing } from '../wa/transcribe'
 import { wa } from '../wa/manager'
 import { findPersonByJid } from '../people'
-import type { MessageItem } from '@shared/types'
+import { businessContext, FILL_SYSTEM, parseContextJson } from './context'
+import type { BusinessContext, MessageItem } from '@shared/types'
 
 // ---------- Anonimização ----------
 
@@ -67,11 +68,12 @@ function transcript(msgs: MessageItem[], storeName: string, anon: boolean, names
     .join('\n')
 }
 
-function storeContext(accountId: string): { name: string; playbook: string | null } {
+/** Nome da loja, contexto do negócio (já com limite de tamanho) e playbook. */
+function storeContext(accountId: string): { name: string; context: string; playbook: string | null } {
   const account = getAccount(accountId)
   const pb = getDb().prepare('SELECT content FROM playbooks WHERE account_id = ?').get(accountId) as
     { content: string } | undefined
-  return { name: account?.name ?? 'Loja', playbook: pb?.content ?? null }
+  return { name: account?.name ?? 'Loja', context: businessContext(accountId), playbook: pb?.content ?? null }
 }
 
 function namesFor(accountId: string, jid: string): string[] {
@@ -82,7 +84,8 @@ function namesFor(accountId: string, jid: string): string[] {
 
 const BASE_RULES = `Você ajuda um pequeno comércio brasileiro a atender clientes pelo WhatsApp.
 Escreva em português do Brasil, com tom cordial, direto e humano, como um atendente experiente da loja.
-Nunca invente preços, prazos, estoque ou condições que não aparecem na conversa ou no playbook; se faltar informação, faça uma pergunta.
+Nunca invente preços, prazos, descontos, estoque ou condições que não aparecem na conversa, no contexto da loja ou no playbook; se faltar informação, faça uma pergunta.
+Respeite o tom de voz e o que a loja pede para não falar.
 Mensagens curtas (até 3 frases), sem markdown, no máximo 1 emoji.`
 
 // ---------- Tarefas ----------
@@ -93,7 +96,7 @@ export async function suggestReply(
   jid: string,
   goal?: string
 ): Promise<{ text: string; provider: string }> {
-  const { name, playbook } = storeContext(accountId)
+  const { name, context, playbook } = storeContext(accountId)
   const anon = getAiSettings().privacy !== 'livre'
   await transcribeMissing(wa.getSocket(accountId), accountId, jid, 4).catch(() => undefined)
   const msgs = listMessages(accountId, jid, null, 30)
@@ -114,7 +117,7 @@ export async function suggestReply(
     task: 'sugerir_resposta',
     tier: 'fast',
     customerData: true,
-    system: `${BASE_RULES}\nLoja: ${name}.${playbook ? `\n\nPlaybook de vendas da loja:\n${playbook.slice(0, 6000)}` : ''}`,
+    system: `${BASE_RULES}\n\nContexto da loja:\n${context}${playbook ? `\n\nPlaybook de vendas da loja:\n${playbook.slice(0, 6000)}` : ''}`,
     prompt: `Conversa (mais antiga primeiro):\n${transcript(msgs, name, anon, namesFor(accountId, jid))}\n\n${history}${
       person?.tags.length ? `\nEtiquetas do cliente: ${mask(person.tags.join(', '))}` : ''
     }\n\n${goal ? `Objetivo da próxima mensagem: ${mask(goal)}\n` : ''}Escreva somente a próxima mensagem da loja, pronta para enviar. Se o cliente aparece como [cliente], não use nome.`,
@@ -130,13 +133,16 @@ export async function campaignVariations(
   count: number,
   brief?: string
 ): Promise<string[]> {
-  const { name } = storeContext(accountId)
+  const { context } = storeContext(accountId)
   const r = await complete({
     task: 'variacoes_campanha',
     tier: 'smart',
     customerData: false,
     system: `${BASE_RULES}
-Loja: ${name}.
+
+Contexto da loja:
+${context}
+
 Você escreve mensagens promocionais para clientes que já compraram na loja.
 Cada variação deve ter o mesmo conteúdo e oferta, com palavras e estrutura diferentes, para não parecer mensagem em massa.
 Mantenha exatamente as variáveis entre chaves que existirem, como {primeiro_nome}. Termine convidando o cliente a responder (pergunta simples).
@@ -159,7 +165,7 @@ export async function buildPlaybook(
   accountId: string,
   onProgress?: (done: number, total: number) => void
 ): Promise<string> {
-  const { name, playbook } = storeContext(accountId)
+  const { name, context, playbook } = storeContext(accountId)
   const anon = getAiSettings().privacy !== 'livre'
   const deals = listDeals(accountId, { from: Date.now() - 120 * 86_400_000, limit: 60 })
   if (deals.length < 3) throw new Error('Marque pelo menos 3 vendas ou perdas nas conversas para montar o playbook')
@@ -202,7 +208,7 @@ export async function buildPlaybook(
     tier: 'smart',
     customerData: true, // resumos citam frases reais de conversas
     system: `Você é consultor de vendas de pequenos comércios. Escreva em português do Brasil, em Markdown simples (títulos ## e listas).`,
-    prompt: `Loja: ${name}.\n${playbook ? `Playbook atual (atualize, mantendo o que continua válido):\n${playbook}\n\n` : ''}Análises de ${notes.length} conversas recentes:\n\n${notes.join('\n\n')}\n\nEscreva o playbook de vendas pelo WhatsApp desta loja com as seções:\n## Abordagens que funcionam\n## Objeções mais comuns e como responder\n## Frases prontas (exemplos reais que funcionaram)\n## O que evitar\n## Quando fazer follow-up\nUse só o que aparece nas análises; não invente números.`,
+    prompt: `Contexto da loja:\n${context}\n\n${playbook ? `Playbook atual (atualize, mantendo o que continua válido):\n${playbook}\n\n` : ''}Análises de ${notes.length} conversas recentes:\n\n${notes.join('\n\n')}\n\nEscreva o playbook de vendas pelo WhatsApp desta loja com as seções:\n## Abordagens que funcionam\n## Objeções mais comuns e como responder\n## Frases prontas (exemplos reais que funcionaram)\n## O que evitar\n## Quando fazer follow-up\nUse só o que aparece nas análises e no contexto da loja; não invente números, preços ou prazos.`,
     maxTokens: 4000
   })
   getDb()
@@ -211,6 +217,23 @@ export async function buildPlaybook(
     )
     .run(accountId, r.text, Date.now())
   return r.text
+}
+
+/** Organiza nos campos do contexto um texto colado pelo dono (site, Instagram…). Não salva: a tela mostra para revisar. */
+export async function fillBusinessContext(text: string): Promise<Partial<BusinessContext>> {
+  const clean = text.trim().slice(0, 20_000)
+  if (clean.length < 20) throw new Error('Cole um texto maior sobre a loja (do site ou do Instagram)')
+  const r = await complete({
+    task: 'preencher_contexto',
+    tier: 'smart',
+    customerData: false,
+    system: FILL_SYSTEM,
+    prompt: `Texto sobre a loja:\n\n${clean}`,
+    maxTokens: 2500
+  })
+  const out = parseContextJson(r.text)
+  if (!Object.keys(out).length) throw new Error('A IA não achou informações da loja nesse texto')
+  return out
 }
 
 export function getPlaybook(accountId: string): { content: string; updatedAt: number } | null {
