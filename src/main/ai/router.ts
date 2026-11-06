@@ -81,6 +81,18 @@ export const PRESETS: Record<
     paid: false,
     keyUrl: 'https://ollama.com/download'
   },
+  // Motor local (llama.cpp) instalado pelo próprio app. O endereço muda a cada vez que o motor sobe.
+  local: {
+    name: 'IA no computador',
+    baseUrl: 'http://127.0.0.1',
+    fast: 'gemma3-1b',
+    smart: 'gemma3-1b',
+    trains: false,
+    rpm: null,
+    rpd: null,
+    paid: false,
+    keyUrl: ''
+  },
   claude: {
     name: 'Claude (Anthropic) — pago',
     baseUrl: 'https://api.anthropic.com',
@@ -184,6 +196,9 @@ export function saveProvider(p: {
     ? (db.prepare('SELECT * FROM ai_providers WHERE id = ?').get(p.id) as unknown as Row | undefined)
     : undefined
   if (p.id && !cur) throw new Error('Provedor não encontrado')
+  // A IA no computador só é criada pelo assistente "Configurar IA" (que baixa e confere o motor)
+  if ((p.preset === 'local' || cur?.preset === 'local') && (!cur || cur.preset !== p.preset))
+    throw new Error('Use o botão Configurar IA para instalar a IA no computador')
   const baseUrl = validateBaseUrl(p.baseUrl ?? cur?.base_url ?? preset?.baseUrl ?? '')
   let key = p.apiKey === undefined ? undefined : p.apiKey ? sealString(p.apiKey.trim()) : null
   // Endereço mudou de servidor: a chave antiga não vai junto (precisa ser informada de novo)
@@ -244,6 +259,26 @@ export function validateBaseUrl(raw: string): string {
   return u.toString().replace(/\/+$/, '')
 }
 
+/** Cadastra (ou atualiza) a IA no computador como provedor. Só o assistente "Configurar IA" chama. */
+export function upsertLocalProvider(modelFast: string, modelSmart: string): void {
+  const db = getDb()
+  const cur = db.prepare("SELECT id FROM ai_providers WHERE preset = 'local'").get() as { id: number } | undefined
+  if (cur) {
+    db.prepare(
+      'UPDATE ai_providers SET model_fast = ?, model_smart = ?, enabled = 1, cooldown_until = 0 WHERE id = ?'
+    ).run(modelFast, modelSmart, cur.id)
+    return
+  }
+  db.prepare(
+    `INSERT INTO ai_providers (preset, name, base_url, api_key, model_fast, model_smart, trains_on_data, rpm, rpd, paid, enabled, priority, created_at)
+     VALUES ('local', ?, ?, NULL, ?, ?, 0, NULL, NULL, 0, 1, 50, ?)`
+  ).run(PRESETS.local.name, PRESETS.local.baseUrl, modelFast, modelSmart, Date.now())
+}
+
+export function removeLocalProvider(): void {
+  getDb().prepare("DELETE FROM ai_providers WHERE preset = 'local'").run()
+}
+
 export function deleteProvider(id: number): void {
   getDb().prepare('DELETE FROM ai_providers WHERE id = ?').run(id)
 }
@@ -295,8 +330,39 @@ class ProviderError extends Error {
   }
 }
 
-async function callOpenAiCompatible(p: Row, model: string, req: AiRequest): Promise<{ text: string; tokens: number }> {
-  const key = p.api_key ? unsealString(p.api_key) : ''
+// ---------- IA no computador ----------
+
+/**
+ * Quem executa os pedidos da IA local: sobe o motor se precisar, roda um pedido por vez
+ * e devolve o endereço e a chave da vez. Registrado por `ai/local/service.ts` (evita import circular).
+ */
+export type LocalRunner = <T>(modelId: string, fn: (baseUrl: string, apiKey: string) => Promise<T>) => Promise<T>
+let localRunner: LocalRunner | null = null
+export function setLocalRunner(r: LocalRunner | null): void {
+  localRunner = r
+}
+
+async function callLocal(p: Row, model: string, req: AiRequest): Promise<{ text: string; tokens: number }> {
+  if (!localRunner) throw new ProviderError('IA no computador não instalada', 10 * 60_000)
+  try {
+    return await localRunner(model, (baseUrl, apiKey) =>
+      // computador fraco: dá mais tempo para responder
+      callOpenAiCompatible({ ...p, base_url: baseUrl }, model, req, { key: apiKey, timeoutMs: 180_000 })
+    )
+  } catch (e) {
+    if (e instanceof ProviderError) throw e
+    // motor não subiu (arquivo apagado, antivírus, falta de memória): espera antes de tentar de novo
+    throw new ProviderError((e as Error).message, 5 * 60_000)
+  }
+}
+
+async function callOpenAiCompatible(
+  p: Row,
+  model: string,
+  req: AiRequest,
+  opts: { key?: string; timeoutMs?: number } = {}
+): Promise<{ text: string; tokens: number }> {
+  const key = opts.key ?? (p.api_key ? unsealString(p.api_key) : '')
   const res = await fetch(`${p.base_url}/chat/completions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...(key ? { authorization: `Bearer ${key}` } : {}) },
@@ -308,7 +374,7 @@ async function callOpenAiCompatible(p: Row, model: string, req: AiRequest): Prom
         { role: 'user', content: req.prompt }
       ]
     }),
-    signal: AbortSignal.timeout(90_000)
+    signal: AbortSignal.timeout(opts.timeoutMs ?? 90_000)
   })
   if (!res.ok) {
     await res.body?.cancel().catch(() => undefined) // corpo do erro pode repetir o pedido: não é guardado
@@ -361,10 +427,11 @@ async function callClaude(p: Row, model: string, req: AiRequest): Promise<{ text
   }
 }
 
-/** Ordem de tentativa para um pedido (função pura para teste). */
+/** Ordem de tentativa para um pedido (função pura para teste).
+ * Tarefas rápidas (`fast`) preferem a IA no computador; as caprichadas (`smart`) preferem a nuvem gratuita. */
 export function candidates(
   providers: AiProvider[],
-  req: Pick<AiRequest, 'customerData' | 'premium'>,
+  req: Pick<AiRequest, 'customerData' | 'premium'> & { tier?: Tier },
   s: AiSettings,
   paidUsed: number,
   now = Date.now()
@@ -372,7 +439,7 @@ export function candidates(
   const usable = providers.filter(
     (p) =>
       p.enabled &&
-      (p.hasKey || p.preset === 'ollama') &&
+      (p.hasKey || p.preset === 'ollama' || p.preset === 'local') &&
       p.cooldownUntil <= now &&
       (!p.rpd || p.usedToday < p.rpd) &&
       // dados de clientes: no modo estrito, só provedores que não treinam com os dados
@@ -380,10 +447,12 @@ export function candidates(
       !(p.paid && paidUsed >= s.paidMonthlyLimit)
   )
   const free = usable
-    .filter((p) => !p.paid)
+    .filter((p) => !p.paid && p.preset !== 'local')
     .sort((a, b) => a.priority - b.priority || Number(a.trainsOnData) - Number(b.trainsOnData))
+  const local = usable.filter((p) => p.preset === 'local')
   const paid = usable.filter((p) => p.paid)
-  return req.premium ? [...paid, ...free] : [...free, ...paid]
+  const gratis = req.tier === 'fast' ? [...local, ...free] : [...free, ...local]
+  return req.premium ? [...paid, ...gratis] : [...gratis, ...paid]
 }
 
 export async function complete(req: AiRequest): Promise<{ text: string; provider: string; model: string }> {
@@ -406,7 +475,12 @@ export async function complete(req: AiRequest): Promise<{ text: string; provider
     win.push(Date.now())
     minuteWindow.set(p.id, win)
     try {
-      const r = p.preset === 'claude' ? await callClaude(row, model, req) : await callOpenAiCompatible(row, model, req)
+      const r =
+        p.preset === 'claude'
+          ? await callClaude(row, model, req)
+          : p.preset === 'local'
+            ? await callLocal(row, model, req)
+            : await callOpenAiCompatible(row, model, req)
       track(p.id, true, r.tokens)
       getDb()
         .prepare('INSERT INTO ai_log (provider, model, task, customer_data, chars_sent, at) VALUES (?, ?, ?, ?, ?, ?)')
@@ -437,7 +511,9 @@ export async function testProvider(id: number): Promise<string> {
   const r =
     row.preset === 'claude'
       ? await callClaude(row, row.model_fast ?? '', req)
-      : await callOpenAiCompatible(row, row.model_fast ?? '', req)
+      : row.preset === 'local'
+        ? await callLocal(row, row.model_fast ?? '', req)
+        : await callOpenAiCompatible(row, row.model_fast ?? '', req)
   track(id, true, r.tokens)
   getDb().prepare('UPDATE ai_providers SET cooldown_until = 0 WHERE id = ?').run(id)
   return r.text

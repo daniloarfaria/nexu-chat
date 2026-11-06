@@ -7,6 +7,7 @@ import { promisify } from 'node:util'
 import type { MediaInfo, TranscribeSettings, TranscribeStatus } from '@shared/types'
 import { getDb, getSetting, setSetting } from '../db'
 import { listProviders } from '../ai/router'
+import { exclusiveLocal } from '../ai/local/service'
 import { unsealString } from '../secure'
 import { ensureMedia } from './media'
 import { touchMessage } from './store'
@@ -169,7 +170,10 @@ export function transcribe(sock: WASocket | null, accountId: string, chatJid: st
     const g = groqProvider()
     let text: string
     if ((s.engine === 'local' || s.engine === 'auto') && localOk) {
-      text = await transcribeLocal(file, tools as { whisper: string; model: string; ffmpeg: string })
+      // nunca junto com o modelo de texto local: entra na fila dele e o desliga antes (memória baixa)
+      text = await exclusiveLocal(() =>
+        transcribeLocal(file, tools as { whisper: string; model: string; ffmpeg: string })
+      )
     } else if ((s.engine === 'groq' || s.engine === 'auto') && g) {
       text = await transcribeGroq(file, media.mimetype ?? 'audio/ogg', g)
     } else {
