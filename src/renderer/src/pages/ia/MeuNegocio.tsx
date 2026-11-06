@@ -100,7 +100,8 @@ function FillDrawer({
       <div className="flex flex-col gap-4">
         <Notice tone="info">
           Cole o texto do site, do Instagram ou do catálogo da loja. A IA separa nos campos e você revisa antes de
-          salvar. Este texto vai para o provedor de IA configurado; não cole dados de clientes.
+          salvar. Este texto normalmente vai para a IA na nuvem (a Groq ou outro provedor cadastrado); não cole dados de
+          clientes.
         </Notice>
         {error && <Notice tone="bad">{error}</Notice>}
         <Field label="Texto sobre a loja" htmlFor="ctx-fill">
@@ -132,8 +133,8 @@ export function MeuNegocio({ accountId }: { accountId: string }): React.JSX.Elem
   return (
     <div className="flex flex-col gap-4">
       <Notice tone="info" icon={<Store className="size-4" />}>
-        O que estiver aqui a IA usa em tudo: sugestões de resposta, versões de campanha e playbook. Ela nunca inventa
-        preço, prazo ou desconto que não esteja escrito aqui. Vale só para este número de WhatsApp.
+        O que estiver aqui a IA usa em tudo: sugestões de resposta, versões de campanha e playbook. Ela é orientada a
+        não inventar preço, prazo ou desconto que não esteja escrito aqui. Vale só para este número de WhatsApp.
       </Notice>
       {error && <Notice tone="bad">{error}</Notice>}
       {filled && <Notice tone="ok">A IA preencheu os campos que achou no texto. Revise e clique em Salvar.</Notice>}

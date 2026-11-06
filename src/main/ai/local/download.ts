@@ -48,11 +48,38 @@ export async function verifyOrDelete(path: string, sha256: string): Promise<void
   }
 }
 
+/** Endereço recusado (também depois de redirecionamento): não adianta tentar de novo. */
+export class UrlNotAllowedError extends Error {
+  constructor() {
+    super('Endereço de download não permitido')
+  }
+}
+
 function checkUrl(raw: string, allowLocalHttp: boolean): void {
   const u = new URL(raw)
+  if (u.username || u.password) throw new UrlNotAllowedError()
   if (u.protocol === 'https:') return
   if (allowLocalHttp && u.protocol === 'http:' && u.hostname === '127.0.0.1') return
-  throw new Error('Endereço de download não permitido')
+  throw new UrlNotAllowedError()
+}
+
+const MAX_REDIRECTS = 5
+
+/** Segue redirecionamentos um a um, conferindo cada endereço (GitHub e Hugging Face mandam para a CDN). */
+async function fetchChecked(o: DownloadOptions, init: RequestInit): Promise<Response> {
+  let url = o.url
+  for (let i = 0; i <= MAX_REDIRECTS; i++) {
+    checkUrl(url, !!o.allowLocalHttp)
+    const res = await fetch(url, { ...init, redirect: 'manual' })
+    const loc = res.headers.get('location')
+    if (res.status >= 300 && res.status < 400 && loc) {
+      await res.body?.cancel().catch(() => undefined)
+      url = new URL(loc, url).toString()
+      continue
+    }
+    return res
+  }
+  throw new Error('Redirecionamentos demais no download')
 }
 
 const sizeOf = (p: string): number => (existsSync(p) ? statSync(p).size : 0)
@@ -69,7 +96,7 @@ async function fetchPart(o: DownloadOptions, part: string): Promise<void> {
   const signal = o.signal ? AbortSignal.any([o.signal, idle.signal]) : idle.signal
   bump()
   try {
-    const res = await fetch(o.url, { headers: start ? { range: `bytes=${start}-` } : {}, signal, redirect: 'follow' })
+    const res = await fetchChecked(o, { headers: start ? { range: `bytes=${start}-` } : {}, signal })
     if (res.status === 416) {
       // o .part já tem tudo (ou está estragado): a conferência decide
       await res.body?.cancel().catch(() => undefined)
@@ -89,14 +116,35 @@ async function fetchPart(o: DownloadOptions, part: string): Promise<void> {
       throw new ChecksumError()
     }
     let received = already
+    let tooBig = false
     o.onProgress?.(received, total)
     const body = Readable.fromWeb(res.body as never)
-    body.on('data', (chunk: Buffer) => {
-      received += chunk.length
-      bump()
-      o.onProgress?.(received, total)
-    })
-    await pipeline(body, createWriteStream(part, { flags: resumed ? 'a' : 'w' }), { signal })
+    try {
+      await pipeline(
+        body,
+        async function* (src: AsyncIterable<Buffer>) {
+          for await (const chunk of src) {
+            received += chunk.length
+            // servidor sem content-length mandando mais que o previsto: para na hora
+            if (o.size && received > o.size) {
+              tooBig = true
+              throw new ChecksumError()
+            }
+            bump()
+            o.onProgress?.(received, total)
+            yield chunk
+          }
+        },
+        createWriteStream(part, { flags: resumed ? 'a' : 'w' }),
+        { signal }
+      )
+    } catch (e) {
+      if (tooBig) {
+        rmSync(part, { force: true })
+        throw new ChecksumError()
+      }
+      throw e
+    }
   } finally {
     clearTimeout(timer)
   }
@@ -123,7 +171,7 @@ export async function downloadVerified(o: DownloadOptions): Promise<string> {
       break
     } catch (e) {
       if (o.signal?.aborted) throw new Error('Download cancelado', { cause: e })
-      if (e instanceof ChecksumError || attempt >= retries) throw e
+      if (e instanceof ChecksumError || e instanceof UrlNotAllowedError || attempt >= retries) throw e
       // internet caiu: espera um pouco e continua de onde parou
       await new Promise((r) => setTimeout(r, Math.min(2000 * 2 ** attempt, 15_000)))
     }

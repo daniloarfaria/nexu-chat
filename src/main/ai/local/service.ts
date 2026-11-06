@@ -1,15 +1,16 @@
 import { app } from 'electron'
 import { execFile } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
+import { basename, join, relative, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
-import type { LocalAiProgress, LocalAiStatus, LocalModelTier } from '@shared/types'
+import type { HardwareInfo, LocalAiProgress, LocalAiStatus, LocalModelTier } from '@shared/types'
 import { getSetting, setSetting } from '../../db'
 import { log } from '../../log'
 import { removeLocalProvider, setLocalRunner, upsertLocalProvider } from '../router'
 import { ENGINE_VERSION, engineAssetFor, LOCAL_MODELS, lightModel, mediumModel, modelById } from './catalog'
-import { clearPartial, downloadVerified } from './download'
-import { LocalEngine, realEngineDeps } from './engine'
+import { clearPartial, downloadVerified, type DownloadOptions } from './download'
+import { LocalEngine, realEngineDeps, type EngineDeps } from './engine'
 import { detectHardware, engineThreads, recommend } from './hardware'
 
 /**
@@ -37,15 +38,86 @@ const setState = (patch: Partial<LocalState>): LocalState => {
 }
 
 const baseDir = (): string => join(app.getPath('userData'), 'ai-local')
+const engineDir = (): string => join(baseDir(), 'engine', ENGINE_VERSION)
+const runDir = (): string => join(baseDir(), 'run')
+const pidFile = (): string => join(runDir(), 'motor.pid')
 const modelPath = (file: string): string => join(baseDir(), 'models', file)
 const exeName = process.platform === 'win32' ? 'llama-server.exe' : 'llama-server'
 
-const engine = new LocalEngine(realEngineDeps)
-let installing: { progress: LocalAiProgress; abort: AbortController } | null = null
+async function extract(archive: string, dest: string, signal: AbortSignal): Promise<void> {
+  // tar do próprio sistema: no Mac (/usr/bin/tar) e no Windows 10+ (System32\tar.exe, também abre .zip).
+  // Ele recusa caminhos absolutos e "..", então nada sai da pasta de destino.
+  const tar =
+    process.platform === 'win32' ? join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe') : '/usr/bin/tar'
+  mkdirSync(dest, { recursive: true })
+  // `signal`: "Remover IA local" durante a extração mata o tar
+  await run(tar, ['-xf', archive, '-C', dest], { timeout: 120_000, windowsHide: true, signal })
+  if (process.platform === 'darwin') {
+    // arquivo conferido pelo SHA-256: tira a marca de "baixado da internet" para o macOS deixar rodar
+    await run('/usr/bin/xattr', ['-dr', 'com.apple.quarantine', dest], { timeout: 30_000 }).catch(() => undefined)
+  }
+}
 
+/** Nome do programa de um PID (para só matar um llama-server antigo, nunca outro programa). */
+async function processName(pid: number): Promise<string | null> {
+  try {
+    if (process.platform === 'win32') {
+      const { stdout } = await run('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], {
+        timeout: 10_000,
+        windowsHide: true
+      })
+      return /^"([^"]+)"/.exec(stdout.trim())?.[1] ?? null
+    }
+    const { stdout } = await run('ps', ['-p', String(pid), '-o', 'comm='], { timeout: 10_000 })
+    return stdout.trim() || null
+  } catch {
+    return null
+  }
+}
+
+/** Dependências trocáveis nos testes (download, extração, processo, computador). */
+export const _deps = {
+  download: (o: DownloadOptions): Promise<string> => downloadVerified(o),
+  extract,
+  engineDeps: realEngineDeps as EngineDeps,
+  hardware: (): HardwareInfo => detectHardware(app.getPath('userData')),
+  processName,
+  killPid: (pid: number): void => {
+    process.kill(pid)
+  },
+  /** apagar com novas tentativas curtas (Windows: arquivo de processo que acabou de fechar) */
+  remove: (path: string): Promise<void> => rm(path, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+}
+
+let engine: LocalEngine | null = null
+function getEngine(): LocalEngine {
+  if (!engine) {
+    const base = _deps.engineDeps
+    engine = new LocalEngine({
+      ...base,
+      // guarda o PID: se o app cair, o próximo início encerra o motor que ficou para trás
+      spawn: (spec, port, key) => {
+        const child = base.spawn(spec, port, key)
+        if (child.pid) {
+          mkdirSync(runDir(), { recursive: true })
+          writeFileSync(pidFile(), String(child.pid))
+          child.onExit(() => rmSync(pidFile(), { force: true }))
+        }
+        return child
+      }
+    })
+  }
+  return engine
+}
+
+let installing: { progress: LocalAiProgress; abort: AbortController; done: Promise<unknown> } | null = null
+
+/** O motor só é aceito se estiver dentro de ai-local/engine/<versão>/ e tiver o nome certo. */
 function engineBinary(s = getState()): string | null {
   if (!s.engineBinary || s.engineVersion !== ENGINE_VERSION) return null
-  const p = join(baseDir(), s.engineBinary)
+  const root = resolve(engineDir())
+  const p = resolve(baseDir(), s.engineBinary)
+  if (!p.startsWith(root + sep) || basename(p) !== exeName) return null
   return existsSync(p) ? p : null
 }
 
@@ -65,7 +137,7 @@ function dirSize(dir: string): number {
 
 export function localStatus(): LocalAiStatus {
   const s = getState()
-  const hardware = detectHardware(app.getPath('userData'))
+  const hardware = _deps.hardware()
   const rec = recommend(hardware)
   return {
     hardware,
@@ -81,7 +153,7 @@ export function localStatus(): LocalAiStatus {
       offered: m.tier === 'leve' ? rec.localSupported : rec.offerMedium
     })),
     mediumEnabled: s.mediumEnabled && modelInstalled(mediumModel().id, s),
-    running: engine.running,
+    running: engine?.running ?? false,
     installing: installing?.progress ?? null,
     diskUsedMb: Math.round(dirSize(baseDir()) / 1024 ** 2)
   }
@@ -95,25 +167,12 @@ function findBinary(dir: string): string | null {
   return null
 }
 
-async function extract(archive: string, dest: string): Promise<void> {
-  // tar do próprio sistema: no Mac (/usr/bin/tar) e no Windows 10+ (System32\tar.exe, também abre .zip).
-  // Ele recusa caminhos absolutos e "..", então nada sai da pasta de destino.
-  const tar =
-    process.platform === 'win32' ? join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe') : '/usr/bin/tar'
-  mkdirSync(dest, { recursive: true })
-  await run(tar, ['-xf', archive, '-C', dest], { timeout: 120_000, windowsHide: true })
-  if (process.platform === 'darwin') {
-    // arquivo conferido pelo SHA-256: tira a marca de "baixado da internet" para o macOS deixar rodar
-    await run('/usr/bin/xattr', ['-dr', 'com.apple.quarantine', dest], { timeout: 30_000 }).catch(() => undefined)
-  }
-}
-
 async function installEngine(signal: AbortSignal, progress: (p: LocalAiProgress) => void): Promise<void> {
   if (engineBinary()) return
-  const asset = engineAssetFor(process.platform, process.arch)
+  const asset = engineAssetFor(_deps.hardware().platform, _deps.hardware().arch)
   if (!asset) throw new Error('Este sistema ainda não tem a IA no computador')
   const archive = join(baseDir(), 'downloads', asset.file)
-  await downloadVerified({
+  await _deps.download({
     url: asset.url,
     dest: archive,
     sha256: asset.sha256,
@@ -123,9 +182,10 @@ async function installEngine(signal: AbortSignal, progress: (p: LocalAiProgress)
   })
   progress({ stage: 'preparando', label: 'Preparando o motor', received: 0, total: 0 })
   const tmp = join(baseDir(), 'engine', `${ENGINE_VERSION}.tmp`)
-  const final = join(baseDir(), 'engine', ENGINE_VERSION)
+  const final = engineDir()
   rmSync(tmp, { recursive: true, force: true })
-  await extract(archive, tmp)
+  await _deps.extract(archive, tmp, signal)
+  if (signal.aborted) throw new Error('Instalação cancelada')
   if (!findBinary(tmp)) throw new Error('O pacote do motor veio sem o llama-server')
   rmSync(final, { recursive: true, force: true })
   renameSync(tmp, final)
@@ -141,7 +201,7 @@ async function installEngine(signal: AbortSignal, progress: (p: LocalAiProgress)
 async function installModel(id: string, signal: AbortSignal, progress: (p: LocalAiProgress) => void): Promise<void> {
   if (modelInstalled(id)) return
   const m = modelById(id)!
-  await downloadVerified({
+  await _deps.download({
     url: m.url,
     dest: modelPath(m.file),
     sha256: m.sha256,
@@ -155,6 +215,7 @@ async function installModel(id: string, signal: AbortSignal, progress: (p: Local
         total
       })
   })
+  if (signal.aborted) throw new Error('Instalação cancelada')
   const s = getState()
   setState({ models: [...new Set([...s.models, id])] })
 }
@@ -187,8 +248,7 @@ export async function installLocal(
     last = now
     onProgress(p)
   }
-  installing = { progress: { stage: 'motor', label: 'Começando', received: 0, total: 0 }, abort: ctrl }
-  try {
+  const work = (async (): Promise<void> => {
     await installEngine(ctrl.signal, progress)
     await installModel(lightModel().id, ctrl.signal, progress)
     if (tier === 'medio') {
@@ -197,6 +257,14 @@ export async function installLocal(
     }
     registerProvider()
     log.info('IA no computador instalada', { nivel: tier, motor: ENGINE_VERSION })
+  })()
+  installing = {
+    progress: { stage: 'motor', label: 'Começando', received: 0, total: 0 },
+    abort: ctrl,
+    done: work.catch(() => undefined)
+  }
+  try {
+    await work
   } finally {
     installing = null
     onProgress(null)
@@ -209,45 +277,99 @@ export function cancelInstall(): void {
   installing?.abort.abort()
 }
 
+const LOCKED =
+  'Não deu para apagar todos os arquivos da IA local: algum programa ainda está usando. Feche o Nexu Chat, abra de novo e tente outra vez.'
+
+async function removePath(path: string): Promise<void> {
+  try {
+    await _deps.remove(path)
+  } catch (e) {
+    log.warn('Falha ao apagar arquivos da IA local', { erro: (e as Error).message })
+    throw new Error(LOCKED, { cause: e })
+  }
+}
+
 /** Desliga o modelo médio e apaga o arquivo dele (volta a usar só o leve). */
-export function disableMedium(): LocalAiStatus {
-  engine.stop()
+export async function disableMedium(): Promise<LocalAiStatus> {
+  await getEngine().stop() // espera o processo sair antes de apagar (Windows trava arquivo em uso)
   const m = mediumModel()
-  rmSync(modelPath(m.file), { force: true })
-  clearPartial(modelPath(m.file))
-  const s = getState()
-  setState({ mediumEnabled: false, models: s.models.filter((x) => x !== m.id) })
-  registerProvider()
+  try {
+    await removePath(modelPath(m.file))
+    clearPartial(modelPath(m.file))
+  } finally {
+    const s = getState()
+    setState({ mediumEnabled: false, models: s.models.filter((x) => x !== m.id) })
+    registerProvider()
+  }
   return localStatus()
 }
 
 /** Apaga a pasta da IA local inteira (motor, modelos e downloads pela metade) e o provedor. */
-export function removeLocal(): LocalAiStatus {
-  installing?.abort.abort()
-  engine.stop()
-  rmSync(baseDir(), { recursive: true, force: true })
-  setSetting('ai.local', DEFAULT)
-  removeLocalProvider()
+export async function removeLocal(): Promise<LocalAiStatus> {
+  if (installing) {
+    installing.abort.abort() // para o download ou mata o tar
+    await installing.done
+  }
+  await getEngine().stop()
+  try {
+    await removePath(baseDir())
+  } finally {
+    // mesmo se algum arquivo ficou preso, o app para de usar a IA local
+    setSetting('ai.local', DEFAULT)
+    removeLocalProvider()
+  }
   return localStatus()
 }
 
 /** Whisper e o modelo de texto nunca rodam juntos: a transcrição local entra na mesma fila. */
 export function exclusiveLocal<T>(fn: () => Promise<T>): Promise<T> {
-  return engine.exclusive(fn)
+  return getEngine().exclusive(fn)
+}
+
+/** Motor que ficou rodando depois de o app cair: encerra, se for mesmo o llama-server. */
+export async function killOrphan(): Promise<boolean> {
+  const file = pidFile()
+  if (!existsSync(file)) return false
+  const pid = Number(readFileSync(file, 'utf8').trim())
+  rmSync(file, { force: true })
+  if (!Number.isInteger(pid) || pid <= 0 || pid === process.pid) return false
+  const name = await _deps.processName(pid)
+  if (!name || basename(name).toLowerCase() !== exeName.toLowerCase()) return false
+  try {
+    _deps.killPid(pid)
+    log.info('Motor da IA local antigo encerrado', { pid })
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function initLocalAi(): void {
-  setLocalRunner((modelId, fn) => {
-    const s = getState()
-    const bin = engineBinary(s)
-    const m = modelById(modelId) ?? lightModel()
-    // modelo médio apagado ou desligado: usa o leve
-    const use = modelInstalled(m.id, s) ? m : lightModel()
-    if (!bin || !modelInstalled(use.id, s)) throw new Error('IA no computador não instalada')
-    return engine.run(
-      { binary: bin, modelPath: modelPath(use.file), ctx: use.ctx, threads: engineThreads(), extraArgs: use.extraArgs },
-      fn
-    )
-  })
-  app.on('will-quit', () => engine.stop())
+  void killOrphan().catch(() => undefined)
+  setLocalRunner(
+    (modelId, fn) => {
+      const s = getState()
+      const bin = engineBinary(s)
+      const m = modelById(modelId) ?? lightModel()
+      // modelo médio apagado ou desligado: usa o leve
+      const use = modelInstalled(m.id, s) ? m : lightModel()
+      if (!bin || !modelInstalled(use.id, s)) throw new Error('IA no computador não instalada')
+      return getEngine().run(
+        {
+          binary: bin,
+          modelPath: modelPath(use.file),
+          ctx: use.ctx,
+          threads: engineThreads(),
+          extraArgs: use.extraArgs,
+          runDir: runDir()
+        },
+        fn
+      )
+    },
+    (modelId) => {
+      const m = modelById(modelId) ?? lightModel()
+      return modelInstalled(m.id) ? m.ctx : lightModel().ctx
+    }
+  )
+  app.on('will-quit', () => void engine?.stop())
 }

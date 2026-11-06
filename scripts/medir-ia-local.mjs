@@ -21,7 +21,8 @@ import {
   readdirSync,
   renameSync,
   rmSync,
-  statSync
+  statSync,
+  writeFileSync
 } from 'node:fs'
 import { createServer } from 'node:net'
 import { cpus, homedir, totalmem } from 'node:os'
@@ -208,8 +209,11 @@ async function main() {
   const modelo = await baixar(model.url, join(dir, 'models', model.file), model.sha256)
   const port = await porta()
   const key = 'medicao'
+  // como o app: a chave vai num arquivo, não na linha de comando
+  const keyFile = join(dir, `chave-${port}.txt`)
+  writeFileSync(keyFile, key + '\n', { mode: 0o600 })
   // mesmos argumentos do app (src/main/ai/local/engine.ts → engineArgs)
-  const args = ['--model', modelo, '--host', '127.0.0.1', '--port', String(port), '--api-key', key, '--ctx-size', String(ctx),
+  const args = ['--model', modelo, '--host', '127.0.0.1', '--port', String(port), '--api-key-file', keyFile, '--ctx-size', String(ctx),
     '--threads', String(threads), '--threads-batch', String(threads), '--parallel', '1', '--load-mode', 'mmap',
     '--cache-ram', '0', '--no-repack', '--no-webui', '--no-slots', ...model.extra,
     ...(process.argv.includes('--sem-gpu') ? ['--n-gpu-layers', '0'] : []),
@@ -284,6 +288,7 @@ async function main() {
   } finally {
     clearInterval(timer)
     proc.kill()
+    rmSync(keyFile, { force: true })
   }
   console.log('\nMotor desligado (memória liberada).')
 }

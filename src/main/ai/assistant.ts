@@ -115,7 +115,7 @@ export async function suggestReply(
     : ''
   const r = await complete({
     task: 'sugerir_resposta',
-    tier: 'fast',
+    tier: 'smart', // tarefa média: nuvem primeiro (ou o modelo médio local, se ligado)
     customerData: true,
     system: `${BASE_RULES}\n\nContexto da loja:\n${context}${playbook ? `\n\nPlaybook de vendas da loja:\n${playbook.slice(0, 6000)}` : ''}`,
     prompt: `Conversa (mais antiga primeiro):\n${transcript(msgs, name, anon, namesFor(accountId, jid))}\n\n${history}${
@@ -183,7 +183,7 @@ export async function buildPlaybook(
       try {
         const r = await complete({
           task: 'analisar_conversa',
-          tier: 'fast',
+          tier: 'smart',
           customerData: true,
           system:
             'Você analisa conversas de vendas de uma loja pelo WhatsApp. Responda em português, em tópicos curtos.',

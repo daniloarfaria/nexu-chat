@@ -338,8 +338,21 @@ class ProviderError extends Error {
  */
 export type LocalRunner = <T>(modelId: string, fn: (baseUrl: string, apiKey: string) => Promise<T>) => Promise<T>
 let localRunner: LocalRunner | null = null
-export function setLocalRunner(r: LocalRunner | null): void {
+/** Tamanho do contexto (tokens) de cada modelo local. */
+let localCtx: (modelId: string) => number = () => 4096
+export function setLocalRunner(r: LocalRunner | null, ctxOf?: (modelId: string) => number): void {
   localRunner = r
+  if (ctxOf) localCtx = ctxOf
+}
+
+/** Estimativa conservadora de tokens em português (cerca de 3 caracteres por token). */
+export function estimateTokens(chars: number): number {
+  return Math.ceil(chars / 3) + 64 // + modelo de conversa (system/user)
+}
+
+/** O pedido cabe no contexto do modelo local, contando a resposta? (função pura para teste) */
+export function localFits(req: Pick<AiRequest, 'system' | 'prompt' | 'maxTokens'>, ctx: number): boolean {
+  return estimateTokens(req.system.length + req.prompt.length) + (req.maxTokens ?? 2000) <= ctx
 }
 
 async function callLocal(p: Row, model: string, req: AiRequest): Promise<{ text: string; tokens: number }> {
@@ -347,7 +360,7 @@ async function callLocal(p: Row, model: string, req: AiRequest): Promise<{ text:
   try {
     return await localRunner(model, (baseUrl, apiKey) =>
       // computador fraco: dá mais tempo para responder
-      callOpenAiCompatible({ ...p, base_url: baseUrl }, model, req, { key: apiKey, timeoutMs: 180_000 })
+      callOpenAiCompatible({ ...p, base_url: baseUrl }, model, req, { key: apiKey, timeoutMs: 180_000, local: true })
     )
   } catch (e) {
     if (e instanceof ProviderError) throw e
@@ -360,7 +373,7 @@ async function callOpenAiCompatible(
   p: Row,
   model: string,
   req: AiRequest,
-  opts: { key?: string; timeoutMs?: number } = {}
+  opts: { key?: string; timeoutMs?: number; local?: boolean } = {}
 ): Promise<{ text: string; tokens: number }> {
   const key = opts.key ?? (p.api_key ? unsealString(p.api_key) : '')
   const res = await fetch(`${p.base_url}/chat/completions`, {
@@ -377,6 +390,12 @@ async function callOpenAiCompatible(
     signal: AbortSignal.timeout(opts.timeoutMs ?? 90_000)
   })
   if (!res.ok) {
+    if (opts.local && res.status === 400) {
+      // llama-server: pedido maior que o contexto. Não é defeito do motor: só este pedido vai para outro provedor
+      const body = await res.text().catch(() => '')
+      if (/exceed|context/i.test(body)) throw new ProviderError('pedido grande demais para a IA no computador', 0)
+      throw new ProviderError('erro 400', 60_000)
+    }
     await res.body?.cancel().catch(() => undefined) // corpo do erro pode repetir o pedido: não é guardado
     const ra = Number(res.headers.get('retry-after'))
     if (res.status === 429)
@@ -428,7 +447,10 @@ async function callClaude(p: Row, model: string, req: AiRequest): Promise<{ text
 }
 
 /** Ordem de tentativa para um pedido (função pura para teste).
- * Tarefas rápidas (`fast`) preferem a IA no computador; as caprichadas (`smart`) preferem a nuvem gratuita. */
+ * - `fast` (classificar, etiquetar, extrair): a IA no computador primeiro, a nuvem de reserva.
+ * - `smart` (sugerir resposta, campanhas, playbook): a nuvem gratuita primeiro, a local de reserva.
+ *   Exceção: com o modelo médio local ligado (opcional, 16 GB+), a local vem primeiro também no `smart`.
+ *   O modelo médio está ligado quando o provedor local tem modelo caprichado diferente do rápido. */
 export function candidates(
   providers: AiProvider[],
   req: Pick<AiRequest, 'customerData' | 'premium'> & { tier?: Tier },
@@ -451,7 +473,8 @@ export function candidates(
     .sort((a, b) => a.priority - b.priority || Number(a.trainsOnData) - Number(b.trainsOnData))
   const local = usable.filter((p) => p.preset === 'local')
   const paid = usable.filter((p) => p.paid)
-  const gratis = req.tier === 'fast' ? [...local, ...free] : [...free, ...local]
+  const localFirst = req.tier === 'fast' || local.some((p) => p.modelSmart && p.modelSmart !== p.modelFast)
+  const gratis = localFirst ? [...local, ...free] : [...free, ...local]
   return req.premium ? [...paid, ...gratis] : [...gratis, ...paid]
 }
 
@@ -471,6 +494,11 @@ export async function complete(req: AiRequest): Promise<{ text: string; provider
     }
     const row = getDb().prepare('SELECT * FROM ai_providers WHERE id = ?').get(p.id) as unknown as Row
     const model = (req.tier === 'fast' ? row.model_fast : row.model_smart) || row.model_fast || row.model_smart || ''
+    if (p.preset === 'local' && !localFits(req, localCtx(model))) {
+      // não cabe no contexto do modelo local: pula sem pausar o provedor
+      errors.push(`${p.name}: pedido grande demais para a IA no computador`)
+      continue
+    }
     const win = minuteWindow.get(p.id) ?? []
     win.push(Date.now())
     minuteWindow.set(p.id, win)

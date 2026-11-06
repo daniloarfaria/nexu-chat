@@ -112,8 +112,9 @@ function LocalCard({ st, onChange }: { st: LocalAiStatus; onChange: () => void }
           {medium?.offered && (
             <div className="rounded-lg bg-sunken p-3">
               <p className="mb-2 text-ink">
-                <b>Modelo médio (opcional).</b> Escreve melhor, mas usa cerca de 3 GB de memória enquanto trabalha e
-                baixa {mb(medium.sizeMb)}. Só aparece porque este computador tem 16 GB ou mais.
+                <b>Modelo médio (opcional).</b> Escreve melhor: com ele ligado, as sugestões de resposta e os textos
+                também são feitos no computador, e a nuvem fica de reserva. Usa cerca de 3 GB de memória enquanto
+                trabalha e baixa {mb(medium.sizeMb)}. Só aparece porque este computador tem 16 GB ou mais.
               </p>
               {st.mediumEnabled ? (
                 <Button
