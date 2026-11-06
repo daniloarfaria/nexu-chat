@@ -6,7 +6,7 @@ import { Button } from './ui'
 /** Aviso no topo quando falta licença, ela está vencendo ou venceu. */
 export function LicenseBanner(): React.JSX.Element | null {
   const [st] = useLicense()
-  const go = useApp((s) => s.go)
+  const goSettings = useApp((s) => s.goSettings)
   if (!st || st.state === 'dev') return null
   const soon = st.state === 'active' && st.daysLeft != null && st.daysLeft <= 7
   if (st.state === 'active' && !soon) return null
@@ -18,7 +18,7 @@ export function LicenseBanner(): React.JSX.Element | null {
     >
       <KeyRound className="size-4 shrink-0" />
       <p className="flex-1">{st.message}</p>
-      <Button size="sm" onClick={() => go('configuracoes')}>
+      <Button size="sm" onClick={() => goSettings('licenca')}>
         {st.state === 'none' ? 'Ativar licença' : 'Ver licença'}
       </Button>
     </div>

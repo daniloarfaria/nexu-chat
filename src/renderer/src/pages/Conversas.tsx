@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { ArrowDown, MessagesSquare, Search, X } from 'lucide-react'
+import { ArrowDown, ArrowRight, MessagesSquare, Search, Smartphone, X } from 'lucide-react'
 import type { MessageItem } from '@shared/types'
 import { useActiveAccount, useApp } from '../lib/store'
 import { useChats } from '../lib/chatStore'
@@ -185,6 +185,7 @@ function ChatView({ jid }: { jid: string }): React.JSX.Element {
 
 export function Conversas(): React.JSX.Element {
   const active = useActiveAccount()
+  const go = useApp((s) => s.go)
   const { setAccount, selected } = useChats()
   const [searching, setSearching] = useState(false)
 
@@ -196,7 +197,17 @@ export function Conversas(): React.JSX.Element {
 
   if (!active) {
     return (
-      <div className="grid h-full place-items-center text-[14px] text-ink-2">Crie uma conta para ver as conversas.</div>
+      <div className="flex h-full flex-col items-center justify-center gap-3 bg-sunken px-8 text-center">
+        <Smartphone className="size-10 text-accent" strokeWidth={1.4} />
+        <h2 className="text-[18px] font-semibold">Conecte seu WhatsApp</h2>
+        <p className="max-w-[44ch] text-[14px] text-ink-2">
+          Para ver e responder as conversas da loja, crie a conta e leia o QR Code com o celular. Leva menos de um
+          minuto.
+        </p>
+        <Button variant="primary" onClick={() => go('contas')}>
+          Conectar número <ArrowRight className="size-4" />
+        </Button>
+      </div>
     )
   }
 

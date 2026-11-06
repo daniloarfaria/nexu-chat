@@ -2,7 +2,6 @@ import { create } from 'zustand'
 import type { Account, AccountState, CampaignAudience, WaVersionInfo } from '@shared/types'
 
 export type PageId =
-  | 'inicio'
   | 'conversas'
   | 'contatos'
   | 'campanhas'
@@ -14,6 +13,8 @@ export type PageId =
   | 'ia'
   | 'contas'
   | 'configuracoes'
+
+export type SettingsTab = 'visao' | 'licenca' | 'backup' | 'modulos' | 'protecao' | 'transcricao' | 'sistema'
 
 export type Theme = 'light' | 'dark' | 'system'
 
@@ -29,7 +30,10 @@ interface AppState {
   campaignDraft: { name: string; audience: CampaignAudience } | null
   /** Funil a abrir na página Funis */
   openPipelineId: number | null
+  /** Aba das Configurações pedida por quem navegou (a página consome e limpa) */
+  settingsTab: SettingsTab | null
   go: (p: PageId) => void
+  goSettings: (tab: SettingsTab) => void
   draftCampaign: (d: { name: string; audience: CampaignAudience }) => void
   openPipeline: (id: number) => void
   setActive: (id: string | null) => void
@@ -54,7 +58,7 @@ export function applyTheme(t: Theme): void {
 }
 
 export const useApp = create<AppState>((set, get) => ({
-  page: 'inicio',
+  page: 'conversas',
   accounts: [],
   states: {},
   activeAccountId: null,
@@ -63,8 +67,10 @@ export const useApp = create<AppState>((set, get) => ({
   loaded: false,
   campaignDraft: null,
   openPipelineId: null,
+  settingsTab: null,
 
-  go: (page) => set({ page }),
+  go: (page) => set({ page, settingsTab: null }),
+  goSettings: (settingsTab) => set({ settingsTab, page: 'configuracoes' }),
   draftCampaign: (campaignDraft) => set({ campaignDraft, page: 'campanhas' }),
   openPipeline: (openPipelineId) => set({ openPipelineId, page: 'funis' }),
   setActive: (activeAccountId) => {

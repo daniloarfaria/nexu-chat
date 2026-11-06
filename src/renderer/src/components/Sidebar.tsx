@@ -4,7 +4,6 @@ import {
   CalendarClock,
   ChevronsUpDown,
   Contact,
-  House,
   Megaphone,
   MessagesSquare,
   Moon,
@@ -38,7 +37,6 @@ interface NavItem {
 const NAV: Array<{ title?: string; items: NavItem[] }> = [
   {
     items: [
-      { id: 'inicio', label: 'Início', icon: House },
       { id: 'conversas', label: 'Conversas', icon: MessagesSquare, module: (m) => m.conversas },
       { id: 'contatos', label: 'Contatos', icon: Contact }
     ]

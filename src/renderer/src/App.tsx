@@ -1,9 +1,9 @@
 import { useEffect } from 'react'
-import { useApp } from './lib/store'
+import { useActiveAccount, useApp } from './lib/store'
+import { homePage } from './lib/home'
 import { Sidebar } from './components/Sidebar'
 import { UpdateBanner } from './components/UpdateBanner'
 import { LicenseBanner } from './components/LicenseBanner'
-import { Inicio } from './pages/Inicio'
 import { Contas } from './pages/Contas'
 import { Configuracoes } from './pages/Configuracoes'
 import { Conversas } from './pages/Conversas'
@@ -22,8 +22,6 @@ import { Novidades } from './components/Novidades'
 function Page(): React.JSX.Element {
   const page = useApp((s) => s.page)
   switch (page) {
-    case 'inicio':
-      return <Inicio />
     case 'contas':
       return <Contas />
     case 'configuracoes':
@@ -50,7 +48,14 @@ function Page(): React.JSX.Element {
 }
 
 export default function App(): React.JSX.Element {
-  const { init, loaded, page } = useApp()
+  const { init, loaded, page, settingsTab } = useApp()
+  const active = useActiveAccount()
+  const conversasLiberado = active?.modules.conversas ?? true
+
+  // Tela inicial é Conversas; se o módulo ou a licença a desligou, cai numa página permitida
+  useEffect(() => {
+    if (loaded && page === 'conversas' && !conversasLiberado) useApp.getState().go(homePage(active?.modules))
+  }, [loaded, page, conversasLiberado, active?.modules])
 
   useEffect(() => {
     let cleanup: (() => void) | undefined
@@ -86,7 +91,7 @@ export default function App(): React.JSX.Element {
           <main className="min-h-0 flex-1 border-t border-line">{loaded && <Page />}</main>
         ) : (
           <main className="min-h-0 flex-1 overflow-y-auto">
-            <div key={page} className="mx-auto w-full max-w-[1080px] px-8 pt-6 pb-12">
+            <div key={`${page}:${settingsTab ?? ''}`} className="mx-auto w-full max-w-[1080px] px-8 pt-6 pb-12">
               {loaded ? <Page /> : <div className="h-40 animate-pulse rounded-xl bg-sunken" />}
             </div>
           </main>
