@@ -19,7 +19,9 @@ describe('licença', () => {
       validade: '2026-12-31'
     })
     const p = parseLicense(key, PUB)
-    expect(p).toEqual(payload)
+    // Módulos novos do plano entram sem emitir outra chave
+    expect(p).toEqual({ ...payload, modulos: expect.arrayContaining(payload.modulos) })
+    expect(p.modulos).toContain('leadsPlanilha')
     expect(p.modulos).toContain('campanhas')
     expect(p.modulos).not.toContain('ia')
   })
