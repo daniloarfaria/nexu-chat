@@ -19,7 +19,7 @@ import {
   storeBirthdayHint
 } from '../notes'
 import { complete } from './router'
-import { isSensitive } from './sensitive'
+import { isSensitive } from '@shared/sensitive'
 export { isSensitive }
 import { anonymize } from './anonymize'
 import { businessContext } from './context'
@@ -73,9 +73,9 @@ const NOTE_SCHEMA = z
   })
   .strict()
 
-/** Nota que parece ordem para a IA ou oferta (desconto, preço): vem de texto do cliente, não vira nota. */
+/** Nota que parece ordem à loja ou à IA (ignore, instrução, ofereça, dar desconto): vem de texto do cliente, não vira nota. Objeção como "achou o preço alto" passa. */
 const INJECTION =
-  /\b(desconto\w*|preco\w*|promocao|gratis|ignor\w*|instruc\w*|ordem|ordens|prompt|sistema|prometa|prometer|oferec\w*|obedec\w*)\b/
+  /\b(ignor\w*|instruc\w*|ordem|ordens|prompt|sistema|prometa|prometer|oferec\w*|obedec\w*|(?:dar|de|da|conceda|conceder|aplique|aplicar|faca|fazer|mande|mandar)\s+(?:um\s+|o\s+)?(?:desconto|promocao|brinde|gratis))\w*\b/
 
 const STOP = new Set([
   'a',
