@@ -21,10 +21,18 @@ function chat(jid: string, extra: Partial<ChatItem> = {}): ChatItem {
 }
 
 /** Simula o processo principal: cada conversa tem suas mensagens salvas. */
-function fakeDeps(db: Record<string, MessageItem[]>, chats: ChatItem[] = []): ChatDeps & { focus: unknown[] } {
+function fakeDeps(
+  db: Record<string, MessageItem[]>,
+  chats: ChatItem[] = [],
+  hasFocus = false
+): ChatDeps & { focus: unknown[]; reads: string[] } {
+  const reads: string[] = []
   const focus: unknown[] = []
   const invoke = vi.fn(async (channel: string, args: Record<string, unknown>) => {
     switch (channel) {
+      case 'chats:read':
+        reads.push(args.jid as string)
+        return undefined
       case 'messages:list': {
         const all = db[args.jid as string] ?? []
         const before = args.before as number | null
@@ -44,8 +52,9 @@ function fakeDeps(db: Record<string, MessageItem[]>, chats: ChatItem[] = []): Ch
   return {
     invoke: invoke as unknown as ChatDeps['invoke'],
     setFocusedChat: (v) => focus.push(v),
-    hasFocus: () => false,
-    focus
+    hasFocus: () => hasFocus,
+    focus,
+    reads
   }
 }
 
@@ -178,5 +187,59 @@ describe('duas instâncias de conversa', () => {
     await win.getState().select(A)
     await win.getState().select(null)
     expect(deps.focus.at(-1)).toBeNull()
+  })
+})
+
+describe('marcar como lida', () => {
+  it('com a janela em foco, marca a conversa visível como lida', async () => {
+    const deps = fakeDeps({ [A]: [msg('a1', 1)] }, [chat(A)], true)
+    const s = createChatStoreCore(deps)
+    await s.getState().setAccount(ACC)
+    await s.getState().select(A)
+    deps.reads.length = 0
+    s.getState().applyMessages(ACC, A, [msg('a2', 2)])
+    expect(deps.reads).toEqual([A])
+  })
+
+  it('sem foco da janela, não marca como lida', async () => {
+    const deps = fakeDeps({ [A]: [msg('a1', 1)] }, [chat(A)], false)
+    const s = createChatStoreCore(deps)
+    await s.getState().setAccount(ACC)
+    await s.getState().select(A)
+    deps.reads.length = 0
+    s.getState().applyMessages(ACC, A, [msg('a2', 2)])
+    expect(deps.reads).toEqual([])
+  })
+
+  it('o estado principal oculto (fora de Conversas) não marca como lida', async () => {
+    const deps = fakeDeps({ [A]: [msg('a1', 1)], [B]: [msg('b1', 1)] }, [chat(A), chat(B)], true)
+    const main = createChatStoreCore(deps)
+    const win = createChatStoreCore(deps, { list: false })
+    await main.getState().setAccount(ACC)
+    await main.getState().select(A)
+    main.getState().setActive(false) // saiu da tela Conversas
+    await win.getState().setAccount(ACC)
+    await win.getState().select(B)
+    deps.reads.length = 0
+    main.getState().applyMessages(ACC, A, [msg('a2', 2)])
+    expect(deps.reads).toEqual([])
+    // voltando para Conversas, volta a marcar
+    main.getState().setActive(true)
+    main.getState().applyMessages(ACC, A, [msg('a3', 3)])
+    expect(deps.reads).toEqual([A])
+  })
+})
+
+describe('foco da conversa na janela', () => {
+  it('fechar a janela não apaga o foco da conversa principal', async () => {
+    const deps = fakeDeps({ [A]: [], [B]: [] }, [chat(A), chat(B)])
+    const main = createChatStoreCore(deps)
+    const win = createChatStoreCore(deps, { list: false })
+    await win.getState().setAccount(ACC)
+    await win.getState().select(B)
+    await main.getState().setAccount(ACC)
+    await main.getState().select(B) // "Abrir na tela Conversas"
+    await win.getState().select(null) // a janela desmonta depois
+    expect(deps.focus.at(-1)).toEqual({ accountId: ACC, jid: B })
   })
 })

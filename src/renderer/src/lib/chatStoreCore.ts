@@ -21,7 +21,10 @@ export interface ChatState {
   sync: SyncState | null
   replyTo: MessageItem | null
   editing: MessageItem | null
+  /** A conversa selecionada está realmente na tela? Oculta (ex.: fora de Conversas), não marca como lida. */
+  active: boolean
 
+  setActive: (v: boolean) => void
   setAccount: (id: string | null) => Promise<void>
   setFilter: (f: ChatFilter) => Promise<void>
   setSearch: (s: string) => Promise<void>
@@ -52,7 +55,12 @@ export interface ChatStoreOptions {
    * false: acompanha só a conversa aberta (janela do funil), sem buscar a lista inteira.
    */
   list?: boolean
+  /** A conversa começa visível? (padrão true; o estado principal começa oculto até a tela Conversas abrir) */
+  active?: boolean
 }
+
+/** Quem é o dono do foco da conversa no processo principal (só o dono pode limpá-lo). */
+let focusOwner: object | null = null
 
 function sortChats(list: ChatItem[]): ChatItem[] {
   return list.sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.lastTs - a.lastTs)
@@ -82,6 +90,16 @@ export function createChatStoreCore(deps: ChatDeps, opts: ChatStoreOptions = {})
   // Por instância: duas janelas não podem dividir o controle de "já está buscando"
   let searchTimer: ReturnType<typeof setTimeout> | null = null
   const loadingOlder = new Set<string>()
+  const owner = {}
+  const setFocus = (v: { accountId: string; jid: string } | null): void => {
+    if (v) {
+      focusOwner = owner
+      deps.setFocusedChat(v)
+    } else if (focusOwner === owner) {
+      focusOwner = null
+      deps.setFocusedChat(null)
+    }
+  }
 
   return createStore<ChatState>((set, get) => ({
     accountId: null,
@@ -96,6 +114,14 @@ export function createChatStoreCore(deps: ChatDeps, opts: ChatStoreOptions = {})
     sync: null,
     replyTo: null,
     editing: null,
+    active: opts.active !== false,
+
+    setActive: (active) => {
+      set({ active })
+      const { selected, accountId } = get()
+      if (!active) setFocus(null)
+      else if (selected && accountId) setFocus({ accountId, jid: selected })
+    },
 
     setAccount: async (id) => {
       if (get().accountId === id) return
@@ -109,7 +135,7 @@ export function createChatStoreCore(deps: ChatDeps, opts: ChatStoreOptions = {})
         replyTo: null,
         editing: null
       })
-      deps.setFocusedChat(null)
+      setFocus(null)
       if (!id || !withList) return
       const [sync] = await Promise.all([deps.invoke('sync:state', { accountId: id }), get().loadChats(true)])
       if (get().accountId === id) set({ sync })
@@ -147,7 +173,7 @@ export function createChatStoreCore(deps: ChatDeps, opts: ChatStoreOptions = {})
     select: async (jid) => {
       const { accountId } = get()
       set({ selected: jid, replyTo: null, editing: null })
-      deps.setFocusedChat(jid && accountId ? { accountId, jid } : null)
+      if (get().active) setFocus(jid && accountId ? { accountId, jid } : null)
       if (!jid || !accountId) return
       if (!withList) {
         // Sem a lista: busca só os dados desta conversa (nome, grupo, só leitura)
@@ -219,7 +245,7 @@ export function createChatStoreCore(deps: ChatDeps, opts: ChatStoreOptions = {})
       const st = get()
       if (st.accountId !== accountId || !st.messages[chatJid]) return
       set({ messages: { ...st.messages, [chatJid]: mergeMsgs(st.messages[chatJid], msgs) } })
-      if (st.selected === chatJid && msgs.some((m) => !m.fromMe) && deps.hasFocus()) {
+      if (st.selected === chatJid && st.active && msgs.some((m) => !m.fromMe) && deps.hasFocus()) {
         void deps.invoke('chats:read', { accountId, jid: chatJid }).catch(() => undefined)
       }
     },

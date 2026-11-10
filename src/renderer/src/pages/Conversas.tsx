@@ -70,7 +70,12 @@ export function Conversas(): React.JSX.Element {
     void setAccount(active?.id ?? null)
   }, [active?.id, setAccount])
 
-  useEffect(() => () => window.ui.setFocusedChat(null), [])
+  // O estado principal só vale como "na tela" enquanto Conversas está aberta
+  const setActiveView = useChatStore((s) => s.setActive)
+  useEffect(() => {
+    setActiveView(true)
+    return () => setActiveView(false)
+  }, [setActiveView])
 
   if (!active) {
     return (

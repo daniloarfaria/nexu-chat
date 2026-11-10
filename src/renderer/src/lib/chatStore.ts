@@ -36,7 +36,7 @@ function bind(api: ChatStoreApi): BoundStore {
 }
 
 /** Instância principal: a da tela Conversas (e de quem abre uma conversa nela). */
-const mainChatStore = createChatStore()
+const mainChatStore = createChatStore({ active: false })
 registerChatStore(mainChatStore)
 export const useChats = bind(mainChatStore)
 
