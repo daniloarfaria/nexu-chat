@@ -470,7 +470,7 @@ function phoneVariants(phone: string): string[] {
   return variants
 }
 
-function phoneIdentity(phone: string): string {
+export function phoneIdentity(phone: string): string {
   return phoneVariants(phone).sort((a, b) => a.length - b.length)[0]
 }
 

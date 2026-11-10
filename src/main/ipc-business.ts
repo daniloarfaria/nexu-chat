@@ -12,6 +12,7 @@ import * as rules from './automation'
 import * as groups from './groups'
 import * as reminders from './reminders'
 import * as deals from './deals'
+import * as painel from './painel'
 import * as leads from './leadsPlanilha'
 import * as tags from './tags'
 import * as pipes from './pipelines'
@@ -633,6 +634,25 @@ export function registerBusinessIpc(handle: Handle, getWindow: () => BrowserWind
   handle('deals:delete', z.object({ accountId, id }).strict(), (a) => deals.deleteDeal(a.accountId, a.id))
   handle('deals:summary', z.object({ accountId, from: z.number().int(), to: z.number().int() }).strict(), (a) =>
     deals.salesSummary(a.accountId, a.from, a.to)
+  )
+
+  handle(
+    'painel:data',
+    z
+      .object({
+        accountIds: z.array(accountId).min(1).max(50),
+        from: z.number().int(),
+        to: z.number().int(),
+        bucket: z.enum(['day', 'week', 'month']),
+        pipelineId: id.optional()
+      })
+      .strict(),
+    (a) => {
+      // Só entram os números com o módulo Vendas ligado
+      const allowed = a.accountIds.filter((x) => getAccount(x)?.modules.vendas)
+      if (!allowed.length) throw new Error('Este módulo está desligado. Ative em Configurações → Módulos.')
+      return painel.panel({ ...a, accountIds: allowed })
+    }
   )
 
   // ---------- IA ----------
