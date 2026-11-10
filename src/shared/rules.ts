@@ -2,6 +2,21 @@ import type { AntiBanSettings } from './types'
 
 // ---------- Telefone ----------
 
+/** Telefones brasileiros antigos e atuais podem representar o mesmo WhatsApp (com e sem o nono dígito). */
+export function phoneVariants(phone: string): string[] {
+  const variants = [phone]
+  if (phone.startsWith('55')) {
+    if (phone.length === 13 && phone[4] === '9') variants.push(phone.slice(0, 4) + phone.slice(5))
+    else if (phone.length === 12) variants.push(phone.slice(0, 4) + '9' + phone.slice(4))
+  }
+  return variants
+}
+
+/** Chave única da pessoa: a variante mais curta do telefone. */
+export function phoneIdentity(phone: string): string {
+  return phoneVariants(phone).sort((a, b) => a.length - b.length)[0]
+}
+
 /**
  * Normaliza telefone para dígitos com DDI. Brasil por padrão.
  * "(11) 98765-4321" → "5511987654321"; "011 98765 4321" → "5511987654321"; "+1 415 555 0100" → "14155550100"

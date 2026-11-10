@@ -641,12 +641,13 @@ export function registerBusinessIpc(handle: Handle, getWindow: () => BrowserWind
     z
       .object({
         accountIds: z.array(accountId).min(1).max(50),
-        from: z.number().int(),
-        to: z.number().int(),
+        from: z.number().int().min(0).max(4_102_444_800_000),
+        to: z.number().int().min(0).max(4_102_444_800_000),
         bucket: z.enum(['day', 'week', 'month']),
         pipelineId: id.optional()
       })
-      .strict(),
+      .strict()
+      .refine((a) => a.from <= a.to && a.to - a.from <= 3660 * 86_400_000, 'Período inválido'),
     (a) => {
       // Só entram os números com o módulo Vendas ligado
       const allowed = a.accountIds.filter((x) => getAccount(x)?.modules.vendas)

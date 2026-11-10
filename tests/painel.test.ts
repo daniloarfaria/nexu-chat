@@ -10,6 +10,9 @@ vi.mock('electron', () => ({
   net: {}
 }))
 
+const mods = { leadsPlanilha: true, metaConversoes: true, vendas: true }
+vi.mock('../src/main/accounts', () => ({ getAccount: () => ({ modules: mods }) }))
+
 import { closeDb, getDb, openDb } from '../src/main/db'
 import { panel } from '../src/main/painel'
 
@@ -46,9 +49,16 @@ function deal(
 }
 let seq = 0
 function msg(acc: string, jid: string, tsMs: number, fromMe = 0): void {
+  const sec = Math.floor(tsMs / 1000)
   getDb()
     .prepare(`INSERT INTO messages (account_id, chat_jid, id, from_me, ts, type) VALUES (?,?,?,?,?,'text')`)
-    .run(acc, jid, 'm' + ++seq, fromMe, Math.floor(tsMs / 1000))
+    .run(acc, jid, 'm' + ++seq, fromMe, sec)
+  getDb()
+    .prepare(
+      `INSERT INTO chats (account_id, jid, is_group, last_ts) VALUES (?,?,?,?)
+       ON CONFLICT(account_id, jid) DO UPDATE SET last_ts = MAX(last_ts, excluded.last_ts)`
+    )
+    .run(acc, jid, jid.endsWith('@g.us') ? 1 : 0, sec)
 }
 const q = (over = {}): Parameters<typeof panel>[0] => ({
   accountIds: [A],
@@ -92,19 +102,82 @@ test('P2: origens separam campanha, anúncio, recuperação, UTM da planilha e e
   expect(r.coverage).toMatchObject({ hasLeadData: true, hasRecovery: true })
 })
 
-test('P3: conversa nova é a primeira mensagem recebida cair no período; conversão olha quem virou venda', () => {
+test('P3: conversa nova é a pessoa cuja primeira mensagem recebida cai no período; lid e número são uma só pessoa', () => {
   const novo = '5511922220001@s.whatsapp.net'
   msg(A, novo, NOW - 5 * DAY)
   msg(A, novo, NOW - 4 * DAY)
   msg(A, '5511922220002@s.whatsapp.net', NOW - 3 * DAY)
   msg(A, '5511922220003@s.whatsapp.net', NOW - 90 * DAY)
-  msg(A, '5511922220003@s.whatsapp.net', NOW - 2 * DAY) // mensagem nova, mas a conversa é antiga
+  msg(A, '5511922220003@s.whatsapp.net', NOW - 2 * DAY) // mensagem nova, mas a pessoa é antiga
   msg(A, '120363@g.us', NOW - DAY) // grupo não conta
   msg(A, '5511922220009@s.whatsapp.net', NOW - DAY, 1) // só enviada por você: não é conversa nova
+  // mesma pessoa em dois JIDs: o número antigo (90 dias) e o lid de hoje
+  msg(A, '5511922220004@s.whatsapp.net', NOW - 90 * DAY)
+  getDb()
+    .prepare('INSERT INTO lid_map (account_id, lid, pn) VALUES (?,?,?)')
+    .run(A, '999@lid', '5511922220004@s.whatsapp.net')
+  msg(A, '999@lid', NOW - DAY)
+  // venda marcada no número, conversa nova pelo outro JID da mesma pessoa
   deal(A, novo, 'won', 7000, 'organic', NOW - DAY)
+  deal(A, '5511922220002@s.whatsapp.net', 'won', 100, 'organic', NOW + 1000 - 1) // ainda no período
   const r = panel(q())
   expect(r.totals.newChats).toBe(2)
-  expect(r.totals.newChatsSold).toBe(1)
+  expect(r.totals.newChatsSold).toBe(2)
+  expect(r.totals.newChatsSold).toBeLessThanOrEqual(r.totals.newChats)
+})
+
+test('P3b: venda marcada no lid conta para o número da mesma pessoa e vira Site (UTM)', () => {
+  getDb()
+    .prepare('INSERT INTO lid_map (account_id, lid, pn) VALUES (?,?,?)')
+    .run(A, '777@lid', '5511944440001@s.whatsapp.net')
+  msg(A, '777@lid', NOW - 2 * DAY)
+  deal(A, '777@lid', 'won', 3000, 'organic', NOW - DAY)
+  getDb()
+    .prepare(
+      `INSERT INTO leads (account_id, dedupe_key, tab, created_at, phone, utm_source, imported_at) VALUES (?, 'z', 'Leads', ?, ?, 'meta', ?)`
+    )
+    .run(A, NOW - 5 * DAY, '5511944440001', NOW)
+  const r = panel(q())
+  expect(r.origins.find((o) => o.kind === 'utm')).toMatchObject({ won: 1, revenueCents: 3000 })
+  expect(r.totals).toMatchObject({ newChats: 1, newChatsSold: 1 })
+})
+
+test('P3c: lead de mais de 30 dias antes da venda não vale como Site (UTM)', () => {
+  deal(A, '5511955550001@s.whatsapp.net', 'won', 3000, 'organic', NOW - DAY)
+  getDb()
+    .prepare(
+      `INSERT INTO leads (account_id, dedupe_key, tab, created_at, phone, utm_source, imported_at) VALUES (?, 'y', 'Leads', ?, ?, 'meta', ?)`
+    )
+    .run(A, NOW - 45 * DAY, '5511955550001', NOW)
+  const by = Object.fromEntries(panel(q()).origins.map((o) => [o.kind, o]))
+  expect(by.utm?.won ?? 0).toBe(0)
+  expect(by.organic.won).toBe(1)
+})
+
+test('P3d: ticket médio ignora venda de valor zero; origem traz ticket e fechamento', () => {
+  deal(A, '5511966660001@s.whatsapp.net', 'won', 0, 'organic', NOW - DAY)
+  deal(A, '5511966660002@s.whatsapp.net', 'won', 10000, 'organic', NOW - DAY)
+  deal(A, '5511966660003@s.whatsapp.net', 'lost', 0, 'organic', NOW - DAY)
+  const r = panel(q())
+  expect(r.totals.avgTicketCents).toBe(10000)
+  const o = r.origins.find((x) => x.kind === 'organic')!
+  expect(o).toMatchObject({ won: 2, lost: 1, avgTicketCents: 10000 })
+  expect(o.closeRate).toBeCloseTo(2 / 3)
+  expect(r.lostReasons).toEqual([{ reason: 'Outro', count: 1 }])
+})
+
+test('P3e: Site (UTM) e Anúncio só aparecem com o módulo ligado (ou com dados)', () => {
+  mods.leadsPlanilha = false
+  mods.metaConversoes = false
+  try {
+    const kinds = panel(q()).origins.map((o) => o.kind)
+    expect(kinds).not.toContain('utm')
+    expect(kinds).not.toContain('ad')
+    expect(panel(q()).coverage).toMatchObject({ adModule: false, leadModule: false })
+  } finally {
+    mods.leadsPlanilha = true
+    mods.metaConversoes = true
+  }
 })
 
 test('P4: faturamento por dia, semana e mês', () => {
@@ -161,29 +234,39 @@ test('P5: funil mostra cartões por coluna, o que chegou até lá e o tempo para
   expect(f[2].rateFromPrev).toBeCloseTo(1 / 3)
   expect(f[3].rateFromPrev).toBeNull()
   expect(f[0].avgIdleDays).toBeCloseTo(25, 0)
+  expect(f[2].avgIdleDays).toBeNull()
+  expect(f[3].avgIdleDays).toBeNull()
   // funil de outro número não aparece
   expect(panel(q({ accountIds: [B], pipelineId: pid })).funnel).toBeNull()
 })
 
-test('P6: consultas usam índice (sem varredura da tabela inteira)', () => {
+test('P6: consultas usam índices que já existem (sem varrer mensagens nem criar índice novo)', () => {
   const db = getDb()
   const plan = (sql: string, ...args: Array<string | number>): string =>
     (db.prepare('EXPLAIN QUERY PLAN ' + sql).all(...args) as Array<{ detail: string }>).map((r) => r.detail).join(' | ')
   const dealsPlan = plan(
-    `SELECT source_type, status, SUM(amount_cents) FROM deals WHERE account_id IN (?) AND created_at >= ? AND created_at < ? GROUP BY source_type, status`,
+    `SELECT source_type, status, COUNT(*) FROM deals WHERE account_id IN (?) AND created_at >= ? AND created_at < ? GROUP BY source_type, status`,
     A,
     0,
     1
   )
-  expect(dealsPlan).toMatch(/USING (COVERING )?INDEX deals_/)
-  expect(dealsPlan).not.toMatch(/SCAN deals(?! USING)/)
-  const newPlan = plan(
-    `SELECT account_id, chat_jid, MIN(ts) FROM messages WHERE account_id IN (?) AND from_me = 0 GROUP BY account_id, chat_jid`,
-    A
+  expect(dealsPlan).toMatch(/USING (COVERING )?INDEX deals_account/)
+  const firstPlan = plan(
+    `SELECT j.value, (SELECT MIN(ts) FROM messages m WHERE m.account_id = ? AND m.chat_jid = j.value AND m.from_me = 0) FROM json_each(?) j`,
+    A,
+    '[]'
   )
-  expect(newPlan).toMatch(/INDEX messages_in/)
+  expect(firstPlan).toMatch(/INDEX messages_chat_ts/)
+  expect(firstPlan).not.toMatch(/SCAN m\b(?! USING)/)
   expect(plan('SELECT stage_id, COUNT(*) FROM pipeline_cards WHERE pipeline_id = ? GROUP BY stage_id', 1)).toMatch(
     /INDEX/
   )
   expect(plan('SELECT phone FROM leads WHERE account_id IN (?) AND phone IS NOT NULL', A)).toMatch(/INDEX leads_/)
+  expect(
+    plan(
+      `SELECT chat_jid FROM deals WHERE account_id = ? AND status = 'won' AND chat_jid IN (SELECT value FROM json_each(?))`,
+      A,
+      '[]'
+    )
+  ).toMatch(/INDEX deals_/)
 })

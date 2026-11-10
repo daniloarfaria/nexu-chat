@@ -464,12 +464,6 @@ const MIGRATIONS: string[] = [
     birthday_suggestion TEXT,
     birthday_dismissed INTEGER NOT NULL DEFAULT 0
   );
-  `,
-  // painel (índices para os números do Painel)
-  `
-  CREATE INDEX deals_painel ON deals (account_id, created_at, status, source_type, amount_cents);
-  CREATE INDEX messages_in ON messages (account_id, chat_jid, ts) WHERE from_me = 0;
-  CREATE INDEX cards_pipeline ON pipeline_cards (pipeline_id, stage_id);
   `
 ]
 

@@ -510,7 +510,7 @@ export interface PanelData {
     lost: number
     avgTicketCents: number
     newChats: number
-    /** Das conversas novas do período, quantas já têm venda marcada */
+    /** Pessoas novas do período (primeira mensagem recebida) que têm venda ganha até hoje */
     newChatsSold: number
     recovered: number
     recoveredCents: number
@@ -523,10 +523,22 @@ export interface PanelData {
     won: number
     lost: number
     revenueCents: number
+    /** Faturado dividido pelas vendas com valor (venda de valor 0 não entra) */
+    avgTicketCents: number
+    /** Ganhas / (ganhas + perdidas) marcadas nesta origem. Não é conversão de conversas. */
+    closeRate: number | null
   }>
   lostReasons: Array<{ reason: string; count: number }>
   /** O que o painel consegue medir de verdade neste período */
-  coverage: { hasAdData: boolean; hasLeadData: boolean; hasRecovery: boolean }
+  coverage: {
+    hasAdData: boolean
+    hasLeadData: boolean
+    hasRecovery: boolean
+    /** Módulo Anúncios da Meta ligado em algum dos números escolhidos */
+    adModule: boolean
+    /** Módulo Planilha de leads ligado em algum dos números escolhidos */
+    leadModule: boolean
+  }
 }
 
 export const LOST_REASONS = [
