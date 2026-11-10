@@ -18,7 +18,8 @@ export const MODULE_KEYS = [
   'status',
   'metaConversoes',
   'leadsPlanilha',
-  'perfilIa'
+  'perfilIa',
+  'iaAtendimento'
 ] as const
 
 export type ModuleKey = (typeof MODULE_KEYS)[number]
@@ -69,6 +70,12 @@ export const MODULE_INFO: Record<ModuleKey, { label: string; description: string
     description:
       'A IA lê a conversa e anota preferências nas notas do cliente (sem dado de saúde). Só liga com o Assistente de IA ligado. Ao ligar, você autoriza enviar trechos anonimizados das conversas à IA em segundo plano, sem clique',
     group: 'Vendas'
+  },
+  iaAtendimento: {
+    label: 'Robô de atendimento com IA',
+    description:
+      'A IA responde as conversas novas, passa para um atendente quando precisa e para quando você assume. Só liga com o Assistente de IA ligado. Trechos anonimizados da conversa vão para a IA a cada resposta',
+    group: 'Atendimento'
   }
 }
 
@@ -88,7 +95,8 @@ export const DEFAULT_MODULES: Modules = {
   status: false,
   metaConversoes: false,
   leadsPlanilha: false,
-  perfilIa: false
+  perfilIa: false,
+  iaAtendimento: false
 }
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'qr' | 'connected' | 'logged_out'
@@ -169,6 +177,8 @@ export interface ChatItem {
   readOnly: boolean
   /** Conversa que começou num anúncio de clique para o WhatsApp */
   fromAd?: boolean
+  /** Quem atende: a IA, uma pessoa, ou a conversa espera um atendente. Vazio quando o robô nunca tocou nela. */
+  ai?: { mode: 'ia' | 'humano' | 'espera'; reason: string | null } | null
 }
 
 export type MessageType =
@@ -239,7 +249,7 @@ export interface SyncState {
   finishedAt: number | null
 }
 
-export type ChatFilter = 'all' | 'unread' | 'groups' | 'archived'
+export type ChatFilter = 'all' | 'unread' | 'groups' | 'archived' | 'waiting'
 
 export interface OutgoingFile {
   name: string
@@ -1020,4 +1030,37 @@ export interface BirthdaySuggestion {
   date: string
   /** Trecho da conversa que gerou a sugestão (sem dados de outros clientes) */
   quote: string
+}
+
+// ---------- Robô de atendimento com IA ----------
+
+export type RobotWhen = 'new' | 'always' | 'away'
+
+export interface RobotSettings {
+  enabled: boolean
+  /** Quando a IA começa a atender: só conversas novas, sempre ou só fora do horário. */
+  when: RobotWhen
+  /** Minutos sem o atendente responder até a IA retomar a conversa. */
+  resumeMin: number
+  /** Respostas da IA por hora, somando todas as conversas do número. */
+  perHour: number
+  /** Respostas da IA por conversa em 24 horas. */
+  perChat: number
+  /** Passa para um atendente quando o cliente está pronto para fechar a compra. */
+  handoffOnClose: boolean
+  /** Uma pessoa por linha: "Ana: lentes de contato, financeiro". */
+  agentsText: string
+}
+
+export type ChatAiMode = 'ia' | 'humano' | 'espera'
+
+export interface ChatAiState {
+  mode: ChatAiMode
+  /** Por que está assim: novo, devolvido, retomou, atendente, transferido, pediu_humano, risco, sem_resposta, midia, limite, ia_fora. */
+  reason: string | null
+  topic: string | null
+  agent: string | null
+  /** Contexto extra escrito pelo atendente só para esta conversa. */
+  extra: string
+  updatedAt: number
 }

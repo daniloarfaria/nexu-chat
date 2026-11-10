@@ -6,11 +6,12 @@ import { fold, isOptOut, renderTemplate, sendWindow, DEFAULT_ANTIBAN, firstName 
 import { findPersonByJid, isOptedOut, optOutByJid } from './people'
 import { onCampaignReceipt, onCampaignReply } from './campaigns'
 import { storeEvents, getChats } from './wa/store'
-import { sendAndStore } from './wa/send'
+import { sendAndStore, wasSentByApp } from './wa/send'
 import { wa } from './wa/manager'
 import { moderateGroupMessage, welcomeParticipants } from './groups'
 import { log } from './log'
 import { enqueueSend } from './outbox'
+import { onClientMessage, onOwnMessage, startRobot } from './iaAtendimento'
 
 /**
  * Tudo que reage a mensagens recebidas:
@@ -167,7 +168,12 @@ async function reply(_sock: WASocket, accountId: string, jid: string, text: stri
 async function onIncoming(accountId: string, m: MessageItem): Promise<void> {
   const account = getAccount(accountId)
   const sock = wa.getSocket(accountId)
-  if (!account || !sock || m.fromMe) return
+  // Mensagem da loja digitada no celular: o atendente assumiu (o robô para)
+  if (m.fromMe) {
+    onOwnMessage(accountId, m, wasSentByApp(accountId, m.id))
+    return
+  }
+  if (!account || !sock) return
 
   if (isJidGroup(m.chatJid)) {
     await moderateGroupMessage(sock, accountId, m)
@@ -186,8 +192,19 @@ async function onIncoming(accountId: string, m: MessageItem): Promise<void> {
     return
   }
 
-  if (!account.modules.respostasAuto) return
-  if (autoCountLastHour(accountId) >= MAX_AUTO_PER_HOUR) return
+  // Respostas por palavra-chave têm prioridade; sem regra para a mensagem, o robô de IA assume
+  onClientMessage(accountId, m, await autoReply(sock, account, m))
+}
+
+/** Responde pela regra de palavra-chave, fora do horário ou boas-vindas. Devolve true se respondeu. */
+async function autoReply(
+  sock: WASocket,
+  account: NonNullable<ReturnType<typeof getAccount>>,
+  m: MessageItem
+): Promise<boolean> {
+  const accountId = account.id
+  if (!account.modules.respostasAuto) return false
+  if (autoCountLastHour(accountId) >= MAX_AUTO_PER_HOUR) return false
   const rules = listRules(accountId)
   const rule = pickRule(rules, m.text, {
     now: new Date(),
@@ -195,7 +212,7 @@ async function onIncoming(accountId: string, m: MessageItem): Promise<void> {
     recentlyAnswered: (id) =>
       answeredRecently(accountId, id, m.chatJid, Math.max(1, rules.find((r) => r.id === id)?.cooldownMin ?? 60))
   })
-  if (!rule) return
+  if (!rule) return false
   const person = findPersonByJid(accountId, m.chatJid)
   const chat = getChats(accountId, [m.chatJid])[0]
   const name = person?.name ?? m.senderName ?? chat?.name ?? ''
@@ -209,9 +226,11 @@ async function onIncoming(accountId: string, m: MessageItem): Promise<void> {
     .prepare('INSERT INTO auto_log (account_id, rule_id, jid, at) VALUES (?, ?, ?, ?)')
     .run(accountId, rule.id, m.chatJid, Date.now())
   await reply(sock, accountId, m.chatJid, text)
+  return true
 }
 
 export function startAutomation(): void {
+  startRobot()
   storeEvents.on('incoming', ({ accountId, message }: { accountId: string; message: MessageItem }) => {
     onIncoming(accountId, message).catch((e) => log.warn('Falha na automação', { erro: (e as Error).message }))
   })
