@@ -331,15 +331,16 @@ A página **Painel** (antes chamada Vendas) mostra, com filtro de **período** e
 - **Números do topo:** faturado, vendas, ticket médio, conversas novas, quantas dessas conversas viraram venda e vendas recuperadas;
 - **Faturamento:** gráfico por dia, semana ou mês, com botão "Ver em tabela";
 - **Funil:** escolha um funil e veja quantos clientes chegaram a cada coluna, quantos passaram da anterior para a seguinte e há quantos dias estão parados;
-- **De onde vieram as vendas:** campanha, lembrete, recuperação, anúncio, site (UTM) e espontâneo, com vendas, faturado e quanto das conversas marcadas fechou;
+- **De onde vieram as vendas:** campanha, lembrete, recuperação, anúncio, site (UTM) e espontâneo, com vendas, faturado, ticket e **fechamento** (das vendas e perdas que você marcou naquela origem, quantas foram vendas; não é a conversão das conversas novas). "Site (UTM)" e "Anúncio" só aparecem com o módulo ligado;
 - os motivos de perda mais comuns;
 - a lista de registros (quando um só número está escolhido).
 
 **O que o Painel mede e o que não mede**
 - Só entra o que você marcou na conversa ("Virou venda" ou "Perdida"). Venda não marcada não aparece.
-- **Conversa nova** é quando o cliente manda a primeira mensagem dentro do período (grupos não contam). **Viraram venda** conta, entre essas conversas, as que já têm venda marcada, mesmo que tenha fechado depois.
+- **Conversas novas** são pessoas cuja primeira mensagem recebida caiu no período (grupos não contam). O mesmo cliente com o número e com o identificador novo do WhatsApp conta uma vez só. **Viraram venda** conta, entre essas pessoas, quem tem venda ganha marcada **até hoje**, mesmo que tenha fechado depois do período.
+- O ticket médio não conta venda marcada com valor zero.
 - O **funil** é a foto de hoje: o app não guarda o histórico de passagens. "Passaram" soma os clientes que estão naquela coluna ou em uma mais adiante, e as colunas de perda ficam de fora.
-- A venda conta para a campanha ou o lembrete enviado ao cliente nos 7 dias anteriores. Se não houve nenhum, e a conversa veio de anúncio (módulo Anúncios da Meta ligado), aparece como **Anúncio** (até 30 dias depois do primeiro contato). Se o telefone do cliente já estava na planilha de leads do site antes da venda, aparece como **Site (UTM)**. Sem nada disso, é **Espontâneo**.
+- A venda conta para a campanha ou o lembrete enviado ao cliente nos 7 dias anteriores. Se não houve nenhum, e a conversa veio de anúncio (módulo Anúncios da Meta ligado), aparece como **Anúncio** (até 30 dias depois do primeiro contato). Se o telefone do cliente estava na planilha de leads do site até 30 dias antes da venda, aparece como **Site (UTM)**. Sem nada disso, é **Espontâneo**.
 - Sem o aviso do WhatsApp de que veio de anúncio, ou sem a planilha de leads, essas vendas caem em Espontâneo. O Painel avisa quando não há dado de anúncio ou de planilha.
 - **Recuperação** ainda não está disponível: mostra zero até essa função existir.
 

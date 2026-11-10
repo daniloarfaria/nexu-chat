@@ -34,7 +34,7 @@ await win.evaluate(() => (document.documentElement.dataset.theme = 'light'))
 for (const [label, file] of [
   ['Contatos', 'contatos'],
   ['Campanhas', 'campanhas'],
-  ['Vendas', 'vendas'],
+  ['Painel', 'painel'],
   ['Lembretes', 'lembretes'],
   ['Respostas automáticas', 'automacoes'],
   ['Assistente de IA', 'ia'],
