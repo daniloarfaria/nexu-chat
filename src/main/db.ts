@@ -464,6 +464,32 @@ const MIGRATIONS: string[] = [
     birthday_suggestion TEXT,
     birthday_dismissed INTEGER NOT NULL DEFAULT 0
   );
+  `,
+  // robô de atendimento com IA
+  `
+  CREATE TABLE chat_ai_mode (
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    chat_jid TEXT NOT NULL,
+    mode TEXT NOT NULL CHECK (mode IN ('ia', 'humano', 'espera')),
+    reason TEXT,
+    topic TEXT,
+    agent TEXT,
+    extra TEXT,
+    human_at INTEGER,
+    pending_since INTEGER,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (account_id, chat_jid)
+  );
+  CREATE INDEX chat_ai_mode_mode ON chat_ai_mode (account_id, mode);
+  -- respostas enviadas pela IA (limite por hora e por conversa)
+  CREATE TABLE ia_atendimento_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    chat_jid TEXT NOT NULL,
+    at INTEGER NOT NULL
+  );
+  CREATE INDEX ia_atendimento_log_acc ON ia_atendimento_log (account_id, at);
+  CREATE INDEX ia_atendimento_log_chat ON ia_atendimento_log (account_id, chat_jid, at);
   `
 ]
 

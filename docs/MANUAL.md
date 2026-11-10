@@ -77,7 +77,7 @@ As fotos dos contatos e dos grupos aparecem na lista, no topo da conversa e, nos
 
 ### Lista de conversas
 - **Buscar conversa**: procura por nome ou número. Não precisa digitar acentos ("joao" encontra "João").
-- **Filtros**: Todas, Não lidas, Grupos e Arquivadas.
+- **Filtros**: Todas, Não lidas, Grupos e Arquivadas. Com o robô de atendimento ligado, aparece também **Esperando atendente** (veja "Robô de atendimento com IA", logo depois de Respostas automáticas).
 - **Nova conversa** (ícone de balão com +): digite DDD e número para falar com alguém que ainda não está na lista.
 - O número ao lado de **Conversas** no menu mostra quantas mensagens não lidas existem.
 
@@ -150,6 +150,7 @@ Em **Configurações → Módulos** você liga e desliga as funções de cada co
 | Vendas | Marcar o que virou venda e ver o retorno no Painel (seção 11) |
 | Assistente de IA | Sugestões de resposta, versões de campanha e playbook (seção 12) |
 | Planilha de leads (plano Marketing) | Traz os leads do formulário do site e mostra o resultado por origem do anúncio (seção 11, “Leads do site”) |
+| Robô de atendimento com IA | A IA responde as conversas novas e passa para uma pessoa quando precisa (seção "Robô de atendimento com IA", depois de Respostas automáticas). Vem desligado; é do plano Completo e só liga com o Assistente de IA ligado |
 | Perfil do cliente pela IA | Botão **Mapear perfil** e o mapeamento automático das notas do cliente (seção 5). Vem desligado; é do plano Completo e só liga com o Assistente de IA ligado. Ligar autoriza enviar trechos anonimizados das conversas à IA em segundo plano, sem clique. Dá para desligar a qualquer momento por causa da LGPD |
 
 ---
@@ -260,6 +261,52 @@ Respondem sozinhas em conversas individuais (nunca em grupos):
 - **Primeira mensagem:** boas-vindas para quem fala com a loja pela primeira vez.
 
 O app não repete a mesma resposta para a mesma pessoa dentro do intervalo escolhido e responde no máximo 30 vezes por hora. Isso evita conversa em círculo com outros robôs.
+
+---
+
+## Robô de atendimento com IA
+
+A IA responde os clientes pelo WhatsApp, em conversas individuais, usando o que você contou em **Assistente de IA → Meu negócio**, o playbook, as notas do cliente e as últimas mensagens da conversa. É um módulo do plano **Completo** e só liga com o **Assistente de IA** ligado (**Configurações → Módulos**). Os ajustes ficam em **Configurações → Robô de atendimento**.
+
+### Ligar
+1. Ligue o módulo **Robô de atendimento com IA** e confira se o Assistente de IA tem um provedor cadastrado e o contexto do negócio preenchido.
+2. Em **Configurações → Robô de atendimento**, ligue o robô e escolha **quando a IA atende**:
+   - **Só conversas novas** (padrão): quem fala com a loja pela primeira vez é atendido pela IA. Conversas antigas, ou que a loja começou, continuam com você: a IA nunca entra nelas nem as retoma sozinha, mesmo que você escreva um contexto extra ou devolva o atendimento pelo botão (só o botão **Devolver para a IA** liga a IA numa conversa antiga, e por escolha sua).
+   - **Só fora do horário de atendimento**: usa o horário da resposta automática "fora do horário" (ou segunda a sábado, das 8h às 18h, se não houver). A mensagem de boas-vindas e a de fora do horário não calam a IA: ela ainda responde à pergunta do cliente.
+   - **Sempre**: inclui conversas antigas.
+
+Mensagens com mais de 15 minutos (por exemplo, as que chegam quando o app volta a conectar) não recebem resposta tardia da IA.
+3. Ajuste os limites: **respostas por hora** (somando todas as conversas do número) e **respostas por conversa** (em 24 horas).
+
+### Quem está atendendo
+No topo de cada conversa individual há uma etiqueta: **IA atendendo**, **Atendimento humano** ou **Esperando atendente**.
+- **Assumir atendimento**: a IA para na hora. Se você escrever na conversa (texto, arquivo, localização, contato ou enquete, pelo app ou pelo celular), ela também para sozinha. Mensagens que o próprio WhatsApp envia pela sua conta (como a saudação ou a mensagem de ausência do WhatsApp Business) também fazem a IA parar: é o lado seguro, e o botão **Devolver para a IA** fica sempre à mão no topo da conversa.
+- **Devolver para a IA**: a IA volta a atender e, se o cliente ficou sem resposta, já responde.
+- **Retomada automática** (só em conversas que a IA já atendeu): se você assumiu e o cliente ficou esperando por 30 minutos (dá para mudar em **Minutos até a IA retomar**), a IA retoma e a conversa mostra **IA retomou o atendimento**.
+- **Contexto extra**: escreva uma instrução só para aquela conversa (por exemplo, "ofereça a armação X"). Ela vai junto de cada resposta da IA.
+
+### Passar para um atendente
+A IA para e avisa o cliente ("Vou chamar a Ana para continuar o seu atendimento") quando:
+- o cliente pede uma pessoa;
+- aparece reclamação ou palavra de risco (como Procon, golpe, advogado);
+- o cliente manda foto, arquivo ou áudio sem texto;
+- a IA não sabe responder pelas informações da loja;
+- o cliente está pronto para fechar a compra, se você ligar **Passar para um atendente na hora de fechar a venda**.
+
+Em **Atendentes e assuntos** escreva uma pessoa por linha, com os assuntos dela (exemplo: `Ana: lentes de contato, financeiro`). A IA escolhe o atendente pelo assunto. Sem lista, a conversa vai para "qualquer atendente".
+O app avisa com uma notificação e a conversa entra no filtro **Esperando atendente**. O app não tem login por atendente: é um aviso e um filtro, não uma permissão. Quando alguém responde, a conversa passa a ser atendimento humano.
+
+### Segurança
+- Respostas por **palavra-chave** (seção 8) e o pedido de **SAIR** vêm antes da IA. O SAIR é gravado mesmo que Campanhas e Lembretes estejam desligados. Quem pediu para não receber mensagens não recebe resposta da IA.
+- Só conversas individuais: nada de grupos, listas de transmissão, canais ou status.
+- Se o cliente repetir a mesma mensagem várias vezes ou devolver o seu próprio texto (sinal de outro robô), a IA não responde e avisa uma pessoa.
+- A IA **nunca responde em grupos**.
+- Antes de enviar, o app confere a resposta: preço (em R$, reais ou por extenso), percentual, parcelas, prazo, desconto, brinde, oferta, telefone, Pix, e-mail e links que **não estejam no contexto da loja** (Assistente de IA → Meu negócio) ou na sua instrução da conversa bloqueiam o envio, e a conversa passa para uma pessoa. O playbook e o campo "O que a IA não pode falar" não servem de fonte para liberar nada. Resposta que cite regras internas, o playbook ou deixe escapar marcas de anonimização como [cliente] também é bloqueada, sem aviso ao cliente.
+- O que o cliente escreve é tratado como texto, nunca como ordem: pedidos como "ignore as regras" não mudam o comportamento da IA.
+- Toda resposta sai pela mesma fila das respostas automáticas (intervalo de segundos entre envios), mostra **digitando…** com um atraso parecido com o de uma pessoa e conta no **limite diário** de envios do número. Os limites por hora (até 60) e por conversa (até 30) são reservados ao enfileirar, e um último conferido vale na hora de enviar: se você assumir, desligar o robô, o cliente pedir SAIR ou chegar uma mensagem nova, a resposta que estava na fila é descartada.
+- Áudio do cliente: com a transcrição automática ligada (Configurações → Transcrição de áudio), a IA espera até 1 minuto pela transcrição; sem ela, passa para uma pessoa.
+- Se o provedor de IA ficar fora do ar, a IA **para**, a conversa vai para **Esperando atendente** e você recebe uma notificação. Nenhum texto genérico é enviado ao cliente.
+- A cada resposta, trechos **anonimizados** da conversa (sem telefone, CPF, e-mail nem endereço) vão para o provedor de IA que você configurou. Notas com dado de saúde nunca vão.
 
 ---
 
@@ -513,7 +560,7 @@ No rodapé do menu: ☀ claro, ☾ escuro ou **automático** (segue o computador
 - Mensagens apagadas para todos são removidas também do computador e dos backups seguintes.
 - Documentos salvos a partir das conversas recebem a marca de "baixado da internet": o Windows/Office e o Mac continuam avisando antes de abrir arquivos perigosos.
 - Envie mensagens de marketing só para clientes que já compraram. Quem responde SAIR vai automaticamente para a lista de não receber.
-- A IA recebe as conversas anonimizadas por padrão (seção 12).
+- A IA recebe as conversas anonimizadas por padrão (seção 12). O robô de atendimento sempre anonimiza, mesmo que o modo da IA seja outro.
 - As notas do cliente ficam só no computador da loja, são apagadas junto com o contato e não guardam dado de saúde (seção 5). O mapeamento de perfil pela IA pode ser desligado em Configurações → Módulos.
 
 ---
@@ -531,6 +578,7 @@ No rodapé do menu: ☀ claro, ☾ escuro ou **automático** (segue o computador
 | Microfone não funciona | Mac: Ajustes do Sistema → Privacidade e Segurança → Microfone → ative o Nexu Chat. Windows: Configurações → Privacidade → Microfone. |
 | Campanha pausada sozinha | Veja o motivo no topo da campanha (falhas seguidas, taxa de resposta baixa). Corrija e clique em **Retomar**. |
 | Campanha parada em "fora do horário" ou "limite diário" | É a proteção funcionando; ela continua sozinha no próximo horário permitido. |
+| Robô de atendimento parou e a conversa foi para "Esperando atendente" | Veja o motivo na faixa no topo da conversa (cliente pediu uma pessoa, a IA não soube responder, limite atingido ou provedor de IA fora do ar). Resolva, atenda ou clique em **Devolver para a IA**. |
 | Assistente de IA: "Nenhum provedor disponível" | Cadastre uma chave em Assistente de IA → Provedores, ou aguarde a pausa do provedor terminar. |
 | Precisa enviar os registros para o suporte | **Configurações → Sistema → Abrir pasta** → pasta `logs`. |
 

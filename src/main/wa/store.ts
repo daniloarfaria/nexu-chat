@@ -1,6 +1,15 @@
 import { EventEmitter } from 'node:events'
 import { isJidGroup, isLidUser, jidNormalizedUser, proto, type Chat, type Contact, type WAMessage } from 'baileys'
-import type { ChatFilter, ChatItem, MediaInfo, MessageExtra, MessageItem, MessageType, SyncState } from '@shared/types'
+import type {
+  ChatAiReason,
+  ChatFilter,
+  ChatItem,
+  MediaInfo,
+  MessageExtra,
+  MessageItem,
+  MessageType,
+  SyncState
+} from '@shared/types'
 import { getDb, transaction } from '../db'
 import { log } from '../log'
 import { extractAdAttribution, recordAttribution } from '../ads'
@@ -121,6 +130,17 @@ function mergeChat(accountId: string, from: string, to: string): void {
   db.prepare('UPDATE deals SET chat_jid = ? WHERE account_id = ? AND chat_jid = ?').run(to, accountId, from)
   db.prepare('UPDATE auto_log SET jid = ? WHERE account_id = ? AND jid = ?').run(to, accountId, from)
   mergeAttribution(accountId, from, to)
+  db.prepare('UPDATE OR IGNORE chat_ai_mode SET chat_jid = ? WHERE account_id = ? AND chat_jid = ?').run(
+    to,
+    accountId,
+    from
+  )
+  db.prepare('DELETE FROM chat_ai_mode WHERE account_id = ? AND chat_jid = ?').run(accountId, from)
+  db.prepare('UPDATE ia_atendimento_log SET chat_jid = ? WHERE account_id = ? AND chat_jid = ?').run(
+    to,
+    accountId,
+    from
+  )
   const exists = db.prepare('SELECT 1 FROM chats WHERE account_id = ? AND jid = ?').get(accountId, from)
   if (!exists) return
   db.prepare(
@@ -502,6 +522,8 @@ interface ChatRow {
   muted_until: number
   read_only: number
   from_ad: number
+  ai_mode: string | null
+  ai_reason: string | null
   c_name: string | null
   c_notify: string | null
   c_verified: string | null
@@ -527,14 +549,17 @@ function toChat(r: ChatRow): ChatItem {
     pinned: !!r.pinned,
     muted: r.muted_until === -1 || r.muted_until > now,
     readOnly: !!r.read_only,
-    fromAd: !!r.from_ad
+    fromAd: !!r.from_ad,
+    ai: r.ai_mode ? { mode: r.ai_mode as 'ia' | 'humano' | 'espera', reason: r.ai_reason as ChatAiReason | null } : null
   }
 }
 
 const CHAT_SELECT = `SELECT ch.*,
   EXISTS (SELECT 1 FROM chat_attribution ca WHERE ca.account_id = ch.account_id AND ca.chat_jid = ch.jid) AS from_ad,
+  am.mode AS ai_mode, am.reason AS ai_reason,
   co.name AS c_name, co.notify AS c_notify, co.verified_name AS c_verified
-  FROM chats ch LEFT JOIN contacts co ON co.account_id = ch.account_id AND co.jid = ch.jid`
+  FROM chats ch LEFT JOIN contacts co ON co.account_id = ch.account_id AND co.jid = ch.jid
+  LEFT JOIN chat_ai_mode am ON am.account_id = ch.account_id AND am.chat_jid = ch.jid`
 
 export function listChats(
   accountId: string,
@@ -546,6 +571,7 @@ export function listChats(
   else where.push('ch.archived = 0')
   if (opts.filter === 'unread') where.push('ch.unread > 0')
   if (opts.filter === 'groups') where.push('ch.is_group = 1')
+  if (opts.filter === 'waiting') where.push("am.mode = 'espera'")
   if (opts.search?.trim()) {
     const q = `%${opts.search.trim().replace(/[%_]/g, '')}%`
     where.push(

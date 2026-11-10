@@ -17,7 +17,7 @@ export type PageId =
   | 'configuracoes'
 
 export type SettingsTab =
-  'visao' | 'licenca' | 'backup' | 'modulos' | 'protecao' | 'transcricao' | 'integracoes' | 'sistema'
+  'visao' | 'licenca' | 'backup' | 'modulos' | 'protecao' | 'transcricao' | 'integracoes' | 'robo' | 'sistema'
 
 export type Theme = 'light' | 'dark' | 'system'
 

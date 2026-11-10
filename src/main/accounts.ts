@@ -25,8 +25,11 @@ function toAccount(r: Row): Account {
   // Só fica ligado o que a licença libera
   const allowed = licenseStatus().modules
   for (const k of MODULE_KEYS) if (!allowed.includes(k)) modules[k] = false
-  // O perfil pela IA depende do Assistente de IA
-  if (!modules.ia) modules.perfilIa = false
+  // O perfil pela IA e o robô de atendimento dependem do Assistente de IA
+  if (!modules.ia) {
+    modules.perfilIa = false
+    modules.iaAtendimento = false
+  }
   return {
     id: r.id,
     name: r.name,
@@ -65,7 +68,10 @@ export function updateAccount(
   const cur = getAccount(id)
   if (!cur) throw new Error('Conta não encontrada')
   const modules = { ...cur.modules, ...(patch.modules ?? {}) }
-  if (!modules.ia) modules.perfilIa = false
+  if (!modules.ia) {
+    modules.perfilIa = false
+    modules.iaAtendimento = false
+  }
   getDb()
     .prepare('UPDATE accounts SET name = ?, color = ?, modules = ?, auto_connect = ? WHERE id = ?')
     .run(

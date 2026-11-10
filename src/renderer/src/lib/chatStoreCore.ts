@@ -72,6 +72,7 @@ function matches(c: ChatItem, filter: ChatFilter, search: string): boolean {
   if (filter === 'archived' ? !c.archived : c.archived) return false
   if (filter === 'unread' && c.unread === 0) return false
   if (filter === 'groups' && !c.isGroup) return false
+  if (filter === 'waiting' && c.ai?.mode !== 'espera') return false
   if (!c.lastTs) return false
   const q = fold(search)
   if (q && !fold(c.name).includes(q) && !(c.phone ?? '').includes(search.replace(/\D/g, '') || '§')) return false

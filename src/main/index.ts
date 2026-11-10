@@ -19,6 +19,7 @@ import { notificationText } from './wa/sync'
 import type { Campaign, EngineState, MessageItem, SyncState } from '@shared/types'
 import { engine } from './engine'
 import { startAutomation } from './automation'
+import { robotEvents } from './iaAtendimento'
 import { startReminders } from './reminders'
 import { startLeadsSync } from './leadsPlanilha'
 import { startStatus, statusEvents } from './status'
@@ -229,6 +230,18 @@ if (!app.requestSingleInstanceLock()) {
     engine.on('campaign', (c: Campaign) => send('campaign:changed', c))
     groupEvents.on('create-progress', (p: unknown) => send('groups:progress', p))
     startAutomation()
+    robotEvents.on('changed', (p: unknown) => send('robot:changed', p))
+    robotEvents.on('handoff', (p: { accountId: string; jid: string; title: string; body: string }) => {
+      if (!Notification.isSupported()) return
+      const n = new Notification({ title: p.title, body: p.body, silent: false })
+      n.on('click', () => {
+        if (!mainWindow) createWindow()
+        mainWindow?.show()
+        mainWindow?.focus()
+        send('nav:open-chat', { accountId: p.accountId, jid: p.jid })
+      })
+      n.show()
+    })
     setAvatarSocketGetter((id) => wa.getSocket(id))
     avatarEvents.on('changed', (p: unknown) => send('avatars:changed', p))
 

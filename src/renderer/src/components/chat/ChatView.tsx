@@ -9,6 +9,7 @@ import { Composer } from './Composer'
 import { Avatar } from './Avatar'
 import { ContactStrip } from './ContactStrip'
 import { DealBar } from './DealBar'
+import { RobotBar } from './RobotBar'
 import { Badge } from '../ui'
 import { dayKey, dayLabel } from './time'
 
@@ -106,6 +107,9 @@ export function ChatView({
         {account?.modules.metaConversoes && chat?.fromAd && <Badge tone="info">Veio de anúncio</Badge>}
         {account?.modules.vendas && !chat?.isGroup && <DealBar key={jid} accountId={account.id} jid={jid} />}
       </header>
+      {account?.modules.iaAtendimento && !jid.endsWith('@g.us') && (
+        <RobotBar key={`robot-${jid}`} accountId={account.id} jid={jid} />
+      )}
       {account && !embedded && !jid.endsWith('@g.us') && (
         <ContactStrip key={jid} accountId={account.id} jid={jid} funil={!!account.modules.funil} />
       )}

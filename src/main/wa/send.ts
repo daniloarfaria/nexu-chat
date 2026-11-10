@@ -1,4 +1,4 @@
-import { proto, type AnyMessageContent, type WAMessage, type WASocket } from 'baileys'
+import { generateMessageIDV2, proto, type AnyMessageContent, type WAMessage, type WASocket } from 'baileys'
 import type { MediaInfo, OutgoingFile } from '@shared/types'
 import { getRawMessage, markChatRead, saveMessages, setMediaUrl } from './store'
 import { storeOwnMedia } from './media'
@@ -9,6 +9,22 @@ import { getDb } from '../db'
 
 const MAX_FILE = 100 * 1024 * 1024
 
+/**
+ * Ids das mensagens que o próprio app enviou (por conta). O WhatsApp devolve cada envio como evento
+ * "fromMe"; com isso dá para saber que uma mensagem sua foi digitada no celular (id desconhecido).
+ */
+const ownIds = new Map<string, number>()
+const OWN_ID_TTL = 5 * 60_000
+export function wasSentByApp(accountId: string, id: string): boolean {
+  const t = ownIds.get(`${accountId}:${id}`)
+  return t != null && Date.now() - t < OWN_ID_TTL
+}
+function rememberOwnId(accountId: string, id: string): void {
+  const now = Date.now()
+  if (ownIds.size > 500) for (const [k, t] of ownIds) if (now - t > OWN_ID_TTL) ownIds.delete(k)
+  ownIds.set(`${accountId}:${id}`, now)
+}
+
 export async function sendAndStore(
   sock: WASocket,
   accountId: string,
@@ -17,7 +33,9 @@ export async function sendAndStore(
   quotedId?: string | null
 ): Promise<WAMessage | undefined> {
   const quoted = quotedId ? getRawMessage(accountId, chatJid, quotedId) : null
-  const sent = await sock.sendMessage(chatJid, content, quoted ? { quoted } : undefined)
+  const messageId = generateMessageIDV2(sock.user?.id)
+  rememberOwnId(accountId, messageId)
+  const sent = await sock.sendMessage(chatJid, content, { messageId, ...(quoted ? { quoted } : {}) })
   if (sent) saveMessages(accountId, [sent], { live: false, ownJid: sock.user?.id ?? null })
   return sent
 }

@@ -95,6 +95,15 @@ export function businessContext(accountId: string, maxChars = CONTEXT_MAX_CHARS)
   return formatBusinessContext(name, getBusinessContext(accountId), maxChars)
 }
 
+/**
+ * O que a IA pode AFIRMAR ao cliente: o contexto inteiro, menos o campo de proibições
+ * (que fala do que não prometer e não pode liberar nada).
+ */
+export function allowedContext(accountId: string): string {
+  const name = getAccount(accountId)?.name ?? 'Loja'
+  return formatBusinessContext(name, { ...getBusinessContext(accountId), forbidden: '' }, 40_000)
+}
+
 /** Lê a resposta da IA (JSON, às vezes dentro de ```json) e devolve só os campos conhecidos. */
 export function parseContextJson(text: string): Partial<BusinessContext> {
   const body = text.replace(/```(?:json)?/gi, '')

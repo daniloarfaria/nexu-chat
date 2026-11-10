@@ -7,12 +7,14 @@ import { Avatar } from './Avatar'
 import { chatTime } from './time'
 import { Badge, Button, Input } from '../ui'
 import { useActiveAccount } from '../../lib/store'
+import { robotLabel } from '../../lib/robot'
 
 const FILTERS: Array<{ id: ChatFilter; label: string }> = [
   { id: 'all', label: 'Todas' },
   { id: 'unread', label: 'Não lidas' },
   { id: 'groups', label: 'Grupos' },
-  { id: 'archived', label: 'Arquivadas' }
+  { id: 'archived', label: 'Arquivadas' },
+  { id: 'waiting', label: 'Esperando atendente' }
 ]
 
 function NewChat({ onClose }: { onClose: () => void }): React.JSX.Element {
@@ -59,7 +61,10 @@ function NewChat({ onClose }: { onClose: () => void }): React.JSX.Element {
 export function ChatList(): React.JSX.Element {
   const { chats, filter, search, setFilter, setSearch, selected, select, loadChats, hasMore, loadingChats, sync } =
     useChatStore()
-  const adsOn = !!useActiveAccount()?.modules.metaConversoes
+  const account = useActiveAccount()
+  const adsOn = !!account?.modules.metaConversoes
+  const robotOn = !!account?.modules.iaAtendimento
+  const filters = FILTERS.filter((f) => f.id !== 'waiting' || robotOn || filter === 'waiting')
   const sentinel = useRef<HTMLDivElement>(null)
   const [newChat, setNewChat] = useState(false)
 
@@ -105,8 +110,8 @@ export function ChatList(): React.JSX.Element {
           <MessageSquarePlus className="size-[18px]" />
         </Button>
       </div>
-      <div className="flex gap-1 px-3 pb-2" role="tablist" aria-label="Filtro de conversas">
-        {FILTERS.map((f) => (
+      <div className="flex flex-wrap gap-1 px-3 pb-2" role="tablist" aria-label="Filtro de conversas">
+        {filters.map((f) => (
           <button
             key={f.id}
             role="tab"
@@ -170,6 +175,7 @@ export function ChatList(): React.JSX.Element {
                       {c.lastPreview ?? ''}
                     </span>
                     {adsOn && c.fromAd && <Badge tone="info">Veio de anúncio</Badge>}
+                    {robotOn && c.ai?.mode === 'espera' && <Badge tone="warn">{robotLabel(c.ai)?.text}</Badge>}
                     {c.muted && <BellOff className="size-3.5 shrink-0 text-ink-3" aria-label="Silenciada" />}
                     {c.pinned && <Pin className="size-3.5 shrink-0 text-ink-3" aria-label="Fixada" />}
                     {c.archived && <Archive className="size-3.5 shrink-0 text-ink-3" aria-label="Arquivada" />}
@@ -191,7 +197,9 @@ export function ChatList(): React.JSX.Element {
               ? 'Nenhuma conversa encontrada.'
               : sync?.running
                 ? 'As conversas aparecem aqui conforme o histórico chega.'
-                : 'Nenhuma conversa ainda.'}
+                : filter === 'waiting'
+                  ? 'Nenhuma conversa esperando atendente.'
+                  : 'Nenhuma conversa ainda.'}
           </li>
         )}
       </ul>

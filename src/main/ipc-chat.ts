@@ -12,6 +12,7 @@ import { ensureMedia, markDownloaded, safeFileName } from './wa/media'
 import { getAvatars } from './wa/avatars'
 import { setTranscribeSettings, transcribe, transcribeStatus } from './wa/transcribe'
 import type { Handle } from './ipc'
+import { noteHumanMessage } from './iaAtendimento'
 
 const accountId = z.string().uuid()
 // JIDs aceitos: usuário, LID ou grupo
@@ -42,7 +43,7 @@ export function registerChatIpc(handle: Handle, getWindow: () => BrowserWindow |
     z
       .object({
         accountId,
-        filter: z.enum(['all', 'unread', 'groups', 'archived']),
+        filter: z.enum(['all', 'unread', 'groups', 'archived', 'waiting']),
         search: z.string().max(100).optional(),
         limit: z.number().int().min(1).max(500),
         offset: z.number().int().min(0)
@@ -94,7 +95,10 @@ export function registerChatIpc(handle: Handle, getWindow: () => BrowserWindow |
   handle(
     'messages:send-text',
     z.object({ accountId, jid, text: z.string().min(1).max(65_000), quotedId: msgId.nullable().optional() }).strict(),
-    (a) => send.sendText(sock(a.accountId), a.accountId, a.jid, a.text, a.quotedId)
+    async (a) => {
+      await send.sendText(sock(a.accountId), a.accountId, a.jid, a.text, a.quotedId)
+      noteHumanMessage(a.accountId, a.jid) // quem digita no app assume a conversa
+    }
   )
   handle(
     'messages:send-file',
@@ -113,7 +117,10 @@ export function registerChatIpc(handle: Handle, getWindow: () => BrowserWindow |
         quotedId: msgId.nullable().optional()
       })
       .strict(),
-    (a) => send.sendFile(sock(a.accountId), a.accountId, a.jid, a.file, a)
+    async (a) => {
+      await send.sendFile(sock(a.accountId), a.accountId, a.jid, a.file, a)
+      noteHumanMessage(a.accountId, a.jid)
+    }
   )
   handle(
     'messages:send-location',
@@ -127,12 +134,18 @@ export function registerChatIpc(handle: Handle, getWindow: () => BrowserWindow |
         address: z.string().max(300).optional()
       })
       .strict(),
-    (a) => send.sendLocation(sock(a.accountId), a.accountId, a.jid, a)
+    async (a) => {
+      await send.sendLocation(sock(a.accountId), a.accountId, a.jid, a)
+      noteHumanMessage(a.accountId, a.jid)
+    }
   )
   handle(
     'messages:send-contact',
     z.object({ accountId, jid, name: z.string().min(1).max(100), phone: z.string().min(8).max(25) }).strict(),
-    (a) => send.sendContactCard(sock(a.accountId), a.accountId, a.jid, a)
+    async (a) => {
+      await send.sendContactCard(sock(a.accountId), a.accountId, a.jid, a)
+      noteHumanMessage(a.accountId, a.jid)
+    }
   )
   handle(
     'messages:send-poll',
@@ -145,7 +158,10 @@ export function registerChatIpc(handle: Handle, getWindow: () => BrowserWindow |
         multiple: z.boolean()
       })
       .strict(),
-    (a) => send.sendPoll(sock(a.accountId), a.accountId, a.jid, a)
+    async (a) => {
+      await send.sendPoll(sock(a.accountId), a.accountId, a.jid, a)
+      noteHumanMessage(a.accountId, a.jid)
+    }
   )
   handle('messages:react', z.object({ accountId, jid, id: msgId, emoji: z.string().max(16) }).strict(), (a) =>
     send.react(sock(a.accountId), a.accountId, a.jid, a.id, a.emoji)

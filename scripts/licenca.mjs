@@ -53,7 +53,8 @@ const PLANS = {
     'status',
     'metaConversoes',
     'leadsPlanilha',
-    'perfilIa'
+    'perfilIa',
+    'iaAtendimento'
   ]
 }
 

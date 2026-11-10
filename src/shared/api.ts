@@ -5,7 +5,9 @@ import type {
   BackupFile,
   BackupSettings,
   Modules,
+  ChatAiState,
   ChatFilter,
+  RobotSettings,
   ChatItem,
   MediaInfo,
   MessageItem,
@@ -241,6 +243,14 @@ export interface ApiMap {
   }
   'pipelines:chat-tags': { args: [{ accountId: string; chatJid: string; tags: string[] }]; ret: string[] }
   'pipelines:person': { args: [{ accountId: string; personId: number }]; ret: CardPlacement[] }
+
+  // Robô de atendimento com IA
+  'robot:settings-get': { args: [{ accountId: string }]; ret: RobotSettings }
+  'robot:settings-save': { args: [{ accountId: string; patch: Partial<RobotSettings> }]; ret: RobotSettings }
+  'robot:chat-get': { args: [{ accountId: string; jid: string }]; ret: ChatAiState | null }
+  'robot:chat-assume': { args: [{ accountId: string; jid: string }]; ret: ChatAiState }
+  'robot:chat-give-back': { args: [{ accountId: string; jid: string }]; ret: ChatAiState }
+  'robot:chat-extra': { args: [{ accountId: string; jid: string; extra: string }]; ret: ChatAiState }
 
   // Notas do cliente e datas (alvo: o contato ou a conversa dele)
   'notes:list': {
@@ -478,6 +488,7 @@ export interface EventMap {
   'ai:local-progress': LocalAiProgress | null
   'avatars:changed': { accountId: string; avatars: Record<string, string | null> }
   'status:changed': { accountId: string }
+  'robot:changed': { accountId: string; jid: string }
 }
 export type EventChannel = keyof EventMap
 
@@ -558,6 +569,12 @@ export const API_CHANNELS: ApiChannel[] = [
   'pipelines:chat-profile',
   'pipelines:chat-tags',
   'pipelines:person',
+  'robot:settings-get',
+  'robot:settings-save',
+  'robot:chat-get',
+  'robot:chat-assume',
+  'robot:chat-give-back',
+  'robot:chat-extra',
   'notes:list',
   'notes:save',
   'notes:pin',
@@ -659,7 +676,8 @@ export const EVENT_CHANNELS: EventChannel[] = [
   'ai:progress',
   'ai:local-progress',
   'avatars:changed',
-  'status:changed'
+  'status:changed',
+  'robot:changed'
 ]
 
 export interface BridgeApi {
