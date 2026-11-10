@@ -415,6 +415,30 @@ const MIGRATIONS: string[] = [
     updated_at INTEGER NOT NULL,
     PRIMARY KEY (account_id, chat_jid)
   );
+  `,
+  // leadsPlanilha — leads trazidos da planilha do site (sem duplicar a mesma linha)
+  `
+  CREATE TABLE leads (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    dedupe_key TEXT NOT NULL,
+    tab TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    name TEXT,
+    email TEXT,
+    phone TEXT,
+    interest TEXT,
+    utm_source TEXT,
+    utm_medium TEXT,
+    utm_campaign TEXT,
+    utm_content TEXT,
+    utm_term TEXT,
+    page TEXT,
+    imported_at INTEGER NOT NULL,
+    UNIQUE (account_id, dedupe_key)
+  );
+  CREATE INDEX leads_account_date ON leads (account_id, created_at);
+  CREATE INDEX leads_phone ON leads (account_id, phone);
   `
 ]
 

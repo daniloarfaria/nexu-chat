@@ -11,11 +11,13 @@ export type PageId =
   | 'status'
   | 'vendas'
   | 'funis'
+  | 'leads'
   | 'ia'
   | 'contas'
   | 'configuracoes'
 
-export type SettingsTab = 'visao' | 'licenca' | 'backup' | 'modulos' | 'protecao' | 'transcricao' | 'sistema'
+export type SettingsTab =
+  'visao' | 'licenca' | 'backup' | 'modulos' | 'protecao' | 'transcricao' | 'integracoes' | 'sistema'
 
 export type Theme = 'light' | 'dark' | 'system'
 

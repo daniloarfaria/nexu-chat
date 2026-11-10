@@ -29,6 +29,12 @@ import type {
   GroupInfo,
   GroupRule,
   LicenseStatus,
+  LeadItem,
+  LeadsConfig,
+  LeadsConfigInput,
+  LeadsDimension,
+  LeadsReport,
+  LeadsSyncResult,
   TranscribeEngine,
   TranscribeMode,
   TranscribeStatus,
@@ -352,6 +358,20 @@ export interface ApiMap {
   'deals:delete': { args: [{ accountId: string; id: number }]; ret: void }
   'deals:summary': { args: [{ accountId: string; from: number; to: number }]; ret: SalesSummary }
 
+  // Planilha de leads
+  'leads:config': { args: [{ accountId: string }]; ret: LeadsConfig }
+  'leads:config-save': { args: [{ accountId: string } & LeadsConfigInput]; ret: LeadsConfig }
+  'leads:sync': { args: [{ accountId: string }]; ret: LeadsSyncResult }
+  'leads:list': {
+    args: [{ accountId: string; from?: number; to?: number; limit?: number; offset?: number }]
+    ret: { items: LeadItem[]; total: number }
+  }
+  'leads:report': { args: [{ accountId: string; from?: number; to?: number }]; ret: LeadsReport }
+  'leads:report-export': {
+    args: [{ accountId: string; dimension: LeadsDimension; from?: number; to?: number }]
+    ret: void
+  }
+
   // IA
   'ai:providers': { args: []; ret: AiProvider[] }
   'ai:provider-save': {
@@ -551,6 +571,12 @@ export const API_CHANNELS: ApiChannel[] = [
   'deals:list',
   'deals:delete',
   'deals:summary',
+  'leads:config',
+  'leads:config-save',
+  'leads:sync',
+  'leads:list',
+  'leads:report',
+  'leads:report-export',
   'ai:providers',
   'ai:provider-save',
   'ai:provider-delete',

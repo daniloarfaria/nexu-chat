@@ -16,6 +16,7 @@ import { Status } from './pages/Status'
 import { Vendas } from './pages/Vendas'
 import { IA } from './pages/IA'
 import { Funis } from './pages/Funis'
+import { Leads } from './pages/Leads'
 import { subscribeChatEvents, useChats } from './lib/chatStore'
 import { subscribeAvatarEvents } from './lib/avatars'
 import { Novidades } from './components/Novidades'
@@ -47,6 +48,8 @@ function Page(): React.JSX.Element {
       return <IA />
     case 'funis':
       return <Funis />
+    case 'leads':
+      return <Leads />
   }
 }
 

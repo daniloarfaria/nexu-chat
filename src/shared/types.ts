@@ -16,7 +16,8 @@ export const MODULE_KEYS = [
   'funil',
   'ia',
   'status',
-  'metaConversoes'
+  'metaConversoes',
+  'leadsPlanilha'
 ] as const
 
 export type ModuleKey = (typeof MODULE_KEYS)[number]
@@ -56,7 +57,12 @@ export const MODULE_INFO: Record<ModuleKey, { label: string; description: string
     description: 'Quadros com etapas personalizadas e disparo por coluna',
     group: 'Vendas'
   },
-  ia: { label: 'Assistente de IA', description: 'Playbook de vendas e mensagens sugeridas', group: 'Vendas' }
+  ia: { label: 'Assistente de IA', description: 'Playbook de vendas e mensagens sugeridas', group: 'Vendas' },
+  leadsPlanilha: {
+    label: 'Planilha de leads',
+    description: 'Traz os leads do site e mostra quais viraram conversa e venda, por origem do anúncio',
+    group: 'Marketing'
+  }
 }
 
 export const DEFAULT_MODULES: Modules = {
@@ -73,7 +79,8 @@ export const DEFAULT_MODULES: Modules = {
   funil: true,
   ia: false,
   status: false,
-  metaConversoes: false
+  metaConversoes: false,
+  leadsPlanilha: false
 }
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'qr' | 'connected' | 'logged_out'
@@ -645,7 +652,8 @@ export const PLANS: Record<PlanId, { nome: string; modulos: ModuleKey[] }> = {
       'gruposModeracao',
       'funil',
       'status',
-      'metaConversoes'
+      'metaConversoes',
+      'leadsPlanilha'
     ]
   },
   completo: { nome: 'Completo', modulos: [...MODULE_KEYS] }
@@ -841,6 +849,75 @@ export const PIPELINE_TEMPLATES: PipelineTemplate[] = [
     ]
   }
 ]
+
+// ---------- Planilha de leads ----------
+
+export interface LeadsConfig {
+  url: string
+  hasSecret: boolean
+  createContacts: boolean
+  pipelineId: number | null
+  lastSyncAt: number | null
+  lastError: string | null
+  lastAdded: number
+}
+
+export interface LeadsConfigInput {
+  url: string
+  /** Vazio mantém a senha já guardada */
+  secret?: string
+  createContacts?: boolean
+  pipelineId?: number | null
+}
+
+export interface LeadsSyncResult {
+  ok: boolean
+  added: number
+  contacts: number
+  error?: string
+}
+
+export interface LeadItem {
+  id: number
+  createdAt: number
+  tab: string
+  name: string | null
+  email: string | null
+  phone: string | null
+  interest: string | null
+  utmSource: string | null
+  utmMedium: string | null
+  utmCampaign: string | null
+  utmContent: string | null
+  utmTerm: string | null
+  page: string | null
+  /** virou conversa no WhatsApp */
+  chat: boolean
+  personId: number | null
+  pipeline: string | null
+  stage: string | null
+  won: boolean
+  valueCents: number
+}
+
+export type LeadsDimension = 'source' | 'campaign' | 'content'
+
+export interface LeadsReportRow {
+  key: string
+  leads: number
+  talked: number
+  bought: number
+  revenueCents: number
+  /** compraram / leads (0 a 1) */
+  rate: number
+}
+
+export interface LeadsReport {
+  total: LeadsReportRow
+  bySource: LeadsReportRow[]
+  byCampaign: LeadsReportRow[]
+  byContent: LeadsReportRow[]
+}
 
 // ---------- Status do WhatsApp ----------
 

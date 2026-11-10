@@ -16,6 +16,7 @@ import { cn } from '../lib/cn'
 import { Protecao } from './Protecao'
 import { Transcricao } from './Transcricao'
 import { Licenca } from './Licenca'
+import { LeadsPlanilhaConfig } from '../components/LeadsPlanilhaConfig'
 import { VisaoGeral } from './configuracoes/VisaoGeral'
 import { useLicense } from '../lib/useLicense'
 
@@ -439,6 +440,7 @@ export function Configuracoes(): React.JSX.Element {
     { id: 'modulos', label: 'Módulos' },
     { id: 'protecao', label: 'Proteção anti-bloqueio' },
     { id: 'transcricao', label: 'Transcrição de áudio' },
+    { id: 'integracoes', label: 'Integrações' },
     { id: 'sistema', label: 'Sistema' }
   ]
   return (
@@ -466,6 +468,7 @@ export function Configuracoes(): React.JSX.Element {
       {tab === 'modulos' && <ModulosTab />}
       {tab === 'protecao' && <Protecao />}
       {tab === 'transcricao' && <Transcricao />}
+      {tab === 'integracoes' && <LeadsPlanilhaConfig />}
       {tab === 'sistema' && <SistemaTab />}
     </div>
   )

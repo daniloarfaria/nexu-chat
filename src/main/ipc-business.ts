@@ -12,6 +12,7 @@ import * as rules from './automation'
 import * as groups from './groups'
 import * as reminders from './reminders'
 import * as deals from './deals'
+import * as leads from './leadsPlanilha'
 import * as tags from './tags'
 import * as pipes from './pipelines'
 import { TAG_COLORS } from '@shared/types'
@@ -570,6 +571,64 @@ export function registerBusinessIpc(handle: Handle, getWindow: () => BrowserWind
       })
       .strict(),
     (a) => deals.listDeals(a.accountId, a)
+  )
+  // ---------- Planilha de leads ----------
+  const period = { from: z.number().int().optional(), to: z.number().int().optional() }
+  handle('leads:config', z.object({ accountId }).strict(), (a) => {
+    need(a.accountId, 'leadsPlanilha')
+    return leads.getConfig(a.accountId)
+  })
+  handle(
+    'leads:config-save',
+    z
+      .object({
+        accountId,
+        url: z.string().trim().max(500),
+        secret: z.string().max(200).optional(),
+        createContacts: z.boolean().optional(),
+        pipelineId: id.nullable().optional()
+      })
+      .strict(),
+    (a) => {
+      need(a.accountId, 'leadsPlanilha')
+      const { accountId: acc, ...input } = a
+      return leads.saveConfig(acc, input)
+    }
+  )
+  handle('leads:sync', z.object({ accountId }).strict(), (a) => {
+    need(a.accountId, 'leadsPlanilha')
+    return leads.syncLeads(a.accountId)
+  })
+  handle(
+    'leads:list',
+    z
+      .object({
+        accountId,
+        ...period,
+        limit: z.number().int().min(1).max(1000).optional(),
+        offset: z.number().int().min(0).optional()
+      })
+      .strict(),
+    (a) => {
+      need(a.accountId, 'leadsPlanilha')
+      return leads.listLeads(a.accountId, a)
+    }
+  )
+  handle('leads:report', z.object({ accountId, ...period }).strict(), (a) => {
+    need(a.accountId, 'leadsPlanilha')
+    return leads.leadsReport(a.accountId, a)
+  })
+  handle(
+    'leads:report-export',
+    z.object({ accountId, dimension: z.enum(['source', 'campaign', 'content']), ...period }).strict(),
+    (a) => {
+      need(a.accountId, 'leadsPlanilha')
+      return saveCsv(
+        getWindow(),
+        `leads-por-${a.dimension}-${stamp()}.csv`,
+        leads.reportCsv(a.accountId, a.dimension, a)
+      )
+    }
   )
   handle('deals:delete', z.object({ accountId, id }).strict(), (a) => deals.deleteDeal(a.accountId, a.id))
   handle('deals:summary', z.object({ accountId, from: z.number().int(), to: z.number().int() }).strict(), (a) =>
