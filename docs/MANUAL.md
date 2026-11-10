@@ -145,6 +145,7 @@ Em **Configurações → Módulos** você liga e desliga as funções de cada co
 | Grupos (envio, extrair membros, criar, moderação) | Cada função liga separada (seção 9) |
 | Lembretes | Aniversário, pós-venda, revisão anual (seção 10) |
 | Status do WhatsApp | Postar texto, foto ou vídeo no status, agora ou agendado (seção "Status", logo depois de Lembretes). Vem desligado; faz parte do plano Marketing |
+| Anúncios da Meta | Mostra quais conversas vieram de anúncio de clique para o WhatsApp (seção "Anúncios da Meta", depois de Vendas). Vem desligado; faz parte do plano Marketing |
 | Vendas | Marcar o que virou venda e ver o retorno (seção 11) |
 | Assistente de IA | Sugestões de resposta, versões de campanha e playbook (seção 12) |
 
@@ -301,6 +302,8 @@ O painel **Vendas** mostra:
 - **de onde vieram as vendas:** a venda conta para a campanha ou o lembrete enviado ao cliente nos 7 dias anteriores, com o valor faturado **por mensagem enviada**;
 - os motivos de perda mais comuns.
 
+Se a conversa veio de um anúncio e nenhuma campanha foi enviada ao cliente nos 7 dias anteriores, a venda aparece com a origem **Anúncio** (módulo Anúncios da Meta ligado).
+
 ### Funis (kanban)
 
 O menu **Funis** organiza os clientes em etapas, como num quadro de post-its.
@@ -324,6 +327,25 @@ O menu **Funis** organiza os clientes em etapas, como num quadro de post-its.
   - **Abrir na tela Conversas** leva para a conversa na tela inteira.
 - **Disparar para uma coluna:** no menu **⋯** da coluna, **Disparar campanha para a coluna** abre uma campanha nova com a coluna já escolhida. Ela segue todas as regras anti-bloqueio. Se houver filtro de etiquetas no quadro, ele vai junto.
 - Excluir um contato (LGPD) tira os cartões dele de todos os funis.
+
+---
+
+## Anúncios da Meta
+
+Quando o cliente clica num anúncio de "Enviar mensagem" do Facebook ou do Instagram e chama a loja no WhatsApp, o app percebe e guarda de onde ele veio. Ligue em **Configurações → Módulos → Anúncios da Meta** (plano Marketing).
+
+- A conversa ganha a etiqueta **Veio de anúncio**, na lista e no topo da conversa.
+- A venda dessa conversa entra no painel **Vendas** com a origem **Anúncio**.
+- O app olha também as conversas antigas, aos poucos e sem travar, logo depois de abrir.
+- Fica guardado só neste computador: a origem (Facebook ou Instagram), o número do anúncio, o endereço dele e, quando o WhatsApp entrega, o código de clique (`ctwa_clid`). Nada é enviado para a Meta nesta etapa.
+
+**Aviso honesto:** o WhatsApp Web nem sempre entrega o código de clique. Sem ele, o app ainda mostra a etiqueta e a origem da venda; só o envio automático para a Meta depende de outro caminho (telefone em hash), que vem numa próxima versão.
+
+### Conferir se o código de clique chegou (teste com anúncio real)
+
+1. Clique num anúncio de clique para o WhatsApp de um número de teste e envie a mensagem.
+2. Abra **Configurações → Sistema → Abrir pasta** e a pasta `logs`.
+3. Procure a linha "Anúncio: conversa que veio de anúncio". O campo `ctwaClid` mostra **chegou** ou **não veio**. O registro não tem telefone, nome nem texto do cliente.
 
 ---
 

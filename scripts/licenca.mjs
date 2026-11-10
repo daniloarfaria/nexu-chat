@@ -33,7 +33,8 @@ const PLANS = {
     'gruposCriar',
     'gruposModeracao',
     'funil',
-    'status'
+    'status',
+    'metaConversoes'
   ],
   completo: [
     'conversas',
@@ -48,7 +49,8 @@ const PLANS = {
     'vendas',
     'funil',
     'ia',
-    'status'
+    'status',
+    'metaConversoes'
   ]
 }
 

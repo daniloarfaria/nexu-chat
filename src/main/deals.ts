@@ -4,6 +4,8 @@ import { lastTouch } from './campaigns'
 import { getChats } from './wa/store'
 import { dayKey } from '@shared/rules'
 import { findPersonByJid } from './people'
+import { getAccount } from './accounts'
+import { hasAdOrigin } from './ads'
 
 interface Row {
   id: number
@@ -51,13 +53,17 @@ export function saveDeal(
 ): Deal {
   // Atribuição: última campanha/lembrete enviado ao contato nos últimos 7 dias
   const touch = lastTouch(accountId, d.chatJid)
+  // Sem campanha recente, a conversa que veio de anúncio vale como "Anúncio" (módulo Anúncios da Meta)
+  const fromAd = !touch && !!getAccount(accountId)?.modules.metaConversoes && hasAdOrigin(accountId, d.chatJid)
   const sourceType: Deal['sourceType'] = d.chatJid.endsWith('@g.us')
     ? 'group'
     : touch
       ? touch.kind === 'reminder'
         ? 'reminder'
         : 'campaign'
-      : 'organic'
+      : fromAd
+        ? 'ad'
+        : 'organic'
   const id = getDb()
     .prepare(
       `INSERT INTO deals (account_id, chat_jid, status, amount_cents, product, payment, reason, note, source_type, source_id, source_name, created_at)
@@ -74,7 +80,7 @@ export function saveDeal(
       d.note?.trim() || null,
       sourceType,
       touch?.id ?? null,
-      touch?.name ?? null,
+      touch?.name ?? (sourceType === 'ad' ? 'Anúncio' : null),
       Date.now()
     ).lastInsertRowid
   return listDeals(accountId, { id: Number(id) })[0]
@@ -136,7 +142,13 @@ export function salesSummary(accountId: string, from: number, to: number): Sales
     rev: number
   }>
   const sentFor = db.prepare("SELECT COUNT(*) AS n FROM campaign_targets WHERE campaign_id = ? AND status = 'sent'")
-  const label = { organic: 'Atendimento espontâneo', group: 'Grupos', campaign: 'Campanha', reminder: 'Lembrete' }
+  const label = {
+    organic: 'Atendimento espontâneo',
+    group: 'Grupos',
+    campaign: 'Campanha',
+    reminder: 'Lembrete',
+    ad: 'Anúncio'
+  }
   const days = db
     .prepare(
       `SELECT created_at, amount_cents FROM deals WHERE account_id = ? AND status = 'won' AND created_at >= ? AND created_at < ?`

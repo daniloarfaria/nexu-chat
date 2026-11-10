@@ -2,6 +2,8 @@ import { EventEmitter } from 'node:events'
 import { isJidGroup, isLidUser, jidNormalizedUser, proto, type Chat, type Contact, type WAMessage } from 'baileys'
 import type { ChatFilter, ChatItem, MediaInfo, MessageExtra, MessageItem, MessageType, SyncState } from '@shared/types'
 import { getDb, transaction } from '../db'
+import { log } from '../log'
+import { extractAdAttribution, recordAttribution } from '../ads'
 import { mutationOf, parseMessage, previewOf } from './parse'
 
 /**
@@ -287,6 +289,14 @@ export function saveMessages(accountId: string, msgs: WAMessage[], opts: SaveOpt
         applyMutation(accountId, chat, mut, actor, !!key.fromMe)
         continue
       }
+      const ad = !key.fromMe && !isJidGroup(chat) ? extractAdAttribution(m) : null
+      if (ad) {
+        try {
+          recordAttribution(accountId, chat, ad, Number(m.messageTimestamp ?? 0) || Math.floor(Date.now() / 1000))
+        } catch (e) {
+          log.warn('Falha ao guardar a origem do anúncio', { erro: String(e) })
+        }
+      }
       const p = parseMessage(m)
       if (p.type === 'system' && !isJidGroup(chat) && p.extra?.label === 'Atualização do grupo') continue
       const fromMe = key.fromMe ? 1 : 0
@@ -466,6 +476,7 @@ interface ChatRow {
   pinned: number
   muted_until: number
   read_only: number
+  from_ad: number
   c_name: string | null
   c_notify: string | null
   c_verified: string | null
@@ -490,11 +501,14 @@ function toChat(r: ChatRow): ChatItem {
     archived: !!r.archived,
     pinned: !!r.pinned,
     muted: r.muted_until === -1 || r.muted_until > now,
-    readOnly: !!r.read_only
+    readOnly: !!r.read_only,
+    fromAd: !!r.from_ad
   }
 }
 
-const CHAT_SELECT = `SELECT ch.*, co.name AS c_name, co.notify AS c_notify, co.verified_name AS c_verified
+const CHAT_SELECT = `SELECT ch.*,
+  EXISTS (SELECT 1 FROM chat_attribution ca WHERE ca.account_id = ch.account_id AND ca.chat_jid = ch.jid) AS from_ad,
+  co.name AS c_name, co.notify AS c_notify, co.verified_name AS c_verified
   FROM chats ch LEFT JOIN contacts co ON co.account_id = ch.account_id AND co.jid = ch.jid`
 
 export function listChats(

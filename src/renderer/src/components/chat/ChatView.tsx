@@ -9,6 +9,7 @@ import { Composer } from './Composer'
 import { Avatar } from './Avatar'
 import { ContactStrip } from './ContactStrip'
 import { DealBar } from './DealBar'
+import { Badge } from '../ui'
 import { dayKey, dayLabel } from './time'
 
 /**
@@ -102,6 +103,7 @@ export function ChatView({
                   : ''}
           </div>
         </div>
+        {account?.modules.metaConversoes && chat?.fromAd && <Badge tone="info">Veio de anúncio</Badge>}
         {account?.modules.vendas && !chat?.isGroup && <DealBar key={jid} accountId={account.id} jid={jid} />}
       </header>
       {account && !embedded && !jid.endsWith('@g.us') && (
