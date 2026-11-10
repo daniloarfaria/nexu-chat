@@ -347,11 +347,11 @@ export function exclusiveLocal<T>(fn: () => Promise<T>): Promise<T> {
   return getEngine().exclusive(fn)
 }
 
-/** O caminho completo é o llama-server desta instalação (dentro de ai-local/engine/<versão>/)? */
+/** O caminho completo é um llama-server desta instalação (ai-local/engine/<qualquer versão>/)? */
 function isEngineExe(path: string): boolean {
   const ci = (x: string): string => (process.platform === 'win32' ? x.toLowerCase() : x)
   const p = ci(resolve(path))
-  const root = ci(resolve(engineDir()))
+  const root = ci(resolve(baseDir(), 'engine'))
   return p.startsWith(root + sep) && ci(basename(p)) === ci(exeName)
 }
 

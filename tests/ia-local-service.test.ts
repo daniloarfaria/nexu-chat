@@ -218,6 +218,14 @@ describe('IA local: endurecimento', () => {
     expect(await svc.killOrphan()).toBe(false)
     expect(killed).toEqual([4242])
 
+    // órfão de uma versão anterior do motor (pasta engine/<versão antiga>) também é encerrado
+    writeFileSync(pid, '4250')
+    svc._deps.processPath = async () => join(base(), 'engine', 'b0000-antiga', 'llama-x', exe)
+    expect(await svc.killOrphan()).toBe(true)
+    expect(killed).toEqual([4242, 4250])
+    killed.length = 0
+    killed.push(4242)
+
     writeFileSync(pid, '4244')
     // mesmo nome de programa, mas de outro lugar (outro llama-server do usuário): não encerra
     svc._deps.processPath = async () => join('/Users/x/outro', exe)
