@@ -421,6 +421,7 @@ const MIGRATIONS: string[] = [
     person_id INTEGER PRIMARY KEY REFERENCES people(id) ON DELETE CASCADE,
     account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
     last_ts INTEGER NOT NULL DEFAULT 0,
+    failed_at INTEGER NOT NULL DEFAULT 0,
     birthday_suggestion TEXT,
     birthday_dismissed INTEGER NOT NULL DEFAULT 0
   );

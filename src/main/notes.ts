@@ -8,7 +8,8 @@ import {
 } from '@shared/types'
 import { findBirthdayInText, validDate } from '@shared/dates'
 import { normalizeDate, dayKey } from '@shared/rules'
-import { getDb } from './db'
+import { getDb, transaction } from './db'
+import { isSensitive } from './ai/sensitive'
 import * as people from './people'
 import { personFromChat } from './pipelines'
 
@@ -84,7 +85,9 @@ export function resolveTarget(
     return target.personId
   }
   if (!target.chatJid) throw new Error('Escolha o contato')
-  return personIdOfChat(accountId, target.chatJid) ?? (create ? personFromChat(accountId, target.chatJid) : null)
+  const found = personIdOfChat(accountId, target.chatJid)
+  if (found != null || !create) return found
+  return personFromChat(accountId, target.chatJid)
 }
 
 export function listNotes(accountId: string, personId: number): ContactNote[] {
@@ -108,6 +111,10 @@ export function saveNote(accountId: string, personId: number, input: NoteInput):
   ownPerson(accountId, personId)
   const db = getDb()
   const { title, body } = clean(input)
+  if (isSensitive(`${title} ${body}`))
+    throw new Error(
+      'Esta nota parece ter dado sensível (saúde, como grau de óculos, religião, política...). Escreva sem isso: o app não guarda esse tipo de dado.'
+    )
   const kind: NoteKind = (NOTE_KINDS as readonly string[]).includes(input.kind) ? input.kind : 'geral'
   const now = Date.now()
   if (input.id) {
@@ -155,24 +162,26 @@ export function saveAiNotes(
   const have = (
     db.prepare('SELECT COUNT(*) AS n FROM contact_notes WHERE person_id = ?').get(personId) as { n: number }
   ).n
-  const room = Math.max(0, NOTES_PER_PERSON - have)
+  if (have + items.length > NOTES_PER_PERSON)
+    throw new Error(`Este contato chegou ao limite de ${NOTES_PER_PERSON} notas. Apague algumas para a IA anotar mais.`)
   const now = Date.now()
   const ins = db.prepare(
     "INSERT INTO contact_notes (account_id, person_id, kind, title, body, author, pinned, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'ia', 0, ?, ?)"
   )
-  const out: ContactNote[] = []
-  for (const it of items.slice(0, room)) {
-    const { title, body } = clean(it)
-    const id = Number(ins.run(accountId, personId, it.kind, title, body, now, now).lastInsertRowid)
-    out.push(toNote(db.prepare('SELECT * FROM contact_notes WHERE id = ?').get(id) as unknown as NoteRow))
-  }
-  return out
+  return transaction(db, () =>
+    items.map((it) => {
+      const { title, body } = clean(it)
+      const id = Number(ins.run(accountId, personId, it.kind, title, body, now, now).lastInsertRowid)
+      return toNote(db.prepare('SELECT * FROM contact_notes WHERE id = ?').get(id) as unknown as NoteRow)
+    })
+  )
 }
 
 // ---------- Disparo automático ----------
 
 interface State {
   last_ts: number
+  failed_at: number
   birthday_suggestion: string | null
   birthday_dismissed: number
 }
@@ -180,8 +189,15 @@ interface State {
 function stateOf(personId: number): State {
   return (
     (getDb()
-      .prepare('SELECT last_ts, birthday_suggestion, birthday_dismissed FROM contact_profile_state WHERE person_id = ?')
-      .get(personId) as State | undefined) ?? { last_ts: 0, birthday_suggestion: null, birthday_dismissed: 0 }
+      .prepare(
+        'SELECT last_ts, failed_at, birthday_suggestion, birthday_dismissed FROM contact_profile_state WHERE person_id = ?'
+      )
+      .get(personId) as State | undefined) ?? {
+      last_ts: 0,
+      failed_at: 0,
+      birthday_suggestion: null,
+      birthday_dismissed: 0
+    }
   )
 }
 
@@ -190,17 +206,25 @@ function upsertState(accountId: string, personId: number, patch: Partial<State>)
   const next = { ...cur, ...patch }
   getDb()
     .prepare(
-      `INSERT INTO contact_profile_state (person_id, account_id, last_ts, birthday_suggestion, birthday_dismissed)
-       VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(person_id) DO UPDATE SET last_ts = excluded.last_ts,
+      `INSERT INTO contact_profile_state (person_id, account_id, last_ts, failed_at, birthday_suggestion, birthday_dismissed)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(person_id) DO UPDATE SET last_ts = excluded.last_ts, failed_at = excluded.failed_at,
          birthday_suggestion = excluded.birthday_suggestion, birthday_dismissed = excluded.birthday_dismissed`
     )
-    .run(personId, accountId, next.last_ts, next.birthday_suggestion, next.birthday_dismissed)
+    .run(personId, accountId, next.last_ts, next.failed_at, next.birthday_suggestion, next.birthday_dismissed)
 }
 
 /** Marca até onde a IA já leu a conversa (timestamp em segundos da última mensagem lida). */
 export function markProfiled(accountId: string, personId: number, ts: number): void {
-  upsertState(accountId, personId, { last_ts: ts })
+  upsertState(accountId, personId, { last_ts: ts, failed_at: 0 })
+}
+
+/** Espera depois de uma falha antes de tentar de novo com o mesmo contato. */
+export const AUTO_RETRY_MS = 60 * 60_000
+
+/** Guarda no banco que a IA falhou com este contato (a espera sobrevive a reiniciar o app). */
+export function markProfileFailed(accountId: string, personId: number, nowMs = Date.now()): void {
+  upsertState(accountId, personId, { failed_at: nowMs })
 }
 
 /** Quando a IA acha o aniversário na conversa, guarda só como sugestão (nada vai para o contato sem confirmar). */
@@ -236,7 +260,9 @@ export function autoProfileCandidates(
   for (const c of chats) {
     const personId = personIdOfChat(accountId, c.jid)
     if (personId == null) continue
-    const since = stateOf(personId).last_ts
+    const st = stateOf(personId)
+    if (nowSec * 1000 - st.failed_at < AUTO_RETRY_MS) continue // falhou há pouco: não ocupa vaga
+    const since = st.last_ts
     const n = (
       db
         .prepare(
@@ -259,13 +285,16 @@ const REMINDER_LABEL: Record<string, (name: string, when: string, verb: string) 
   days_after: (n, when, verb) => `Lembrete "${n}" ${verb} em ${when}`
 }
 
+/** Por quanto tempo um lembrete só registrado (sem envio confirmado) ainda conta como programado. */
+const PENDING_WINDOW_MS = 12 * 3600_000
+
 const fmt = (ms: number): string => new Date(ms).toLocaleDateString('pt-BR')
 
 /**
  * Lembretes que este contato recebeu, do mais novo ao mais antigo.
  * Vem dos envios reais (campaign_targets); o que só está no registro do dia (reminder_log) aparece como "programado".
  */
-export function dateHistory(accountId: string, personId: number): DateHistoryItem[] {
+export function dateHistory(accountId: string, personId: number, nowMs = Date.now()): DateHistoryItem[] {
   const db = getDb()
   const reminders = new Map<number, { name: string; kind: DateHistoryItem['kind'] }>(
     (
@@ -276,6 +305,12 @@ export function dateHistory(accountId: string, personId: number): DateHistoryIte
       }>
     ).map((r) => [r.id, { name: r.name, kind: r.kind }])
   )
+  /** Mesmo lembrete no mesmo período (ano para aniversário e anual, dia para "dias depois") = um envio só. */
+  const periodOf = (rid: number, at: number): string => {
+    const k = reminders.get(rid)?.kind
+    const d = new Date(at)
+    return `${rid}|${k === 'days_after' ? dayKey(d) : d.getFullYear()}`
+  }
   const out: DateHistoryItem[] = []
   const seen = new Set<string>()
   const sent = db
@@ -288,7 +323,7 @@ export function dateHistory(accountId: string, personId: number): DateHistoryIte
   for (const s of sent) {
     const rid = Number(/^reminder:(\d+)$/.exec(s.source ?? '')?.[1])
     const r = reminders.get(rid)
-    seen.add(`${rid}|${dayKey(new Date(s.at))}`)
+    seen.add(periodOf(rid, s.at))
     const kind = r?.kind ?? 'yearly'
     out.push({
       kind,
@@ -296,6 +331,7 @@ export function dateHistory(accountId: string, personId: number): DateHistoryIte
       label: r ? REMINDER_LABEL[kind](r.name, fmt(s.at), 'enviado') : `Lembrete enviado em ${fmt(s.at)}`
     })
   }
+  // O registro do dia só entra como "programado" enquanto o envio é recente; depois disso, sem envio, some
   const logged = db
     .prepare(
       `SELECT l.reminder_id AS rid, l.at AS at FROM reminder_log l JOIN reminders r ON r.id = l.reminder_id
@@ -303,7 +339,7 @@ export function dateHistory(accountId: string, personId: number): DateHistoryIte
     )
     .all(personId, accountId) as Array<{ rid: number; at: number }>
   for (const l of logged) {
-    if (seen.has(`${l.rid}|${dayKey(new Date(l.at))}`)) continue
+    if (seen.has(periodOf(l.rid, l.at)) || nowMs - l.at > PENDING_WINDOW_MS) continue
     const r = reminders.get(l.rid)
     if (!r) continue
     out.push({ kind: r.kind, at: l.at, label: REMINDER_LABEL[r.kind](r.name, fmt(l.at), 'programado') })
