@@ -3,9 +3,9 @@ import {
   Bot,
   CalendarClock,
   ChevronsUpDown,
+  CircleDashed,
   Contact,
   FileSpreadsheet,
-  House,
   Megaphone,
   MessagesSquare,
   Moon,
@@ -39,7 +39,6 @@ interface NavItem {
 const NAV: Array<{ title?: string; items: NavItem[] }> = [
   {
     items: [
-      { id: 'inicio', label: 'Início', icon: House },
       { id: 'conversas', label: 'Conversas', icon: MessagesSquare, module: (m) => m.conversas },
       { id: 'contatos', label: 'Contatos', icon: Contact }
     ]
@@ -49,6 +48,7 @@ const NAV: Array<{ title?: string; items: NavItem[] }> = [
     items: [
       { id: 'campanhas', label: 'Campanhas', icon: Megaphone, module: (m) => m.campanhas },
       { id: 'lembretes', label: 'Lembretes', icon: CalendarClock, module: (m) => m.lembretes },
+      { id: 'status', label: 'Status', icon: CircleDashed, module: (m) => m.status },
       {
         id: 'grupos',
         label: 'Grupos',

@@ -8,7 +8,7 @@ import {
   type BackupSettings,
   type ModuleKey
 } from '@shared/types'
-import { useActiveAccount, useApp } from '../lib/store'
+import { useActiveAccount, useApp, type SettingsTab } from '../lib/store'
 import { Badge, Button, Field, Input, Notice, PageHeader, Section, Switch } from '../components/ui'
 import { useUpdateStatus } from '../lib/useUpdateStatus'
 import { formatBytes, formatDateTime, timeAgo } from '../lib/format'
@@ -17,9 +17,10 @@ import { Protecao } from './Protecao'
 import { Transcricao } from './Transcricao'
 import { Licenca } from './Licenca'
 import { LeadsPlanilhaConfig } from '../components/LeadsPlanilhaConfig'
+import { VisaoGeral } from './configuracoes/VisaoGeral'
 import { useLicense } from '../lib/useLicense'
 
-type Tab = 'licenca' | 'backup' | 'modulos' | 'protecao' | 'transcricao' | 'integracoes' | 'sistema'
+type Tab = SettingsTab
 
 const FREQ: Array<{ id: BackupSettings['frequency']; label: string }> = [
   { id: 'daily', label: 'Todo dia' },
@@ -431,8 +432,9 @@ function SistemaTab(): React.JSX.Element {
 }
 
 export function Configuracoes(): React.JSX.Element {
-  const [tab, setTab] = useState<Tab>('licenca')
+  const [tab, setTab] = useState<Tab>(() => useApp.getState().settingsTab ?? 'visao')
   const tabs: Array<{ id: Tab; label: string }> = [
+    { id: 'visao', label: 'Visão geral' },
     { id: 'licenca', label: 'Licença' },
     { id: 'backup', label: 'Backup' },
     { id: 'modulos', label: 'Módulos' },
@@ -460,6 +462,7 @@ export function Configuracoes(): React.JSX.Element {
           </button>
         ))}
       </div>
+      {tab === 'visao' && <VisaoGeral setTab={setTab} />}
       {tab === 'licenca' && <Licenca />}
       {tab === 'backup' && <BackupTab />}
       {tab === 'modulos' && <ModulosTab />}

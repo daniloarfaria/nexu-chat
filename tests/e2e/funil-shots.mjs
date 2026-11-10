@@ -96,7 +96,7 @@ for (const theme of ['light', 'dark']) {
 }
 await win.getByRole('button', { name: /Carla Mendes/ }).click()
 await shot('dark-cartao')
-await win.getByRole('button', { name: 'Fechar', exact: true }).last().click()
+await win.keyboard.press('Escape')
 await win.getByRole('button', { name: 'Editar funil' }).click()
 await win.getByRole('button', { name: 'Configurar Orçamento enviado' }).click()
 await shot('dark-editor')

@@ -18,6 +18,9 @@ import type {
   AiSettings,
   AiUsageEntry,
   AutoRule,
+  BusinessContext,
+  LocalAiProgress,
+  LocalAiStatus,
   Campaign,
   CampaignAudience,
   CampaignTarget,
@@ -47,6 +50,10 @@ import type {
   TagDef,
   Reminder,
   SalesSummary,
+  StatusAudience,
+  StatusKind,
+  StatusPost,
+  StatusSettings,
   TargetStatus,
   WaVersionInfo
 } from './types'
@@ -304,6 +311,31 @@ export interface ApiMap {
     ret: Reminder
   }
   'reminders:delete': { args: [{ accountId: string; id: number }]; ret: void }
+
+  // Status do WhatsApp
+  'status:list': { args: [{ accountId: string }]; ret: StatusPost[] }
+  'status:create': {
+    args: [
+      {
+        accountId: string
+        kind: StatusKind
+        text: string
+        background?: string | null
+        font?: number | null
+        audience: StatusAudience
+        scheduledAt: number | null
+        media?: { name: string; mime: string; data: Uint8Array } | null
+      }
+    ]
+    ret: StatusPost
+  }
+  'status:cancel': { args: [{ accountId: string; id: number }]; ret: StatusPost }
+  'status:audience-count': {
+    args: [{ accountId: string; audience: StatusAudience }]
+    ret: { total: number; semWhatsapp: number; optedOut: number; large: boolean; limit: number }
+  }
+  'status:settings': { args: [{ accountId: string }]; ret: StatusSettings & { postedToday: number } }
+  'status:settings-save': { args: [{ accountId: string; dailyLimit: number }]; ret: StatusSettings }
   'reminders:preview': { args: [{ accountId: string; id: number }]; ret: number }
 
   // Vendas
@@ -369,6 +401,14 @@ export interface ApiMap {
   'ai:playbook': { args: [{ accountId: string }]; ret: { content: string; updatedAt: number } | null }
   'ai:playbook-build': { args: [{ accountId: string }]; ret: string }
   'ai:playbook-save': { args: [{ accountId: string; content: string }]; ret: void }
+  'ai:context-get': { args: [{ accountId: string }]; ret: BusinessContext }
+  'ai:context-save': { args: [{ accountId: string; context: Partial<BusinessContext> }]; ret: BusinessContext }
+  'ai:context-fill': { args: [{ accountId: string; text: string }]; ret: Partial<BusinessContext> }
+  'ai:local-status': { args: []; ret: LocalAiStatus }
+  'ai:local-install': { args: [{ tier: 'leve' | 'medio' }]; ret: LocalAiStatus }
+  'ai:local-cancel': { args: []; ret: void }
+  'ai:local-medium-off': { args: []; ret: LocalAiStatus }
+  'ai:local-remove': { args: []; ret: LocalAiStatus }
 
   'backup:get': { args: []; ret: BackupSettings }
   'backup:update': {
@@ -408,7 +448,9 @@ export interface EventMap {
     finished?: boolean
   }
   'ai:progress': { accountId: string; done: number; total: number }
+  'ai:local-progress': LocalAiProgress | null
   'avatars:changed': { accountId: string; avatars: Record<string, string | null> }
+  'status:changed': { accountId: string }
 }
 export type EventChannel = keyof EventMap
 
@@ -519,6 +561,12 @@ export const API_CHANNELS: ApiChannel[] = [
   'reminders:save',
   'reminders:delete',
   'reminders:preview',
+  'status:list',
+  'status:create',
+  'status:cancel',
+  'status:audience-count',
+  'status:settings',
+  'status:settings-save',
   'deals:save',
   'deals:list',
   'deals:delete',
@@ -541,6 +589,14 @@ export const API_CHANNELS: ApiChannel[] = [
   'ai:playbook',
   'ai:playbook-build',
   'ai:playbook-save',
+  'ai:context-get',
+  'ai:context-save',
+  'ai:context-fill',
+  'ai:local-status',
+  'ai:local-install',
+  'ai:local-cancel',
+  'ai:local-medium-off',
+  'ai:local-remove',
   'backup:get',
   'backup:update',
   'backup:choose-folder',
@@ -565,7 +621,9 @@ export const EVENT_CHANNELS: EventChannel[] = [
   'campaign:changed',
   'groups:progress',
   'ai:progress',
-  'avatars:changed'
+  'ai:local-progress',
+  'avatars:changed',
+  'status:changed'
 ]
 
 export interface BridgeApi {

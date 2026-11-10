@@ -18,6 +18,8 @@ import * as pipes from './pipelines'
 import { TAG_COLORS } from '@shared/types'
 import * as ai from './ai/router'
 import * as assistant from './ai/assistant'
+import * as aiContext from './ai/context'
+import * as localAi from './ai/local/service'
 import { wa } from './wa/manager'
 import { deleteMediaFiles } from './wa/media'
 import { sendAndStore } from './wa/send'
@@ -640,7 +642,7 @@ export function registerBusinessIpc(handle: Handle, getWindow: () => BrowserWind
     z
       .object({
         id: id.optional(),
-        preset: z.enum(['groq', 'gemini', 'openrouter', 'mistral', 'ollama', 'claude', 'custom']),
+        preset: z.enum(['groq', 'gemini', 'openrouter', 'mistral', 'ollama', 'claude', 'local', 'custom']),
         name: z.string().max(60).optional(),
         baseUrl: z.string().max(300).optional(),
         apiKey: z.string().max(400).nullable().optional(),
@@ -697,4 +699,69 @@ export function registerBusinessIpc(handle: Handle, getWindow: () => BrowserWind
   handle('ai:playbook-save', z.object({ accountId, content: z.string().max(50_000) }).strict(), (a) =>
     assistant.savePlaybook(a.accountId, a.content)
   )
+
+  // Contexto do negócio (o que a IA sabe da loja)
+  handle('ai:context-get', z.object({ accountId }).strict(), (a) => aiContext.getBusinessContext(a.accountId))
+  handle(
+    'ai:context-save',
+    z
+      .object({
+        accountId,
+        context: z
+          .object({
+            about: z
+              .string()
+              .max(aiContext.FIELD_MAX_CHARS + 1000)
+              .optional(),
+            products: z
+              .string()
+              .max(aiContext.FIELD_MAX_CHARS + 1000)
+              .optional(),
+            hours: z
+              .string()
+              .max(aiContext.FIELD_MAX_CHARS + 1000)
+              .optional(),
+            payment: z
+              .string()
+              .max(aiContext.FIELD_MAX_CHARS + 1000)
+              .optional(),
+            policies: z
+              .string()
+              .max(aiContext.FIELD_MAX_CHARS + 1000)
+              .optional(),
+            faq: z
+              .string()
+              .max(aiContext.FIELD_MAX_CHARS + 1000)
+              .optional(),
+            tone: z
+              .string()
+              .max(aiContext.FIELD_MAX_CHARS + 1000)
+              .optional(),
+            forbidden: z
+              .string()
+              .max(aiContext.FIELD_MAX_CHARS + 1000)
+              .optional(),
+            updatedAt: z.number().nullable().optional()
+          })
+          .strict()
+      })
+      .strict(),
+    (a) => {
+      if (!getAccount(a.accountId)) throw new Error('Conta não encontrada')
+      return aiContext.saveBusinessContext(a.accountId, a.context)
+    }
+  )
+  // IA no computador (motor local)
+  localAi.initLocalAi()
+  handle('ai:local-status', null, () => localAi.localStatus())
+  handle('ai:local-install', z.object({ tier: z.enum(['leve', 'medio']) }).strict(), (a) =>
+    localAi.installLocal(a.tier, (p) => getWindow()?.webContents.send('ai:local-progress', p))
+  )
+  handle('ai:local-cancel', null, () => localAi.cancelInstall())
+  handle('ai:local-medium-off', null, () => localAi.disableMedium())
+  handle('ai:local-remove', null, () => localAi.removeLocal())
+  handle('ai:context-fill', z.object({ accountId, text: z.string().max(30_000) }).strict(), (a) => {
+    need(a.accountId, 'ia')
+    return assistant.fillBusinessContext(a.text)
+  })
 }

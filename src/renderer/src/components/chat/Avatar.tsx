@@ -2,7 +2,7 @@ import { Users } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '../../lib/cn'
 import { useAvatar } from '../../lib/avatars'
-import { useChats } from '../../lib/chatStore'
+import { useChatStore } from '../../lib/chatStore'
 
 const PALETTE = [
   '#C2410C',
@@ -43,7 +43,7 @@ export function Avatar({
   size?: number
   className?: string
 }): React.JSX.Element {
-  const accountId = useChats((s) => s.accountId)
+  const accountId = useChatStore((s) => s.accountId)
   const url = useAvatar(accountId, id)
   const [broken, setBroken] = useState<string | null>(null)
   const color = PALETTE[hash(id) % PALETTE.length]

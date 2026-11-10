@@ -15,6 +15,7 @@ export const MODULE_KEYS = [
   'vendas',
   'funil',
   'ia',
+  'status',
   'leadsPlanilha'
 ] as const
 
@@ -33,6 +34,11 @@ export const MODULE_INFO: Record<ModuleKey, { label: string; description: string
   lembretes: {
     label: 'Lembretes recorrentes',
     description: 'Aniversário, pós-venda, revisão anual',
+    group: 'Marketing'
+  },
+  status: {
+    label: 'Status do WhatsApp',
+    description: 'Postar texto, foto ou vídeo no status, agora ou agendado',
     group: 'Marketing'
   },
   gruposEnvio: { label: 'Envio para grupos', description: 'Campanhas para vários grupos', group: 'Grupos' },
@@ -66,6 +72,7 @@ export const DEFAULT_MODULES: Modules = {
   vendas: true,
   funil: true,
   ia: false,
+  status: false,
   leadsPlanilha: false
 }
 
@@ -471,7 +478,7 @@ export const PAYMENT_METHODS = [
 
 // ---------- Assistente de IA ----------
 
-export type AiPreset = 'groq' | 'gemini' | 'openrouter' | 'mistral' | 'ollama' | 'claude' | 'custom'
+export type AiPreset = 'groq' | 'gemini' | 'openrouter' | 'mistral' | 'ollama' | 'claude' | 'local' | 'custom'
 export type AiPrivacy = 'estrita' | 'anonimizar' | 'livre'
 
 export interface AiProvider {
@@ -505,6 +512,77 @@ export interface AiUsageEntry {
   customerData: boolean
   charsSent: number
   at: number
+}
+
+// ---------- Contexto do negócio (IA) ----------
+
+/** O que a IA sabe da loja. Um por número de WhatsApp (settings `ai.context.<accountId>`). */
+export interface BusinessContext {
+  about: string // o que a loja vende e para quem
+  products: string // produtos e serviços, com preço e prazo
+  hours: string // horário de funcionamento e endereço
+  payment: string // formas de pagamento
+  policies: string // troca, garantia e entrega
+  faq: string // perguntas frequentes
+  tone: string // tom de voz
+  forbidden: string // o que a IA não pode falar
+  updatedAt: number | null
+}
+export type BusinessContextField = Exclude<keyof BusinessContext, 'updatedAt'>
+
+// ---------- IA no computador (motor local) ----------
+
+export type LocalModelTier = 'leve' | 'medio'
+
+export interface HardwareInfo {
+  platform: string
+  arch: string
+  totalMemGb: number
+  freeMemGb: number
+  cpus: number
+  cpuModel: string
+  freeDiskGb: number | null
+}
+
+export interface AiRecommendation {
+  /** O sistema tem motor pronto para baixar (Mac Apple Silicon/Intel, Windows 64 bits). */
+  localSupported: boolean
+  /** Memória e disco dão conta do modelo leve. */
+  localRecommended: boolean
+  /** Modelo médio aparece como opção (16 GB ou mais). */
+  offerMedium: boolean
+  /** Sugestão principal: as duas juntas (local principal, nuvem reserva) ou só a nuvem. */
+  primary: 'ambas' | 'nuvem'
+  reasons: string[]
+  slowWarning: boolean
+}
+
+export interface LocalModelInfo {
+  id: string
+  tier: LocalModelTier
+  name: string
+  sizeMb: number
+  installed: boolean
+  offered: boolean
+}
+
+export interface LocalAiProgress {
+  stage: 'motor' | 'modelo' | 'conferindo' | 'preparando'
+  label: string
+  received: number
+  total: number
+}
+
+export interface LocalAiStatus {
+  hardware: HardwareInfo
+  recommendation: AiRecommendation
+  engineInstalled: boolean
+  engineVersion: string
+  models: LocalModelInfo[]
+  mediumEnabled: boolean
+  running: boolean
+  installing: LocalAiProgress | null
+  diskUsedMb: number
 }
 
 // ---------- Grupos ----------
@@ -564,6 +642,7 @@ export const PLANS: Record<PlanId, { nome: string; modulos: ModuleKey[] }> = {
       'gruposCriar',
       'gruposModeracao',
       'funil',
+      'status',
       'leadsPlanilha'
     ]
   },
@@ -828,4 +907,43 @@ export interface LeadsReport {
   bySource: LeadsReportRow[]
   byCampaign: LeadsReportRow[]
   byContent: LeadsReportRow[]
+}
+
+// ---------- Status do WhatsApp ----------
+
+export type StatusKind = 'texto' | 'imagem' | 'video'
+export type StatusPostState = 'agendado' | 'enviando' | 'enviado' | 'falhou' | 'cancelado'
+
+/** Quem vê o status: todos os contatos com WhatsApp, só quem tem a etiqueta, ou todos menos quem tem a etiqueta. */
+export interface StatusAudience {
+  modo: 'todos' | 'etiqueta' | 'todos_menos'
+  tags: string[]
+}
+
+export interface StatusMedia {
+  name: string
+  mime: string
+  file: string
+  size: number
+}
+
+export interface StatusPost {
+  id: number
+  accountId: string
+  kind: StatusKind
+  text: string | null
+  media: StatusMedia | null
+  background: string | null
+  font: number | null
+  audience: StatusAudience
+  scheduledAt: number
+  status: StatusPostState
+  error: string | null
+  sentAt: number | null
+  recipientsCount: number | null
+  createdAt: number
+}
+
+export interface StatusSettings {
+  dailyLimit: number
 }

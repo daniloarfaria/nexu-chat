@@ -1,5 +1,16 @@
-import { useEffect, useState } from 'react'
-import { ArrowDown, ArrowUp, ChevronDown, MessageCircle, Plus, Settings2, Trash2, Trophy, XCircle } from 'lucide-react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronDown,
+  MessageCircle,
+  Plus,
+  Settings2,
+  Trash2,
+  Trophy,
+  X,
+  XCircle
+} from 'lucide-react'
 import {
   PIPELINE_TEMPLATES,
   type Pipeline,
@@ -11,10 +22,13 @@ import {
   type TagDef
 } from '@shared/types'
 import { cn } from '../../lib/cn'
+import { guardedClose } from '../../lib/escape'
 import { formatPhone } from '../../lib/format'
-import { openChat } from '../../lib/openChat'
+import { openChat, resolveChatJid } from '../../lib/openChat'
+import { ChatStoreProvider, useWindowChatStore } from '../../lib/chatStore'
 import { money, useAction, useLoad } from '../../lib/useAsync'
-import { Button, Checkbox, Drawer, Field, Input, Notice, Select, Tabs, Textarea } from '../../components/ui'
+import { Button, Checkbox, Drawer, Field, Input, Modal, Notice, Select, Tabs, Textarea } from '../../components/ui'
+import { ChatView } from '../../components/chat/ChatView'
 import { Avatar } from '../../components/chat/Avatar'
 import { ColorDot, ColorPicker, TagPicker, TagToggles } from '../../components/tags'
 
@@ -36,15 +50,7 @@ function moneyInput(cents: number): string {
 
 // ---------- Cartão ----------
 
-export function CardDrawer({
-  accountId,
-  card,
-  stages,
-  tagDefs,
-  onMove,
-  onChanged,
-  onClose
-}: {
+type CardProps = {
   accountId: string
   card: PipelineCard
   stages: PipelineStage[]
@@ -52,6 +58,69 @@ export function CardDrawer({
   onMove: (stageId: number) => void
   onChanged: () => void
   onClose: () => void
+}
+
+/**
+ * Janela do cartão: a conversa completa à esquerda e os dados do cartão à direita.
+ * A conversa usa um estado próprio, então não troca a conversa aberta na tela Conversas.
+ */
+export function CardWindow(props: CardProps & { notes?: ReactNode }): React.JSX.Element {
+  const { accountId, card } = props
+  const name = card.name || formatPhone(card.phone)
+  // Valor ou nota digitados e não salvos: Esc/clique fora não podem jogar fora sem perguntar
+  const dirtyRef = useRef(false)
+  const onClose = (): void =>
+    guardedClose(
+      () => dirtyRef.current,
+      () => confirm('Há valor ou nota sem salvar. Fechar mesmo assim?'),
+      props.onClose
+    )
+  const [jid, setJid] = useState<string | null>(card.jid)
+  const store = useWindowChatStore(accountId, jid)
+
+  // Contato sem conversa ainda: cria pelo número, como o botão "Abrir conversa" fazia
+  useEffect(() => {
+    if (card.jid) return
+    let alive = true
+    void resolveChatJid(accountId, null, card.phone).then((j) => alive && setJid(j))
+    return () => {
+      alive = false
+    }
+  }, [accountId, card.jid, card.phone])
+
+  return (
+    <Modal label={`Cartão de ${name}`} onClose={onClose} className="h-[85vh] w-[90vw] max-w-[1400px] flex-row">
+      <ChatStoreProvider store={store}>
+        <section aria-label="Conversa" className="flex min-w-0 flex-1 flex-col">
+          {jid ? (
+            <ChatView key={jid} jid={jid} embedded fallbackName={card.name || undefined} />
+          ) : (
+            <div className="grid flex-1 place-items-center bg-sunken text-[13.5px] text-ink-2">Abrindo a conversa…</div>
+          )}
+        </section>
+        <CardPanel {...props} onClose={onClose} dirtyRef={dirtyRef} closeNow={props.onClose} />
+      </ChatStoreProvider>
+    </Modal>
+  )
+}
+
+/** Dados do cartão (coluna, etiquetas, valor, nota) na coluna direita da janela. */
+function CardPanel({
+  accountId,
+  card,
+  stages,
+  tagDefs,
+  onMove,
+  onChanged,
+  onClose,
+  dirtyRef,
+  closeNow,
+  notes
+}: CardProps & {
+  notes?: ReactNode
+  dirtyRef: { current: boolean }
+  /** fecha sem perguntar (depois de tirar o cartão do funil) */
+  closeNow: () => void
 }): React.JSX.Element {
   const [value, setValue] = useState(moneyInput(card.valueCents))
   const [note, setNote] = useState(card.note ?? '')
@@ -63,6 +132,9 @@ export function CardDrawer({
   )
   const name = card.name || formatPhone(card.phone)
   const dirty = parseMoney(value) !== card.valueCents || (note.trim() || null) !== (card.note ?? null)
+  useEffect(() => {
+    dirtyRef.current = dirty
+  }, [dirty, dirtyRef])
 
   async function changeTags(next: string[]): Promise<void> {
     const add = next.filter((t) => !tags.includes(t))
@@ -94,102 +166,107 @@ export function CardDrawer({
     const ok = await run('rm', () => window.api.invoke('pipelines:remove-cards', { accountId, cardIds: [card.id] }))
     if (ok !== undefined) {
       onChanged()
-      onClose()
+      closeNow()
     }
   }
 
   const others = (places.data ?? []).filter((p) => p.cardId !== card.id)
 
   return (
-    <Drawer
-      title="Cartão"
-      onClose={onClose}
-      footer={
-        <>
-          <Button variant="danger" className="mr-auto" loading={busy === 'rm'} onClick={() => void remove()}>
-            <Trash2 className="size-4" /> Tirar do funil
-          </Button>
-          <Button variant="primary" disabled={!dirty} loading={busy === 'save'} onClick={() => void save()}>
-            Salvar
-          </Button>
-        </>
-      }
-    >
-      <div className="flex items-center gap-3">
-        <Avatar id={card.jid ?? `${card.phone}@s.whatsapp.net`} name={name} size={48} />
+    <aside aria-label="Dados do cartão" className="flex w-[min(380px,40%)] shrink-0 flex-col border-l border-line">
+      <header className="flex shrink-0 items-center gap-3 border-b border-line px-4 py-3">
+        <Avatar id={card.jid ?? `${card.phone}@s.whatsapp.net`} name={name} size={40} />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[17px] font-semibold">{name}</div>
-          <div className="tabular text-[13px] text-ink-2">{formatPhone(card.phone)}</div>
+          <div className="truncate text-[15px] font-semibold">{name}</div>
+          <div className="tabular text-[12.5px] text-ink-2">{formatPhone(card.phone)}</div>
         </div>
-        <Button size="sm" onClick={() => void openChat(accountId, card.jid, card.phone)}>
-          <MessageCircle className="size-4" /> Abrir conversa
+        <Button variant="ghost" size="sm" aria-label="Fechar (Esc)" title="Fechar (Esc)" onClick={onClose}>
+          <X className="size-4" />
         </Button>
-      </div>
-      {card.optOut && (
-        <div className="mt-4">
-          <Notice tone="warn">Este contato pediu para não receber mensagens. Ele é pulado nos disparos.</Notice>
-        </div>
-      )}
-
-      <div className="mt-6 flex flex-col gap-5">
-        <Field label="Coluna" htmlFor="card-stage">
-          <Select
-            id="card-stage"
-            value={card.stageId}
-            onChange={(e) => onMove(Number(e.target.value))}
-            className="w-full"
-          >
-            {stages.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-                {s.kind !== 'open' ? ` (${KIND_LABEL[s.kind].toLowerCase()})` : ''}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Etiquetas" hint="Digite para buscar ou criar. Elas valem para o contato em todo o app.">
-          <TagPicker defs={tagDefs.defs} value={tags} onChange={(t) => void changeTags(t)} />
-        </Field>
-        <Field label="Valor do negócio (R$)" htmlFor="card-val">
-          <Input
-            id="card-val"
-            inputMode="decimal"
-            className="tabular w-40"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            placeholder="0,00"
-          />
-        </Field>
-        <Field label="Nota" htmlFor="card-note">
-          <Textarea
-            id="card-note"
-            rows={4}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="O que foi combinado, próximo passo, preferências…"
-          />
-        </Field>
-        {others.length > 0 && (
-          <Field label="Também está em">
-            <ul className="flex flex-col gap-1.5">
-              {others.map((p) => (
-                <li key={p.cardId} className="flex items-center gap-2 text-[13.5px]">
-                  <ColorDot color={p.stageColor} />
-                  <span className="font-medium">{p.pipelineName}</span>
-                  <span className="text-ink-3">→ {p.stageName}</span>
-                  {p.valueCents > 0 && <span className="tabular ml-auto text-ink-2">{money(p.valueCents)}</span>}
-                </li>
-              ))}
-            </ul>
-          </Field>
+      </header>
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+        {card.optOut && (
+          <div className="mb-5">
+            <Notice tone="warn">Este contato pediu para não receber mensagens. Ele é pulado nos disparos.</Notice>
+          </div>
         )}
-        <p className="tabular text-[12.5px] text-ink-3">
-          No funil desde {new Date(card.createdAt).toLocaleDateString('pt-BR')} · nesta coluna desde{' '}
-          {new Date(card.movedAt).toLocaleDateString('pt-BR')}
-        </p>
-        {error && <Notice tone="bad">{error}</Notice>}
+
+        <div className="flex flex-col gap-5">
+          <Field label="Coluna" htmlFor="card-stage">
+            <Select
+              id="card-stage"
+              value={card.stageId}
+              onChange={(e) => onMove(Number(e.target.value))}
+              className="w-full"
+            >
+              {stages.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                  {s.kind !== 'open' ? ` (${KIND_LABEL[s.kind].toLowerCase()})` : ''}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Etiquetas" hint="Digite para buscar ou criar. Elas valem para o contato em todo o app.">
+            <TagPicker defs={tagDefs.defs} value={tags} onChange={(t) => void changeTags(t)} />
+          </Field>
+          <Field label="Valor do negócio (R$)" htmlFor="card-val">
+            <Input
+              id="card-val"
+              inputMode="decimal"
+              className="tabular w-40"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              placeholder="0,00"
+            />
+          </Field>
+          <Field label="Nota" htmlFor="card-note">
+            <Textarea
+              id="card-note"
+              rows={4}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="O que foi combinado, próximo passo, preferências…"
+            />
+          </Field>
+          {others.length > 0 && (
+            <Field label="Também está em">
+              <ul className="flex flex-col gap-1.5">
+                {others.map((p) => (
+                  <li key={p.cardId} className="flex items-center gap-2 text-[13.5px]">
+                    <ColorDot color={p.stageColor} />
+                    <span className="font-medium">{p.pipelineName}</span>
+                    <span className="text-ink-3">→ {p.stageName}</span>
+                    {p.valueCents > 0 && <span className="tabular ml-auto text-ink-2">{money(p.valueCents)}</span>}
+                  </li>
+                ))}
+              </ul>
+            </Field>
+          )}
+          <p className="tabular text-[12.5px] text-ink-3">
+            No funil desde {new Date(card.createdAt).toLocaleDateString('pt-BR')} · nesta coluna desde{' '}
+            {new Date(card.movedAt).toLocaleDateString('pt-BR')}
+          </p>
+          {error && <Notice tone="bad">{error}</Notice>}
+        </div>
+        {/* Ponto de extensão: o bloco de notas do cliente (função 5) entra aqui */}
+        {notes}
+        <button
+          className="mt-5 inline-flex items-center gap-1.5 text-[13px] text-accent hover:underline"
+          onClick={() => void openChat(accountId, card.jid, card.phone)}
+        >
+          <MessageCircle className="size-3.5" /> Abrir na tela Conversas
+        </button>
       </div>
-    </Drawer>
+      <footer className="flex shrink-0 justify-end gap-2 border-t border-line px-4 py-3">
+        <Button variant="danger" className="mr-auto" loading={busy === 'rm'} onClick={() => void remove()}>
+          <Trash2 className="size-4" /> Tirar do funil
+        </Button>
+        <Button variant="primary" disabled={!dirty} loading={busy === 'save'} onClick={() => void save()}>
+          Salvar
+        </Button>
+      </footer>
+    </aside>
   )
 }
 

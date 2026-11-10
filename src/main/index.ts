@@ -20,8 +20,10 @@ import { engine } from './engine'
 import { startAutomation } from './automation'
 import { startReminders } from './reminders'
 import { startLeadsSync } from './leadsPlanilha'
+import { startStatus, statusEvents } from './status'
 import { groupEvents } from './groups'
 import { avatarEvents, setAvatarSocketGetter } from './wa/avatars'
+import { shutdownLocalAi } from './ai/local/service'
 
 const APP_ID = 'br.com.disparador.app'
 const VERSION_RECHECK_MS = 6 * 60 * 60 * 1000
@@ -175,10 +177,15 @@ if (!app.requestSingleInstanceLock()) {
       () => mainWindow,
       () => {
         quitting = true
-        wa.shutdown()
-        closeDb()
-        app.relaunch()
-        app.exit(0)
+        // app.exit() pula os eventos de saída: para a IA local antes
+        void shutdownLocalAi()
+          .catch(() => undefined)
+          .finally(() => {
+            wa.shutdown()
+            closeDb()
+            app.relaunch()
+            app.exit(0)
+          })
       }
     )
 
@@ -230,6 +237,8 @@ if (!app.requestSingleInstanceLock()) {
     engine.startAll()
     startReminders()
     startLeadsSync()
+    startStatus()
+    statusEvents.on('changed', (p: unknown) => send('status:changed', p))
     // Ao conectar, retoma campanhas paradas por falta de conexão
     wa.on('state', (s) => s.status === 'connected' && engine.kick(s.accountId))
 
@@ -257,6 +266,8 @@ if (!app.requestSingleInstanceLock()) {
       quitting = true
       runBackup()
         .catch(() => undefined)
+        .then(() => shutdownLocalAi())
+        .catch(() => undefined)
         .finally(() => {
           wa.shutdown()
           closeDb()
@@ -264,9 +275,16 @@ if (!app.requestSingleInstanceLock()) {
         })
       return
     }
+    // para a IA local e espera o processo sair antes de fechar de vez
+    e.preventDefault()
     quitting = true
-    wa.shutdown()
-    closeDb()
+    void shutdownLocalAi()
+      .catch(() => undefined)
+      .finally(() => {
+        wa.shutdown()
+        closeDb()
+        app.quit()
+      })
   })
 
   app.on('window-all-closed', () => {

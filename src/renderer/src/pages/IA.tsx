@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Bot, BookOpenText, KeyRound, Plus, ShieldCheck, Trash2, Wand2 } from 'lucide-react'
+import { Bot, BookOpenText, KeyRound, Plus, Settings2, ShieldCheck, Trash2, Wand2 } from 'lucide-react'
 import type { AiPreset, AiProvider, AiPrivacy } from '@shared/types'
 import { useActiveAccount } from '../lib/store'
 import { useAction, useLoad } from '../lib/useAsync'
@@ -19,6 +19,8 @@ import {
   Textarea
 } from '../components/ui'
 import { cn } from '../lib/cn'
+import { MeuNegocio } from './ia/MeuNegocio'
+import { ConfigurarIA } from './ia/ConfigurarIA'
 
 const PRESETS: Array<{ id: AiPreset; name: string; note: string; url: string; free: boolean }> = [
   {
@@ -206,7 +208,8 @@ function Providers(): React.JSX.Element {
                     <span className="font-medium">{p.name}</span>
                     {p.paid ? <Badge tone="warn">pago</Badge> : <Badge tone="ok">grátis</Badge>}
                     {p.trainsOnData ? <Badge>pode treinar com dados</Badge> : <Badge tone="info">não treina</Badge>}
-                    {!p.hasKey && p.preset !== 'ollama' && <Badge tone="bad">sem chave</Badge>}
+                    {!p.hasKey && p.preset !== 'ollama' && p.preset !== 'local' && <Badge tone="bad">sem chave</Badge>}
+                    {p.preset === 'local' && <Badge tone="info">no computador</Badge>}
                     {p.cooldownUntil > now && (
                       <Badge tone="warn">
                         em pausa até{' '}
@@ -229,16 +232,22 @@ function Providers(): React.JSX.Element {
                     ).then(() => list.reload())
                   }
                 />
-                <Button size="sm" variant="ghost" onClick={() => setForm({ p, preset: p.preset })}>
-                  <KeyRound className="size-4" /> Editar
-                </Button>
+                {p.preset !== 'local' && (
+                  <Button size="sm" variant="ghost" onClick={() => setForm({ p, preset: p.preset })}>
+                    <KeyRound className="size-4" /> Editar
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="ghost"
                   aria-label="Remover"
                   onClick={() =>
-                    confirm(`Remover ${p.name}?`) &&
-                    void run('d', () => window.api.invoke('ai:provider-delete', { id: p.id })).then(() => list.reload())
+                    p.preset === 'local'
+                      ? alert('Para remover a IA do computador, use o botão Configurar IA.')
+                      : confirm(`Remover ${p.name}?`) &&
+                        void run('d', () => window.api.invoke('ai:provider-delete', { id: p.id })).then(() =>
+                          list.reload()
+                        )
                   }
                 >
                   <Trash2 className="size-4" />
@@ -386,6 +395,7 @@ function Usage(): React.JSX.Element {
     variacoes_campanha: 'Versões de campanha',
     analisar_conversa: 'Análise de conversa',
     playbook: 'Playbook',
+    preencher_contexto: 'Preencher contexto do negócio',
     teste: 'Teste'
   }
   return (
@@ -427,26 +437,36 @@ function Usage(): React.JSX.Element {
 
 export function IA(): React.JSX.Element {
   const account = useActiveAccount()
-  const [tab, setTab] = useState<'playbook' | 'provedores' | 'uso'>('provedores')
+  const [tab, setTab] = useState<'negocio' | 'playbook' | 'provedores' | 'uso'>('negocio')
+  const [setup, setSetup] = useState(false)
+  const [setupKey, setSetupKey] = useState(0)
   if (!account) return <Empty icon={<Bot className="size-9" />} title="Crie uma conta primeiro" />
   return (
     <div>
       <PageHeader
         title="Assistente de IA"
         description="Sugere respostas nas conversas, cria versões de campanhas e monta o playbook de vendas da loja. Nada é enviado ao cliente sem você revisar."
+        actions={
+          <Button variant="primary" onClick={() => setSetup(true)}>
+            <Settings2 className="size-4" /> Configurar IA
+          </Button>
+        }
       />
       <Tabs
         value={tab}
         onChange={setTab}
         items={[
+          { id: 'negocio', label: 'Meu negócio' },
           { id: 'provedores', label: 'Provedores' },
           { id: 'playbook', label: 'Playbook de vendas' },
           { id: 'uso', label: 'Uso' }
         ]}
       />
-      {tab === 'provedores' && <Providers />}
+      {tab === 'negocio' && <MeuNegocio key={account.id} accountId={account.id} />}
+      {tab === 'provedores' && <Providers key={setupKey} />}
       {tab === 'playbook' && <Playbook accountId={account.id} />}
       {tab === 'uso' && <Usage />}
+      {setup && <ConfigurarIA onClose={() => (setSetup(false), setSetupKey((k) => k + 1))} />}
     </div>
   )
 }

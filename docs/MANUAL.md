@@ -62,6 +62,8 @@ Crie uma conta para cada número. Para trocar de loja, use o seletor no alto do 
 
 O menu **Conversas** funciona como o WhatsApp do computador, mas tudo fica **salvo no seu computador**, mesmo o que for apagado do celular.
 
+**Conversas é a tela que abre quando você inicia o app.** Se ainda não houver número conectado, ela mostra "Conecte seu WhatsApp" com um botão que leva direto a **Contas**. O resumo que antes ficava na tela Início (números conectados, último backup e versão do WhatsApp Web) agora está em **Configurações → Visão geral**.
+
 ### Histórico
 - O WhatsApp só envia o histórico de conversas antigas **no momento em que o aparelho é vinculado**. Enquanto isso acontece, aparece no alto da lista o aviso "Sincronizando histórico…", com a contagem de mensagens.
 - Quanto tempo de histórico vem depende do celular. Normalmente são meses.
@@ -142,6 +144,7 @@ Em **Configurações → Módulos** você liga e desliga as funções de cada co
 | Respostas automáticas | Responder sozinho por palavra-chave, fora do horário e boas-vindas (seção 8) |
 | Grupos (envio, extrair membros, criar, moderação) | Cada função liga separada (seção 9) |
 | Lembretes | Aniversário, pós-venda, revisão anual (seção 10) |
+| Status do WhatsApp | Postar texto, foto ou vídeo no status, agora ou agendado (seção "Status", logo depois de Lembretes). Vem desligado; faz parte do plano Marketing |
 | Vendas | Marcar o que virou venda e ver o retorno (seção 11) |
 | Assistente de IA | Sugestões de resposta, versões de campanha e playbook (seção 12) |
 | Planilha de leads (plano Marketing) | Traz os leads do formulário do site e mostra o resultado por origem do anúncio (seção 11, “Leads do site”) |
@@ -258,6 +261,36 @@ Use os modelos prontos. A lista mostra quantos contatos recebem **hoje**. Os env
 
 ---
 
+## Status
+
+Poste no **status do WhatsApp** da loja pelo computador. Ligue o módulo **Status do WhatsApp** em Configurações → Módulos; a página **Status** aparece no menu, em Marketing.
+
+**Criar um status:** clique em **Novo status** e escolha:
+- **Texto:** até 700 letras, com cor de fundo e tipo de letra.
+- **Foto:** JPG, PNG ou WEBP, até 16 MB, com legenda opcional.
+- **Vídeo:** MP4 de até 90 segundos e 16 MB, com legenda opcional. Vídeo maior ou mais longo é recusado (o app confere o tamanho e a duração do arquivo; se não conseguir ler a duração, também recusa): corte antes de postar.
+
+A prévia ao lado mostra como fica.
+
+**Quem vê:**
+- **Todos os contatos com WhatsApp;**
+- **Só quem tem uma etiqueta;** ou
+- **Todos menos quem tem uma etiqueta** (ex.: todos menos "Fornecedor").
+
+Ficam sempre de fora quem pediu para não receber mensagens e quem ainda não tem WhatsApp confirmado. O app confirma o WhatsApp de um contato quando envia uma campanha para ele ou quando o contato é criado a partir de uma conversa ou de um grupo. Contatos só importados da planilha entram depois da primeira campanha. A tela mostra quantas pessoas vão poder ver.
+
+**Lista grande:** acima de 1.000 pessoas, a tela avisa. O WhatsApp envia a postagem para cada aparelho de cada pessoa da lista, então ela demora mais e pesa no celular. Dá para postar mesmo assim; se puder, use uma etiqueta para um público menor.
+
+**Quando:** **Agora** (precisa estar conectado) ou **Agendar** para uma data e hora. O app precisa estar aberto na hora marcada. Se o WhatsApp estiver desconectado, o status sai assim que conectar. Se passar mais de 24 horas da hora marcada sem conexão, a postagem não sai e aparece como **Falhou**.
+
+**Limite por dia:** por padrão, até **10 postagens por dia** por conta (contando as já postadas e as agendadas para o mesmo dia). Mude o número no topo da página (de 1 a 50). Postar demais seguido pode fazer o WhatsApp tratar o número como robô.
+
+**Histórico:** a lista mostra cada postagem com a situação (**Agendado**, **Postando**, **Postado**, **Falhou** ou **Cancelado**), o público, quantas pessoas e a data. Postagens agendadas podem ser **canceladas** antes da hora. Se o WhatsApp não responder em 1 minuto, a postagem aparece como **Falhou** (confira no celular se o status saiu). O status some do WhatsApp em 24 horas, como qualquer status. Os arquivos de foto e vídeo ficam guardados no computador por 7 dias e depois são apagados.
+
+**Quem viu:** por enquanto o app não mostra quem viu. Confira no celular.
+
+---
+
 ## 11. Vendas
 
 No topo de cada conversa:
@@ -283,7 +316,13 @@ O menu **Funis** organiza os clientes em etapas, como num quadro de post-its.
 - **Adicionar contatos:** escolha contatos da base ou traga todos que têm uma etiqueta.
   - Pela conversa: na faixa abaixo do nome, clique em **+ funil**. Se a conversa ainda não é contato, ele é criado com o nome e o número dela.
 - **Mover:** arraste o cartão para outra coluna ou ordem. Também dá pelo próprio cartão, ou pela faixa da conversa clicando na etapa.
-- **Cartão:** valor do negócio, nota, etiquetas, tempo na coluna, última mensagem e o botão **Abrir conversa**.
+- **Cartão:** clique no cartão para abrir a janela dele no meio da tela.
+  - **À esquerda**, a conversa completa: histórico (role para cima para ver as mais antigas), caixa de mensagem, anexos e áudio. Dá para responder dali mesmo.
+  - **À direita**, os dados do cartão: coluna, etiquetas, valor do negócio, nota, tempo na coluna e em que outros funis o contato está.
+  - Contato que ainda não conversou: a conversa aparece vazia e você pode mandar a primeira mensagem.
+  - A conversa aberta na tela **Conversas** não muda.
+  - **Esc**, o **X** ou um clique fora fecham a janela. O quadro continua onde estava, com a mesma rolagem e os mesmos filtros. Se houver **valor ou nota sem salvar**, o app pergunta antes de fechar. Dentro da janela, o **Esc** fecha primeiro o que estiver aberto por cima (seletor de reação, menu de anexo, formulário de localização, contato ou enquete) e só depois a janela.
+  - **Abrir na tela Conversas** leva para a conversa na tela inteira.
 - **Disparar para uma coluna:** no menu **⋯** da coluna, **Disparar campanha para a coluna** abre uma campanha nova com a coluna já escolhida. Ela segue todas as regras anti-bloqueio. Se houver filtro de etiquetas no quadro, ele vai junto.
 - Excluir um contato (LGPD) tira os cartões dele de todos os funis.
 
@@ -309,8 +348,38 @@ Para lojas que têm o site da agência com formulário gravando numa Google Plan
 
 ## 12. Assistente de IA
 
-### Configurar (gratuito)
-Em **Assistente de IA → Provedores**, adicione pelo menos dois provedores gratuitos. Cada um tem o link para criar a chave:
+### Configurar IA em um passo
+O botão **Configurar IA**, no alto da página **Assistente de IA**, abre uma tela só:
+1. O app olha o computador (memória, processador e espaço livre) e mostra a recomendação.
+2. **IA no computador** (privada, grátis, funciona sem internet):
+   - clique em **Instalar IA no computador**. O app baixa o motor (llama.cpp) e um modelo leve (Gemma 3 1B, cerca de 800 MB) e confere cada arquivo antes de usar. Não pede senha de administrador;
+   - se a internet cair, clique de novo: o download continua de onde parou. **Parar download** guarda o que já baixou;
+   - a IA no computador só liga quando alguma tarefa precisa dela e desliga sozinha depois de 5 minutos parada. Desligada, não gasta memória. Ela faz uma tarefa por vez e usa no máximo metade do processador;
+   - fica com as tarefas rápidas (entender o que o cliente quer, etiquetar, tirar datas). As que pedem texto bom (sugestões de resposta, versões de campanha, playbook, preencher o contexto) vão primeiro para a nuvem, e a IA no computador fica de reserva;
+   - pedido grande demais para a IA no computador vai direto para a nuvem;
+   - computadores com 16 GB de memória ou mais podem ligar também o **modelo médio** (Qwen3 4B, cerca de 2,4 GB), que escreve melhor. Com ele ligado, as sugestões de resposta e os textos também são feitos no computador, e a nuvem fica de reserva;
+   - **Remover IA local** apaga todos os arquivos dela.
+3. **IA gratuita na nuvem (Groq):** clique em **abrir o site do Groq**, crie a chave, cole e clique em **Salvar e testar**.
+
+O recomendado é usar as duas: a IA no computador como principal para as tarefas rápidas e a nuvem como reserva. Em computador mais fraco, a IA no computador responde devagar.
+
+### Meu negócio
+Na aba **Meu negócio** você conta para a IA como é a loja. Vale para o número de WhatsApp escolhido. Os campos:
+- o que a loja vende e para quem;
+- produtos e serviços, com preço e prazo;
+- horário de funcionamento e endereço;
+- formas de pagamento;
+- troca, garantia e entrega;
+- perguntas frequentes;
+- tom de voz;
+- o que a IA **não** pode falar.
+
+**Preencher com a IA:** cole o texto do site ou do Instagram da loja e a IA separa nos campos. Revise e clique em **Salvar**.
+
+A IA usa esse contexto nas sugestões de resposta, nas versões de campanha e no playbook, e é orientada a não inventar preço, prazo ou desconto que não esteja escrito ali. Se o texto ficar muito grande, a IA recebe só uma parte: corta primeiro as perguntas frequentes e o tom de voz. O que ela não pode falar nunca é cortado.
+
+### Provedores (manual)
+Em **Assistente de IA → Provedores**, dá para adicionar outros provedores. Cada um tem o link para criar a chave:
 - **Groq:** rápido, cerca de 1.000 pedidos por dia, não treina com seus dados;
 - **Google Gemini:** no plano grátis pode usar os textos para melhorar produtos;
 - **OpenRouter**, **Mistral**, ou **Ollama** (roda no próprio computador);

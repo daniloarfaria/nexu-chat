@@ -15,9 +15,10 @@ import {
   Trash2,
   X
 } from 'lucide-react'
-import { useChats } from '../../lib/chatStore'
+import { useChatStore } from '../../lib/chatStore'
 import { useActiveAccount } from '../../lib/store'
 import { cn } from '../../lib/cn'
+import { escapeInner } from '../../lib/escape'
 import { Button, Input } from '../ui'
 
 type Extra = 'location' | 'contact' | 'poll' | null
@@ -36,13 +37,13 @@ function readDraft(key: string): string {
 
 /** O componente é recriado (key) ao trocar de conversa ou entrar em edição, zerando o estado. */
 export function Composer({ jid, disabled }: { jid: string; disabled?: string | null }): React.JSX.Element {
-  const editingId = useChats((s) => s.editing?.id ?? '')
-  const accountId = useChats((s) => s.accountId ?? '')
+  const editingId = useChatStore((s) => s.editing?.id ?? '')
+  const accountId = useChatStore((s) => s.accountId ?? '')
   return <ComposerInner key={`${accountId}|${jid}|${editingId}`} jid={jid} disabled={disabled} />
 }
 
 function ComposerInner({ jid, disabled }: { jid: string; disabled?: string | null }): React.JSX.Element {
-  const { accountId, replyTo, editing, setReply, setEditing } = useChats()
+  const { accountId, replyTo, editing, setReply, setEditing } = useChatStore()
   const iaOn = !!useActiveAccount()?.modules.ia
   const [suggesting, setSuggesting] = useState(false)
 
@@ -336,7 +337,7 @@ function ComposerInner({ jid, disabled }: { jid: string; disabled?: string | nul
           </div>
         ) : (
           <>
-            <div className="relative">
+            <div className="relative" onKeyDown={(e) => escapeInner(e, menu, () => setMenu(false))}>
               <Button
                 variant="ghost"
                 aria-label="Anexar"
@@ -408,7 +409,9 @@ function ComposerInner({ jid, disabled }: { jid: string; disabled?: string | nul
                   e.preventDefault()
                   void submit()
                 }
-                if (e.key === 'Escape') {
+                if (escapeInner(e, !!extra, () => setExtra(null))) return // fecha o formulário extra, não a janela
+                if (e.key === 'Escape' && (replyTo || editing)) {
+                  e.stopPropagation() // cancela a resposta/edição sem fechar a janela em volta
                   setReply(null)
                   setEditing(null)
                 }
@@ -468,7 +471,7 @@ function ExtraForm({
   jid: string
   onClose: () => void
 }): React.JSX.Element {
-  const accountId = useChats((s) => s.accountId)
+  const accountId = useChatStore((s) => s.accountId)
   const [a, setA] = useState('')
   const [b, setB] = useState('')
   const [opts, setOpts] = useState(['', ''])
@@ -512,7 +515,11 @@ function ExtraForm({
   }
 
   return (
-    <form onSubmit={send} className="flex flex-col gap-2.5 border-b border-line bg-sunken px-4 py-3">
+    <form
+      onSubmit={send}
+      onKeyDown={(e) => escapeInner(e, true, onClose)}
+      className="flex flex-col gap-2.5 border-b border-line bg-sunken px-4 py-3"
+    >
       <div className="flex items-center justify-between">
         <span className="text-[13.5px] font-semibold">
           {kind === 'location' ? 'Enviar localização' : kind === 'contact' ? 'Enviar contato' : 'Criar enquete'}
