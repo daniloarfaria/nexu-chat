@@ -307,6 +307,9 @@ function ModulosTab(): React.JSX.Element {
                 <div className="flex-1">
                   <div className="text-[14px] font-medium">{MODULE_INFO[k].label}</div>
                   <div className="text-[13px] text-ink-2">{MODULE_INFO[k].description}</div>
+                  {k === 'perfilIa' && !active.modules.ia && (
+                    <div className="mt-0.5 text-[12.5px] text-warn">Ligue antes o Assistente de IA.</div>
+                  )}
                 </div>
                 {license && !license.modules.includes(k) ? (
                   <Badge>fora do seu plano</Badge>
@@ -314,6 +317,7 @@ function ModulosTab(): React.JSX.Element {
                   <Switch
                     label={MODULE_INFO[k].label}
                     checked={active.modules[k]}
+                    disabled={k === 'perfilIa' && !active.modules.ia}
                     onChange={(v) => void toggle(k, v)}
                   />
                 )}

@@ -29,6 +29,7 @@ import { ChatStoreProvider, useWindowChatStore } from '../../lib/chatStore'
 import { money, useAction, useLoad } from '../../lib/useAsync'
 import { Button, Checkbox, Drawer, Field, Input, Modal, Notice, Select, Tabs, Textarea } from '../../components/ui'
 import { ChatView } from '../../components/chat/ChatView'
+import { ContactNotes } from '../../components/ContactNotes'
 import { Avatar } from '../../components/chat/Avatar'
 import { ColorDot, ColorPicker, TagPicker, TagToggles } from '../../components/tags'
 
@@ -249,7 +250,9 @@ function CardPanel({
           </p>
           {error && <Notice tone="bad">{error}</Notice>}
         </div>
-        {/* Ponto de extensão: o bloco de notas do cliente (função 5) entra aqui */}
+        <div className="mt-6 border-t border-line pt-4">
+          <ContactNotes accountId={accountId} target={{ personId: card.personId }} />
+        </div>
         {notes}
         <button
           className="mt-5 inline-flex items-center gap-1.5 text-[13px] text-accent hover:underline"

@@ -22,6 +22,7 @@ import { ColorDot, TagChip, TagPicker } from '../components/tags'
 import { useTagDefs } from '../lib/tagColors'
 import { TagManager } from '../components/TagManager'
 import { StagePicker } from '../components/StagePicker'
+import { BirthdayLine, ContactNotes, DateHint, DateHistory } from '../components/ContactNotes'
 
 const PAGE = 100
 
@@ -103,6 +104,7 @@ function PersonForm({
         </Field>
         <Field label="Aniversário" htmlFor="p-bday" hint="Dia/mês ou dia/mês/ano">
           <Input id="p-bday" value={birthday} onChange={(e) => setBirthday(e.target.value)} placeholder="25/12" />
+          <BirthdayLine date={birthday} />
         </Field>
         <Field label="Etiquetas" hint="Digite para buscar; Enter cria uma etiqueta nova.">
           <TagPicker defs={tagDefs} value={tags} onChange={setTags} />
@@ -128,25 +130,28 @@ function PersonForm({
         <fieldset className="flex flex-col gap-2">
           <legend className="mb-1.5 text-[13px] font-medium">Outras informações</legend>
           {fields.map(([k, v], i) => (
-            <div key={i} className="grid grid-cols-[1fr_1.4fr_auto] gap-2">
-              <Input
-                aria-label="Nome do campo"
-                placeholder="Ex.: data_compra"
-                value={k}
-                onChange={(e) => setFields(fields.map((f, j) => (j === i ? [e.target.value, f[1]] : f)))}
-              />
-              <Input
-                aria-label="Valor"
-                value={v}
-                onChange={(e) => setFields(fields.map((f, j) => (j === i ? [f[0], e.target.value] : f)))}
-              />
-              <Button
-                variant="ghost"
-                aria-label="Remover campo"
-                onClick={() => setFields(fields.filter((_, j) => j !== i))}
-              >
-                <Trash2 className="size-4" />
-              </Button>
+            <div key={i} className="flex flex-col gap-0.5">
+              <div className="grid grid-cols-[1fr_1.4fr_auto] gap-2">
+                <Input
+                  aria-label="Nome do campo"
+                  placeholder="Ex.: data_compra"
+                  value={k}
+                  onChange={(e) => setFields(fields.map((f, j) => (j === i ? [e.target.value, f[1]] : f)))}
+                />
+                <Input
+                  aria-label="Valor"
+                  value={v}
+                  onChange={(e) => setFields(fields.map((f, j) => (j === i ? [f[0], e.target.value] : f)))}
+                />
+                <Button
+                  variant="ghost"
+                  aria-label="Remover campo"
+                  onClick={() => setFields(fields.filter((_, j) => j !== i))}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
+              <DateHint value={v} />
             </div>
           ))}
           <Button variant="ghost" size="sm" className="self-start" onClick={() => setFields([...fields, ['', '']])}>
@@ -156,6 +161,16 @@ function PersonForm({
             Campos viram variáveis nas mensagens: {'{data_compra}'}, {'{cidade}'}…
           </p>
         </fieldset>
+        {person && (
+          <>
+            <DateHistory accountId={accountId} personId={person.id} />
+            <ContactNotes
+              accountId={accountId}
+              target={{ personId: person.id }}
+              onBirthdaySaved={(d) => setBirthday(birthdayLabel(d))}
+            />
+          </>
+        )}
       </div>
     </Drawer>
   )

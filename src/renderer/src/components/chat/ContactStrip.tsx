@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, Plus, SquareKanban, Tag } from 'lucide-react'
+import { ChevronDown, Plus, SquareKanban, StickyNote, Tag } from 'lucide-react'
 import type { CardPlacement, Pipeline } from '@shared/types'
 import { useApp } from '../../lib/store'
 import { useAction, useLoad } from '../../lib/useAsync'
@@ -7,8 +7,9 @@ import { Button, Notice } from '../ui'
 import { TagChip, TagPicker } from '../tags'
 import { TAG_HEX, tagStyle, useTagDefs } from '../../lib/tagColors'
 import { StagePicker } from '../StagePicker'
+import { ContactNotes } from '../ContactNotes'
 
-type Open = 'tags' | 'add' | number | null
+type Open = 'tags' | 'add' | 'notes' | number | null
 
 /** Faixa abaixo do cabeçalho da conversa: etiquetas do contato e em que coluna de cada funil ele está. */
 export function ContactStrip({
@@ -28,6 +29,7 @@ export function ContactStrip({
     () => (funil ? window.api.invoke('pipelines:list', { accountId }) : Promise.resolve([] as Pipeline[])),
     [accountId, funil]
   )
+  const noteList = useLoad(() => window.api.invoke('notes:list', { accountId, chatJid: jid }), [accountId, jid])
   const tagDefs = useTagDefs(accountId)
   const [open, setOpen] = useState<Open>(null)
   const [stage, setStage] = useState<number | null>(null)
@@ -98,6 +100,19 @@ export function ContactStrip({
         )}
       </button>
 
+      <span aria-hidden className="mx-1.5 h-4 w-px bg-line" />
+      <button
+        aria-expanded={open === 'notes'}
+        onClick={() => setOpen(open === 'notes' ? null : 'notes')}
+        className="inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-[12px] text-ink-3 hover:bg-sunken hover:text-ink"
+        title="Notas do cliente"
+      >
+        <StickyNote className="size-3.5" aria-hidden />
+        {noteList.data?.notes.length
+          ? `${noteList.data.notes.length} ${noteList.data.notes.length === 1 ? 'nota' : 'notas'}`
+          : 'notas'}
+      </button>
+
       {funil && (
         <>
           <span aria-hidden className="mx-1.5 h-4 w-px bg-line" />
@@ -154,6 +169,11 @@ export function ContactStrip({
                 </Button>
               </div>
             </>
+          )}
+          {open === 'notes' && (
+            <div className="max-h-[60vh] overflow-y-auto">
+              <ContactNotes accountId={accountId} target={{ chatJid: jid }} onChanged={() => void noteList.reload()} />
+            </div>
           )}
           {typeof open === 'number' &&
             (() => {

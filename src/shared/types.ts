@@ -17,7 +17,8 @@ export const MODULE_KEYS = [
   'ia',
   'status',
   'metaConversoes',
-  'leadsPlanilha'
+  'leadsPlanilha',
+  'perfilIa'
 ] as const
 
 export type ModuleKey = (typeof MODULE_KEYS)[number]
@@ -62,6 +63,12 @@ export const MODULE_INFO: Record<ModuleKey, { label: string; description: string
     label: 'Planilha de leads',
     description: 'Traz os leads do site e mostra quais viraram conversa e venda, por origem do anúncio',
     group: 'Marketing'
+  },
+  perfilIa: {
+    label: 'Perfil do cliente pela IA',
+    description:
+      'A IA lê a conversa e anota preferências nas notas do cliente (sem dado de saúde). Só liga com o Assistente de IA ligado. Ao ligar, você autoriza enviar trechos anonimizados das conversas à IA em segundo plano, sem clique',
+    group: 'Vendas'
   }
 }
 
@@ -80,7 +87,8 @@ export const DEFAULT_MODULES: Modules = {
   ia: false,
   status: false,
   metaConversoes: false,
-  leadsPlanilha: false
+  leadsPlanilha: false,
+  perfilIa: false
 }
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'qr' | 'connected' | 'logged_out'
@@ -956,4 +964,60 @@ export interface StatusPost {
 
 export interface StatusSettings {
   dailyLimit: number
+}
+
+// ---------- Notas do cliente e datas ----------
+
+export const NOTE_KINDS = ['geral', 'perfil', 'preferencia', 'objecao', 'familia'] as const
+export type NoteKind = (typeof NOTE_KINDS)[number]
+
+export const NOTE_KIND_LABEL: Record<NoteKind, string> = {
+  geral: 'Geral',
+  perfil: 'Perfil',
+  preferencia: 'Preferência',
+  objecao: 'Objeção',
+  familia: 'Família'
+}
+
+export interface ContactNote {
+  id: number
+  accountId: string
+  personId: number
+  kind: NoteKind
+  title: string
+  body: string
+  author: 'atendente' | 'ia'
+  pinned: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+export interface NoteInput {
+  id?: number
+  kind: NoteKind
+  title: string
+  body: string
+  pinned?: boolean
+}
+
+/** Alvo das notas: o contato, ou a conversa (o contato é achado ou criado pelo número). */
+export type NoteTarget = { personId: number } | { chatJid: string }
+
+export interface ProfileMapResult {
+  added: ContactNote[]
+  /** Aniversário que a IA achou na conversa (só sugestão, nada é salvo). */
+  birthday: string | null
+}
+
+export interface DateHistoryItem {
+  kind: ReminderKind
+  label: string
+  at: number
+}
+
+export interface BirthdaySuggestion {
+  /** MM-DD ou AAAA-MM-DD, no formato interno */
+  date: string
+  /** Trecho da conversa que gerou a sugestão (sem dados de outros clientes) */
+  quote: string
 }

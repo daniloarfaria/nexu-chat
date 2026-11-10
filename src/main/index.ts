@@ -22,6 +22,7 @@ import { startAutomation } from './automation'
 import { startReminders } from './reminders'
 import { startLeadsSync } from './leadsPlanilha'
 import { startStatus, statusEvents } from './status'
+import { startProfileAuto } from './ai/profile'
 import { groupEvents } from './groups'
 import { avatarEvents, setAvatarSocketGetter } from './wa/avatars'
 import { shutdownLocalAi } from './ai/local/service'
@@ -248,6 +249,7 @@ if (!app.requestSingleInstanceLock()) {
     startReminders()
     startLeadsSync()
     startStatus()
+    startProfileAuto()
     statusEvents.on('changed', (p: unknown) => send('status:changed', p))
     // Ao conectar, retoma campanhas paradas por falta de conexão
     wa.on('state', (s) => s.status === 'connected' && engine.kick(s.accountId))

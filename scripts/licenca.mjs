@@ -50,7 +50,8 @@ const PLANS = {
     'funil',
     'ia',
     'status',
-    'metaConversoes'
+    'metaConversoes',
+    'perfilIa'
   ]
 }
 

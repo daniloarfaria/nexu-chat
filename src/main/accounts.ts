@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { DEFAULT_MODULES, MODULE_KEYS, type Account, type Modules } from '@shared/types'
-import { getDb } from './db'
+import { getDb, getSetting, setSetting } from './db'
 import { licenseStatus } from './license'
 
 interface Row {
@@ -25,6 +25,8 @@ function toAccount(r: Row): Account {
   // Só fica ligado o que a licença libera
   const allowed = licenseStatus().modules
   for (const k of MODULE_KEYS) if (!allowed.includes(k)) modules[k] = false
+  // O perfil pela IA depende do Assistente de IA
+  if (!modules.ia) modules.perfilIa = false
   return {
     id: r.id,
     name: r.name,
@@ -63,6 +65,7 @@ export function updateAccount(
   const cur = getAccount(id)
   if (!cur) throw new Error('Conta não encontrada')
   const modules = { ...cur.modules, ...(patch.modules ?? {}) }
+  if (!modules.ia) modules.perfilIa = false
   getDb()
     .prepare('UPDATE accounts SET name = ?, color = ?, modules = ?, auto_connect = ? WHERE id = ?')
     .run(
@@ -72,7 +75,32 @@ export function updateAccount(
       (patch.autoConnect ?? cur.autoConnect) ? 1 : 0,
       id
     )
+  // Ao ligar os Lembretes pela primeira vez, já vem o lembrete de aniversário pronto
+  if (patch.modules?.lembretes && !cur.modules.lembretes) ensureBirthdayReminder(id)
   return getAccount(id)!
+}
+
+/** Cria o lembrete de aniversário padrão uma vez por conta (e só se ela ainda não tem um). */
+function ensureBirthdayReminder(accountId: string): void {
+  const flag = `reminders.birthday-default.${accountId}`
+  if (getSetting<boolean>(flag, false)) return
+  setSetting(flag, true)
+  const db = getDb()
+  if (db.prepare("SELECT 1 FROM reminders WHERE account_id = ? AND kind = 'birthday'").get(accountId)) return
+  db.prepare(
+    'INSERT INTO reminders (name, kind, field, offset_days, send_hour, template, tags, enabled, account_id, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)'
+  ).run(
+    'Aniversário',
+    'birthday',
+    null,
+    0,
+    10,
+    '{Parabéns|Feliz aniversário}, {primeiro_nome}! A equipe da {loja} deseja um dia muito especial.',
+    '[]',
+    1,
+    accountId,
+    Date.now()
+  )
 }
 
 export function deleteAccount(id: string): void {
