@@ -2,6 +2,8 @@ import { EventEmitter } from 'node:events'
 import { isJidGroup, isLidUser, jidNormalizedUser, proto, type Chat, type Contact, type WAMessage } from 'baileys'
 import type { ChatFilter, ChatItem, MediaInfo, MessageExtra, MessageItem, MessageType, SyncState } from '@shared/types'
 import { getDb, transaction } from '../db'
+import { log } from '../log'
+import { extractAdAttribution, recordAttribution } from '../ads'
 import { mutationOf, parseMessage, previewOf } from './parse'
 
 /**
@@ -89,12 +91,36 @@ export function saveLidMappings(accountId: string, maps: Array<{ lid: string; pn
   })
 }
 
+/** A origem de anúncio segue a conversa: o destino completa campos vazios e fica com a origem mais antiga. */
+function mergeAttribution(accountId: string, from: string, to: string): void {
+  const db = getDb()
+  const src = db
+    .prepare('SELECT first_ts FROM chat_attribution WHERE account_id = ? AND chat_jid = ?')
+    .get(accountId, from) as { first_ts: number } | undefined
+  if (!src) return
+  db.prepare('UPDATE OR IGNORE chat_attribution SET chat_jid = ? WHERE account_id = ? AND chat_jid = ?').run(
+    to,
+    accountId,
+    from
+  )
+  // Se o destino já tinha origem, a do LID completa o que faltava
+  const cols = ['conversion_source', 'entry_point', 'ad_id', 'ad_url', 'ctwa_clid']
+  const fill = cols
+    .map((c) => `${c} = COALESCE(${c}, (SELECT ${c} FROM chat_attribution WHERE account_id = ?1 AND chat_jid = ?2))`)
+    .join(', ')
+  db.prepare(
+    `UPDATE chat_attribution SET ${fill}, first_ts = MIN(first_ts, ?3) WHERE account_id = ?1 AND chat_jid = ?4`
+  ).run(accountId, from, src.first_ts, to)
+  db.prepare('DELETE FROM chat_attribution WHERE account_id = ? AND chat_jid = ?').run(accountId, from)
+}
+
 /** Junta a conversa guardada pelo LID na conversa do número. */
 function mergeChat(accountId: string, from: string, to: string): void {
   const db = getDb()
   // Vendas e registros de automação acompanham a conversa (mesmo sem mensagens salvas no LID)
   db.prepare('UPDATE deals SET chat_jid = ? WHERE account_id = ? AND chat_jid = ?').run(to, accountId, from)
   db.prepare('UPDATE auto_log SET jid = ? WHERE account_id = ? AND jid = ?').run(to, accountId, from)
+  mergeAttribution(accountId, from, to)
   const exists = db.prepare('SELECT 1 FROM chats WHERE account_id = ? AND jid = ?').get(accountId, from)
   if (!exists) return
   db.prepare(
@@ -205,6 +231,7 @@ export function deleteChats(accountId: string, jids: string[]): void {
     for (const j of jids) {
       const jid = canonJid(accountId, j)
       db.prepare('DELETE FROM chats WHERE account_id = ? AND jid = ?').run(accountId, jid)
+      db.prepare('DELETE FROM chat_attribution WHERE account_id = ? AND chat_jid = ?').run(accountId, jid)
       db.prepare('DELETE FROM messages WHERE account_id = ? AND chat_jid = ?').run(accountId, jid)
       db.prepare('DELETE FROM messages_fts WHERE account_id = ? AND chat_jid = ?').run(accountId, jid)
       touch(accountId, jid)
@@ -286,6 +313,14 @@ export function saveMessages(accountId: string, msgs: WAMessage[], opts: SaveOpt
             : chat
         applyMutation(accountId, chat, mut, actor, !!key.fromMe)
         continue
+      }
+      const ad = !key.fromMe && !isJidGroup(chat) ? extractAdAttribution(m) : null
+      if (ad) {
+        try {
+          recordAttribution(accountId, chat, ad, Number(m.messageTimestamp ?? 0) || Math.floor(Date.now() / 1000))
+        } catch (e) {
+          log.warn('Falha ao guardar a origem do anúncio', { erro: String(e) })
+        }
       }
       const p = parseMessage(m)
       if (p.type === 'system' && !isJidGroup(chat) && p.extra?.label === 'Atualização do grupo') continue
@@ -466,6 +501,7 @@ interface ChatRow {
   pinned: number
   muted_until: number
   read_only: number
+  from_ad: number
   c_name: string | null
   c_notify: string | null
   c_verified: string | null
@@ -490,11 +526,14 @@ function toChat(r: ChatRow): ChatItem {
     archived: !!r.archived,
     pinned: !!r.pinned,
     muted: r.muted_until === -1 || r.muted_until > now,
-    readOnly: !!r.read_only
+    readOnly: !!r.read_only,
+    fromAd: !!r.from_ad
   }
 }
 
-const CHAT_SELECT = `SELECT ch.*, co.name AS c_name, co.notify AS c_notify, co.verified_name AS c_verified
+const CHAT_SELECT = `SELECT ch.*,
+  EXISTS (SELECT 1 FROM chat_attribution ca WHERE ca.account_id = ch.account_id AND ca.chat_jid = ch.jid) AS from_ad,
+  co.name AS c_name, co.notify AS c_notify, co.verified_name AS c_verified
   FROM chats ch LEFT JOIN contacts co ON co.account_id = ch.account_id AND co.jid = ch.jid`
 
 export function listChats(
@@ -713,6 +752,9 @@ export function resetAccountData(accountId: string): void {
       db.prepare(`DELETE FROM ${t} WHERE account_id = ?`).run(accountId)
     }
     db.prepare('DELETE FROM messages_fts WHERE account_id = ?').run(accountId)
+    db.prepare('DELETE FROM chat_attribution WHERE account_id = ?').run(accountId)
+    // O histórico volta a ser lido do começo quando as mensagens forem baixadas de novo
+    db.prepare("DELETE FROM settings WHERE key = 'ads.reprocess.cursor'").run()
   })
 }
 

@@ -13,6 +13,7 @@ import { refreshWaVersion } from './wa/version'
 import { applyPendingRestore, getBackupSettings, isBackupDue, runBackup } from './backup'
 import { setupAutoUpdate } from './updater'
 import { handleMediaProtocol, registerMediaScheme } from './wa/media'
+import { reprocessAdAttribution } from './ads'
 import { getChats, reparseUnsupported, storeEvents, unreadTotal } from './wa/store'
 import { notificationText } from './wa/sync'
 import type { Campaign, EngineState, MessageItem, SyncState } from '@shared/types'
@@ -160,6 +161,15 @@ if (!app.requestSingleInstanceLock()) {
     } catch (e) {
       log.error('Falha ao reprocessar mensagens', e)
     }
+    // Procura anúncios no histórico, em lotes, sem travar a abertura do app
+    const scanAds = (): void => {
+      try {
+        if (!reprocessAdAttribution().done) setTimeout(scanAds, 200)
+      } catch (e) {
+        log.error('Falha ao reprocessar anúncios', e)
+      }
+    }
+    setTimeout(scanAds, 3000)
 
     // Nega permissões que o app não usa (câmera, microfone, localização…)
     session.defaultSession.setPermissionRequestHandler((_wc, permission, cb, details) => {

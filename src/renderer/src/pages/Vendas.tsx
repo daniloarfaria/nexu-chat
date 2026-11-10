@@ -23,7 +23,13 @@ function range(p: Period): { from: number; to: number; label: string } {
   return { from: Date.now() - d * 86_400_000, to, label: `últimos ${d} dias` }
 }
 
-const SOURCE = { campaign: 'Campanha', reminder: 'Lembrete', group: 'Grupo', organic: 'Espontâneo' } as const
+const SOURCE = {
+  campaign: 'Campanha',
+  reminder: 'Lembrete',
+  group: 'Grupo',
+  organic: 'Espontâneo',
+  ad: 'Anúncio'
+} as const
 
 export function Vendas(): React.JSX.Element {
   const account = useActiveAccount()

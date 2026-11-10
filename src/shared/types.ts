@@ -15,7 +15,8 @@ export const MODULE_KEYS = [
   'vendas',
   'funil',
   'ia',
-  'status'
+  'status',
+  'metaConversoes'
 ] as const
 
 export type ModuleKey = (typeof MODULE_KEYS)[number]
@@ -38,6 +39,11 @@ export const MODULE_INFO: Record<ModuleKey, { label: string; description: string
   status: {
     label: 'Status do WhatsApp',
     description: 'Postar texto, foto ou vídeo no status, agora ou agendado',
+    group: 'Marketing'
+  },
+  metaConversoes: {
+    label: 'Anúncios da Meta',
+    description: 'Saber quais conversas vieram de anúncio e avisar a Meta das vendas',
     group: 'Marketing'
   },
   gruposEnvio: { label: 'Envio para grupos', description: 'Campanhas para vários grupos', group: 'Grupos' },
@@ -66,7 +72,8 @@ export const DEFAULT_MODULES: Modules = {
   vendas: true,
   funil: true,
   ia: false,
-  status: false
+  status: false,
+  metaConversoes: false
 }
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'qr' | 'connected' | 'logged_out'
@@ -145,6 +152,8 @@ export interface ChatItem {
   pinned: boolean
   muted: boolean
   readOnly: boolean
+  /** Conversa que começou num anúncio de clique para o WhatsApp */
+  fromAd?: boolean
 }
 
 export type MessageType =
@@ -430,7 +439,7 @@ export interface Deal {
   payment: string | null
   reason: string | null
   note: string | null
-  sourceType: 'campaign' | 'reminder' | 'group' | 'organic'
+  sourceType: 'campaign' | 'reminder' | 'group' | 'organic' | 'ad'
   sourceName: string | null
   createdAt: number
 }
@@ -635,7 +644,8 @@ export const PLANS: Record<PlanId, { nome: string; modulos: ModuleKey[] }> = {
       'gruposCriar',
       'gruposModeracao',
       'funil',
-      'status'
+      'status',
+      'metaConversoes'
     ]
   },
   completo: { nome: 'Completo', modulos: [...MODULE_KEYS] }

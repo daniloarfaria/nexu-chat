@@ -400,6 +400,21 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX status_posts_due ON status_posts (status, scheduled_at);
   CREATE INDEX status_posts_account ON status_posts (account_id, created_at);
+  `,
+  // metaConversoes (captura de anúncios)
+  `
+  CREATE TABLE chat_attribution (
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    chat_jid TEXT NOT NULL,
+    conversion_source TEXT,
+    entry_point TEXT,
+    ad_id TEXT,
+    ad_url TEXT,
+    ctwa_clid TEXT,
+    first_ts INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (account_id, chat_jid)
+  );
   `
 ]
 
