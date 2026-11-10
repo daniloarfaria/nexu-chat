@@ -33,8 +33,7 @@ const PLANS = {
     'gruposCriar',
     'gruposModeracao',
     'funil',
-    'status',
-    'perfilIa'
+    'status'
   ],
   completo: [
     'conversas',

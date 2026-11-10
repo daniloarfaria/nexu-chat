@@ -164,7 +164,11 @@ function PersonForm({
         {person && (
           <>
             <DateHistory accountId={accountId} personId={person.id} />
-            <ContactNotes accountId={accountId} target={{ personId: person.id }} />
+            <ContactNotes
+              accountId={accountId}
+              target={{ personId: person.id }}
+              onBirthdaySaved={(d) => setBirthday(birthdayLabel(d))}
+            />
           </>
         )}
       </div>

@@ -22,11 +22,14 @@ const dateLabel = (d: string): string => birthdayInfo(d)?.label ?? d
 export function ContactNotes({
   accountId,
   target,
-  onChanged
+  onChanged,
+  onBirthdaySaved
 }: {
   accountId: string
   target: NotesTarget
   onChanged?: () => void
+  /** Chamado depois que o aniversário sugerido foi salvo (a ficha atualiza o campo). */
+  onBirthdaySaved?: (date: string) => void
 }): React.JSX.Element {
   const perfilIa = useApp((s) => !!s.accounts.find((a) => a.id === accountId)?.modules.perfilIa)
   const key = 'personId' in target ? `p${target.personId}` : target.chatJid
@@ -89,7 +92,10 @@ export function ContactNotes({
     const r = await run('bday', () =>
       window.api.invoke('dates:birthday-set', { accountId, personId, birthday: suggestion.date })
     )
-    if (r) await reload()
+    if (r) {
+      onBirthdaySaved?.(r)
+      await reload()
+    }
   }
 
   async function dismissBirthday(): Promise<void> {

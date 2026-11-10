@@ -148,7 +148,7 @@ Em **Configurações → Módulos** você liga e desliga as funções de cada co
 | Status do WhatsApp | Postar texto, foto ou vídeo no status, agora ou agendado (seção "Status", logo depois de Lembretes). Vem desligado; faz parte do plano Marketing |
 | Vendas | Marcar o que virou venda e ver o retorno (seção 11) |
 | Assistente de IA | Sugestões de resposta, versões de campanha e playbook (seção 12) |
-| Perfil do cliente pela IA | Botão **Mapear perfil** e o mapeamento automático das notas do cliente (seção 5). Vem desligado; faz parte dos planos Marketing e Completo. Dá para desligar a qualquer momento por causa da LGPD |
+| Perfil do cliente pela IA | Botão **Mapear perfil** e o mapeamento automático das notas do cliente (seção 5). Vem desligado; é do plano Completo e só liga com o Assistente de IA ligado. Ligar autoriza enviar trechos anonimizados das conversas à IA em segundo plano, sem clique. Dá para desligar a qualquer momento por causa da LGPD |
 
 ---
 
@@ -173,8 +173,8 @@ O menu **Contatos** é a base de clientes da loja, usada por campanhas e lembret
 - **Excluir** atende pedidos de exclusão de dados (LGPD). Apaga o contato junto com as conversas, mensagens, fotos e arquivos recebidos e as vendas registradas. Se a pessoa tinha pedido para não receber, só o número fica guardado na lista de bloqueio, para ela nunca mais receber, mesmo se voltar numa planilha.
 - **Exportar** gera um CSV com todos os contatos.
 - **Aniversário e datas do contato:** na ficha, o campo **Aniversário** mostra a idade (quando há o ano) e quantos dias faltam. Nos campos de data que você criar (por exemplo `data_compra`), aparece ao lado quando a data volta.
-  - A ficha lista os **Lembretes enviados**, uma linha por envio, como "Lembrete de aniversário enviado em 12/03/2027". O que ainda está programado aparece como "programado".
-  - Se o cliente disser a data na conversa ("meu aniversário é dia 12/03", "nasci em..."), o app pergunta **"Salvar 12/03 como aniversário?"** no bloco de notas. **Nada é salvo sem o seu clique** em **Salvar aniversário**; **Agora não** esconde a sugestão para sempre. A sugestão só aparece para quem ainda não tem aniversário e só vale para o que o **cliente** escreveu.
+  - A ficha lista os **Lembretes enviados**, uma linha por envio, como "Lembrete de aniversário enviado em 12/03/2027". Um lembrete que ainda não foi confirmado como enviado aparece como "programado" só nas primeiras 12 horas; depois, se não saiu, some.
+  - Se o cliente disser a data na conversa ("meu aniversário é dia 12/03", "nasci em..."), o app pergunta **"Salvar 12/03 como aniversário?"** no bloco de notas. **Nada é salvo sem o seu clique** em **Salvar aniversário**; **Agora não** esconde a sugestão para sempre. A sugestão só aparece para quem ainda não tem aniversário e só vale quando o **próprio cliente** fala da sua data ("nasci em", "meu aniversário é", "faço anos") com a data logo depois; aniversário de marido, filho ou outra pessoa é ignorado. Ao salvar, o campo Aniversário da ficha se atualiza.
   - Enviar os lembretes continua na seção 10 (módulo Lembretes, plano Marketing). Ver e editar as datas na ficha vale para todos os planos.
 
 ### Notas do cliente
@@ -188,15 +188,15 @@ Como usar:
 - **Nova nota:** escolha o tipo (Geral, Perfil, Preferência, Objeção ou Família), dê um título se quiser e escreva. Dá para **fixar** (vai para o topo), **editar** e **apagar**.
 - Notas escritas por você valem em todos os planos (módulo Conversas).
 - Se a conversa ainda não é um contato da base, ele é criado com o nome e o número dela ao salvar a primeira nota.
-- Não anote **grau de óculos nem outros dados de saúde**. Isso é dado sensível pela LGPD.
-- As notas entram, **anonimizadas**, no contexto da **sugestão de resposta** da IA (nome e telefone viram marcadores).
+- Não anote **grau de óculos nem outros dados sensíveis** (saúde, religião, política, sindicato). O app **recusa salvar** a nota que parecer ter isso e pede para reescrever sem. Notas antigas com esse tipo de dado nunca vão para a IA.
+- As notas entram, **anonimizadas**, no contexto da **sugestão de resposta** da IA (nome e telefone viram marcadores). As escritas pela IA vão marcadas como "não confirmadas" e só entram com o módulo Perfil do cliente pela IA ligado.
 - **Excluir o contato apaga também as notas dele.**
 
-**Mapear perfil com IA** (módulo "Perfil do cliente pela IA", planos Marketing e Completo):
+**Mapear perfil com IA** (módulo "Perfil do cliente pela IA", plano Completo, com o Assistente de IA ligado):
 - O botão **Mapear perfil** manda a conversa para a IA, **anonimizada**, e ela anota o que o cliente disse, por exemplo "prefere armação leve", "comprou para a filha", "achou caro". Essas notas ficam marcadas **IA** e você pode editar ou apagar.
 - A IA recebe as notas que já existem e **só propõe o que é novo**. Se não achar nada, o app avisa.
 - A IA **nunca anota saúde** (grau ou receita de óculos, doenças, remédios), religião, política nem telefone ou endereço. O app confere o texto de novo antes de salvar e descarta o que parecer sensível.
-- **Sozinho:** quando uma conversa fica **2 horas parada** depois de pelo menos **10 mensagens novas**, o app mapeia o perfil sem você pedir. Isso vale só para contatos que já estão na base e para conversas dos últimos 3 dias, e no máximo 3 por vez. Para **desligar**, tire o módulo em Configurações → Módulos.
+- **Sozinho:** quando uma conversa fica **2 horas parada** depois de pelo menos **10 mensagens novas**, o app mapeia o perfil sem você pedir. Isso vale só para contatos que já estão na base e para conversas dos últimos 3 dias, e no máximo 3 por vez. Se a IA falhar com um contato, o app espera 1 hora antes de tentar de novo (mesmo se você fechar o app). Esses usos aparecem no registro da IA como "perfil_cliente_auto". Para **desligar**, tire o módulo em Configurações → Módulos.
 - Precisa de um provedor de IA configurado (seção 12).
 
 
@@ -285,7 +285,7 @@ Mensagens automáticas em datas de cada cliente, enviadas **uma vez por pessoa**
 - **Dias depois de uma data:** ex.: 7 dias depois da `data_compra` (pós-venda).
 - **Todo ano na data:** ex.: revisão anual de grau um ano depois da compra.
 
-Use os modelos prontos. Cada envio fica registrado na ficha do contato, em **Lembretes enviados** (seção 5). A lista mostra quantos contatos recebem **hoje**. Os envios saem no horário escolhido, respeitando a Proteção anti-bloqueio, e aparecem em Campanhas como "Lembrete: …".
+Ao ligar o módulo Lembretes pela primeira vez, o app já cria o lembrete **Aniversário** (ligado, às 10h, mensagem simples sem oferta). Você pode editar ou apagar. Use os modelos prontos. Cada envio fica registrado na ficha do contato, em **Lembretes enviados** (seção 5). A lista mostra quantos contatos recebem **hoje**. Os envios saem no horário escolhido, respeitando a Proteção anti-bloqueio, e aparecem em Campanhas como "Lembrete: …".
 
 ---
 
