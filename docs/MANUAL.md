@@ -335,7 +335,8 @@ O menu **Funis** organiza os clientes em etapas, como num quadro de post-its.
 Quando o cliente clica num anúncio de "Enviar mensagem" do Facebook ou do Instagram e chama a loja no WhatsApp, o app percebe e guarda de onde ele veio. Ligue em **Configurações → Módulos → Anúncios da Meta** (plano Marketing).
 
 - A conversa ganha a etiqueta **Veio de anúncio**, na lista e no topo da conversa.
-- A venda dessa conversa entra no painel **Vendas** com a origem **Anúncio**.
+- A venda dessa conversa entra no painel **Vendas** com a origem **Anúncio** se fechar em até **30 dias** depois do primeiro contato vindo do anúncio (e sem campanha ou lembrete enviado nos 7 dias anteriores). Passado esse prazo, a venda conta como espontânea.
+- Se o WhatsApp trocar o identificador da conversa pelo número do cliente, a etiqueta e a origem acompanham. Ao excluir a conversa ou apagar os dados da conta, a origem some junto.
 - O app olha também as conversas antigas, aos poucos e sem travar, logo depois de abrir.
 - Fica guardado só neste computador: a origem (Facebook ou Instagram), o número do anúncio, o endereço dele e, quando o WhatsApp entrega, o código de clique (`ctwa_clid`). Nada é enviado para a Meta nesta etapa.
 

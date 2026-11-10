@@ -161,6 +161,7 @@ describe('reprocessar o histórico', () => {
 describe('origem da venda', () => {
   test('venda de conversa que veio de anúncio ganha a origem Anúncio', () => {
     store.saveMessages(ACC, [adMsg()], { live: true })
+    getDb().prepare('UPDATE chat_attribution SET first_ts = ?').run(Math.floor(Date.now() / 1000))
     const d = saveDeal(ACC, { chatJid: PN, status: 'won', amountCents: 10000 })
     expect(d.sourceType).toBe('ad')
     expect(d.sourceName).toBe('Anúncio')
@@ -174,5 +175,64 @@ describe('origem da venda', () => {
     store.saveMessages(ACC, [adMsg()], { live: true })
     enableModule(false)
     expect(saveDeal(ACC, { chatJid: PN, status: 'won', amountCents: 10000 }).sourceType).toBe('organic')
+  })
+})
+
+describe('fusão, limpeza e janela', () => {
+  const LID = '123456789012345@lid'
+
+  test('a origem acompanha a fusão do LID para o número', () => {
+    store.saveMessages(ACC, [adMsg({ jid: LID })], { live: true })
+    expect(getAttribution(ACC, LID)).not.toBeNull()
+    store.saveLidMappings(ACC, [{ lid: LID, pn: PN }])
+    expect(getAttribution(ACC, LID)).toBeNull()
+    expect(getAttribution(ACC, PN)).toMatchObject({ adId: '120210000000001' })
+  })
+
+  test('na fusão, o destino completa campos vazios e mantém a origem mais antiga', () => {
+    store.saveMessages(ACC, [adMsg({ jid: LID, ctwaClid: 'ARAlid' })], { live: true })
+    store.saveMessages(ACC, [adMsg()], { live: true })
+    getDb().prepare('UPDATE chat_attribution SET first_ts = 5 WHERE chat_jid = ?').run(LID)
+    store.saveLidMappings(ACC, [{ lid: LID, pn: PN }])
+    expect(getAttribution(ACC, PN)).toMatchObject({ ctwaClid: 'ARAlid', firstTs: 5 })
+    expect(getAttribution(ACC, LID)).toBeNull()
+  })
+
+  test('excluir a conversa apaga a origem', () => {
+    store.saveMessages(ACC, [adMsg()], { live: true })
+    store.deleteChats(ACC, [PN])
+    expect(getAttribution(ACC, PN)).toBeNull()
+  })
+
+  test('zerar os dados da conta apaga as origens e reinicia o cursor', () => {
+    store.saveMessages(ACC, [adMsg()], { live: false })
+    reprocessAdAttribution()
+    store.resetAccountData(ACC)
+    expect(getAttribution(ACC, PN)).toBeNull()
+    expect(getDb().prepare("SELECT 1 FROM settings WHERE key = 'ads.reprocess.cursor'").get()).toBeUndefined()
+  })
+
+  test('a origem Anúncio vale por 30 dias; depois a venda volta a ser espontânea', () => {
+    store.saveMessages(ACC, [adMsg()], { live: true })
+    const dia = 86_400_000
+    getDb()
+      .prepare('UPDATE chat_attribution SET first_ts = ?')
+      .run(Math.floor((Date.now() - 29 * dia) / 1000))
+    expect(saveDeal(ACC, { chatJid: PN, status: 'won', amountCents: 1 }).sourceType).toBe('ad')
+    getDb()
+      .prepare('UPDATE chat_attribution SET first_ts = ?')
+      .run(Math.floor((Date.now() - 31 * dia) / 1000))
+    expect(saveDeal(ACC, { chatJid: PN, status: 'won', amountCents: 1 }).sourceType).toBe('organic')
+  })
+
+  test('o reprocesso usa a mensagem mais antiga como primeira origem', () => {
+    const novo = adMsg({ ctwaClid: 'ARAnovo' })
+    novo.messageTimestamp = 1_790_000_900
+    const velho = adMsg()
+    velho.messageTimestamp = 1_790_000_100
+    store.saveMessages(ACC, [novo, velho], { live: false })
+    getDb().prepare('DELETE FROM chat_attribution').run()
+    reprocessAdAttribution()
+    expect(getAttribution(ACC, PN)?.firstTs).toBe(1_790_000_100)
   })
 })

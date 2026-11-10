@@ -5,7 +5,10 @@ import { getChats } from './wa/store'
 import { dayKey } from '@shared/rules'
 import { findPersonByJid } from './people'
 import { getAccount } from './accounts'
-import { hasAdOrigin } from './ads'
+import { getAttribution } from './ads'
+
+/** Por quantos dias, depois do primeiro contato vindo de anúncio, a venda ainda conta como "Anúncio". */
+export const AD_ORIGIN_DAYS = 30
 
 interface Row {
   id: number
@@ -53,8 +56,10 @@ export function saveDeal(
 ): Deal {
   // Atribuição: última campanha/lembrete enviado ao contato nos últimos 7 dias
   const touch = lastTouch(accountId, d.chatJid)
-  // Sem campanha recente, a conversa que veio de anúncio vale como "Anúncio" (módulo Anúncios da Meta)
-  const fromAd = !touch && !!getAccount(accountId)?.modules.metaConversoes && hasAdOrigin(accountId, d.chatJid)
+  // Sem campanha recente, a conversa que veio de anúncio vale como "Anúncio" por AD_ORIGIN_DAYS dias
+  // depois do primeiro contato (módulo Anúncios da Meta)
+  const adOrigin = !touch && getAccount(accountId)?.modules.metaConversoes ? getAttribution(accountId, d.chatJid) : null
+  const fromAd = !!adOrigin && Date.now() / 1000 - adOrigin.firstTs <= AD_ORIGIN_DAYS * 86400
   const sourceType: Deal['sourceType'] = d.chatJid.endsWith('@g.us')
     ? 'group'
     : touch

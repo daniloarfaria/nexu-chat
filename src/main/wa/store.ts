@@ -91,12 +91,36 @@ export function saveLidMappings(accountId: string, maps: Array<{ lid: string; pn
   })
 }
 
+/** A origem de anúncio segue a conversa: o destino completa campos vazios e fica com a origem mais antiga. */
+function mergeAttribution(accountId: string, from: string, to: string): void {
+  const db = getDb()
+  const src = db
+    .prepare('SELECT first_ts FROM chat_attribution WHERE account_id = ? AND chat_jid = ?')
+    .get(accountId, from) as { first_ts: number } | undefined
+  if (!src) return
+  db.prepare('UPDATE OR IGNORE chat_attribution SET chat_jid = ? WHERE account_id = ? AND chat_jid = ?').run(
+    to,
+    accountId,
+    from
+  )
+  // Se o destino já tinha origem, a do LID completa o que faltava
+  const cols = ['conversion_source', 'entry_point', 'ad_id', 'ad_url', 'ctwa_clid']
+  const fill = cols
+    .map((c) => `${c} = COALESCE(${c}, (SELECT ${c} FROM chat_attribution WHERE account_id = ?1 AND chat_jid = ?2))`)
+    .join(', ')
+  db.prepare(
+    `UPDATE chat_attribution SET ${fill}, first_ts = MIN(first_ts, ?3) WHERE account_id = ?1 AND chat_jid = ?4`
+  ).run(accountId, from, src.first_ts, to)
+  db.prepare('DELETE FROM chat_attribution WHERE account_id = ? AND chat_jid = ?').run(accountId, from)
+}
+
 /** Junta a conversa guardada pelo LID na conversa do número. */
 function mergeChat(accountId: string, from: string, to: string): void {
   const db = getDb()
   // Vendas e registros de automação acompanham a conversa (mesmo sem mensagens salvas no LID)
   db.prepare('UPDATE deals SET chat_jid = ? WHERE account_id = ? AND chat_jid = ?').run(to, accountId, from)
   db.prepare('UPDATE auto_log SET jid = ? WHERE account_id = ? AND jid = ?').run(to, accountId, from)
+  mergeAttribution(accountId, from, to)
   const exists = db.prepare('SELECT 1 FROM chats WHERE account_id = ? AND jid = ?').get(accountId, from)
   if (!exists) return
   db.prepare(
@@ -207,6 +231,7 @@ export function deleteChats(accountId: string, jids: string[]): void {
     for (const j of jids) {
       const jid = canonJid(accountId, j)
       db.prepare('DELETE FROM chats WHERE account_id = ? AND jid = ?').run(accountId, jid)
+      db.prepare('DELETE FROM chat_attribution WHERE account_id = ? AND chat_jid = ?').run(accountId, jid)
       db.prepare('DELETE FROM messages WHERE account_id = ? AND chat_jid = ?').run(accountId, jid)
       db.prepare('DELETE FROM messages_fts WHERE account_id = ? AND chat_jid = ?').run(accountId, jid)
       touch(accountId, jid)
@@ -727,6 +752,9 @@ export function resetAccountData(accountId: string): void {
       db.prepare(`DELETE FROM ${t} WHERE account_id = ?`).run(accountId)
     }
     db.prepare('DELETE FROM messages_fts WHERE account_id = ?').run(accountId)
+    db.prepare('DELETE FROM chat_attribution WHERE account_id = ?').run(accountId)
+    // O histórico volta a ser lido do começo quando as mensagens forem baixadas de novo
+    db.prepare("DELETE FROM settings WHERE key = 'ads.reprocess.cursor'").run()
   })
 }
 

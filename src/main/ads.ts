@@ -139,16 +139,23 @@ const CURSOR = 'ads.reprocess.cursor'
  * Reprocessa o histórico (messages.raw) em lotes, no mesmo padrão de reparseUnsupported.
  * Guarda até onde foi, então cada lote só olha mensagens ainda não vistas.
  */
-export function reprocessAdAttribution(limit = 2000): { scanned: number; found: number; done: boolean } {
+export function reprocessAdAttribution(limit = 500): { scanned: number; found: number; done: boolean } {
   const db = getDb()
-  const cursor = getSetting<number>(CURSOR, 0)
+  // Do mais antigo para o mais novo: a primeira origem da conversa vem da mensagem mais antiga
+  const cursor = getSetting<{ ts: number; rid: number }>(CURSOR, { ts: -1, rid: 0 })
   const rows = db
     .prepare(
       `SELECT rowid AS rid, account_id, chat_jid, ts, raw FROM messages
-       WHERE rowid > ? AND from_me = 0 AND raw IS NOT NULL AND chat_jid NOT LIKE '%@g.us'
-       ORDER BY rowid LIMIT ?`
+       WHERE (ts > ? OR (ts = ? AND rowid > ?)) AND from_me = 0 AND raw IS NOT NULL AND chat_jid NOT LIKE '%@g.us'
+       ORDER BY ts, rowid LIMIT ?`
     )
-    .all(cursor, limit) as Array<{ rid: number; account_id: string; chat_jid: string; ts: number; raw: Uint8Array }>
+    .all(cursor.ts, cursor.ts, cursor.rid, limit) as Array<{
+    rid: number
+    account_id: string
+    chat_jid: string
+    ts: number
+    raw: Uint8Array
+  }>
   let found = 0
   transaction(db, () => {
     for (const r of rows) {
@@ -160,7 +167,7 @@ export function reprocessAdAttribution(limit = 2000): { scanned: number; found: 
       }
     }
   })
-  if (rows.length) setSetting(CURSOR, rows[rows.length - 1].rid)
+  if (rows.length) setSetting(CURSOR, { ts: rows[rows.length - 1].ts, rid: rows[rows.length - 1].rid })
   const done = rows.length < limit
   if (found || (done && rows.length))
     log.info('Anúncios no histórico reprocessados', { lidas: rows.length, conversas: found })
