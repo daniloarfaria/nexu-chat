@@ -12,6 +12,11 @@ const jid = z
   .max(120)
   .regex(/^[\w.:-]+@(s\.whatsapp\.net|lid|g\.us)$/)
 
+const privateJid = z
+  .string()
+  .max(120)
+  .regex(/^[\w.:-]+@(s\.whatsapp\.net|lid)$/)
+
 /** Alvo: o contato, ou a conversa dele. */
 const target = { personId: id.optional(), chatJid: jid.optional() }
 
@@ -49,11 +54,15 @@ export function registerNotesIpc(handle: Handle): void {
     need(a.accountId, 'conversas')
     N.deleteNote(a.accountId, a.id)
   })
-  handle('notes:map', z.object({ accountId, ...target }).strict(), (a) => {
-    need(a.accountId, 'conversas')
-    need(a.accountId, 'perfilIa')
-    return mapProfile(a.accountId, a)
-  })
+  handle(
+    'notes:map',
+    z.object({ accountId, personId: id.optional(), chatJid: privateJid.optional() }).strict(),
+    (a) => {
+      need(a.accountId, 'conversas')
+      need(a.accountId, 'perfilIa')
+      return mapProfile(a.accountId, a)
+    }
+  )
   handle('dates:info', z.object({ accountId, ...target }).strict(), (a) => {
     need(a.accountId, 'conversas')
     const personId = N.resolveTarget(a.accountId, a, false)

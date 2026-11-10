@@ -72,7 +72,14 @@ const MONTHS: Record<string, number> = {
 
 /** Frases em que a pessoa fala do próprio aniversário (não de outra pessoa, nem de retirada ou agendamento). */
 const OWN =
-  /(?:\bnasci\b|\bmeu (?:aniversario|niver|nascimento)\b|\bfaco anos\b|\bfaz(?:endo)? anos\b|\bminha data de nascimento\b|\bdata de nascimento\b|\bdata de nasc\b)/
+  /(?:\bnasci\b|\bmeu (?:aniversario|niver|nascimento)\b|\bfaco anos\b|\bminha data de nascimento\b|\bminha data de nasc\b)/
+
+/** Se aparece alguém além do cliente perto da frase, a data não é dele. */
+const OTHER =
+  /\b(marido|esposa|esposo|mulher|namorad[oa]|filh[oa]s?|mae|pai|irma[o]?|neto|neta|sobrinh[oa]|amig[oa]|colega|chefe|cunhad[oa]|genro|nora|dele|dela|dos dois)\b/
+
+/** A data tem que estar logo depois da frase (até esta quantidade de letras). */
+const NEAR = 45
 
 /** Data que existe no calendário (31/02 não existe; 29/02 vale para qualquer ano). */
 export function validDate(norm: string | null): string | null {
@@ -92,7 +99,10 @@ export function findBirthdayInText(text: string): string | null {
   const t = fold(text)
   const own = OWN.exec(t)
   if (!own) return null
-  const rest = t.slice(own.index)
+  const rest = t.slice(own.index + own[0].length, own.index + own[0].length + NEAR)
+  if (OTHER.test(rest)) return null
+  const iso = /\b(\d{4})-(\d{1,2})-(\d{1,2})\b/.exec(rest)
+  if (iso) return validDate(normalizeDate(`${iso[1]}-${iso[2]}-${iso[3]}`))
   const num = /\b(\d{1,2})[/.-](\d{1,2})(?:[/.-](\d{4}|\d{2}))?\b/.exec(rest)
   if (num) return validDate(normalizeDate(`${num[1]}/${num[2]}${num[3] ? '/' + num[3] : ''}`))
   const ext = /\b(\d{1,2}) de ([a-z]+)(?: de (\d{4}))?\b/.exec(rest)

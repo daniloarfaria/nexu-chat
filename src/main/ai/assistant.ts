@@ -7,8 +7,8 @@ import { transcribeMissing } from '../wa/transcribe'
 import { wa } from '../wa/manager'
 import { findPersonByJid } from '../people'
 import { anonymize } from './anonymize'
-import { notesForPrompt } from './profile'
-import { listNotes } from '../notes'
+import { contextNotes } from './profile'
+import { personIdOfChat } from '../notes'
 import { businessContext, FILL_SYSTEM, parseContextJson } from './context'
 import type { BusinessContext, MessageItem } from '@shared/types'
 
@@ -75,7 +75,7 @@ export async function suggestReply(
       )
     : ''
   // Notas do cliente (anotadas pela loja ou pela IA) entram sempre anonimizadas
-  const notes = person ? notesForPrompt(listNotes(accountId, person.id), names) : ''
+  const notes = contextNotes(accountId, personIdOfChat(accountId, jid), names)
   const r = await complete({
     task: 'sugerir_resposta',
     tier: 'smart', // tarefa média: nuvem primeiro (ou o modelo médio local, se ligado)

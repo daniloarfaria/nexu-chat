@@ -54,7 +54,8 @@ export const MODULE_INFO: Record<ModuleKey, { label: string; description: string
   ia: { label: 'Assistente de IA', description: 'Playbook de vendas e mensagens sugeridas', group: 'Vendas' },
   perfilIa: {
     label: 'Perfil do cliente pela IA',
-    description: 'A IA lê a conversa e anota preferências nas notas do cliente (sem dado de saúde)',
+    description:
+      'A IA lê a conversa e anota preferências nas notas do cliente (sem dado de saúde). Só liga com o Assistente de IA ligado. Ao ligar, você autoriza enviar trechos anonimizados das conversas à IA em segundo plano, sem clique',
     group: 'Vendas'
   }
 }
@@ -642,8 +643,7 @@ export const PLANS: Record<PlanId, { nome: string; modulos: ModuleKey[] }> = {
       'gruposCriar',
       'gruposModeracao',
       'funil',
-      'status',
-      'perfilIa'
+      'status'
     ]
   },
   completo: { nome: 'Completo', modulos: [...MODULE_KEYS] }

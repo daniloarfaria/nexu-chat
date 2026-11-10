@@ -108,9 +108,11 @@ describe('mapeamento de perfil (funções puras)', () => {
     expect(() => parseProfileJson('não sei')).toThrow(/IA/)
   })
 
-  test('tipo desconhecido vira geral e lixo é ignorado', () => {
-    const r = parseProfileJson('{"notes":[{"kind":"xpto","title":"a","body":"b"},{"body":""},"oi"]}')
-    expect(r.notes).toEqual([{ kind: 'geral', title: 'a', body: 'b' }])
+  test('item inválido (tipo desconhecido, lixo) é descartado, sem corrigir', () => {
+    const r = parseProfileJson(
+      '{"notes":[{"kind":"xpto","title":"a","body":"b"},{"kind":"geral","title":"ok","body":"fica"},{"body":""},"oi"]}'
+    )
+    expect(r.notes).toEqual([{ kind: 'geral', title: 'ok', body: 'fica' }])
   })
 
   test('dado de saúde nunca vira nota', () => {
@@ -145,7 +147,7 @@ describe('mapeamento de perfil (funções puras)', () => {
   })
 
   test('troca o marcador [cliente] por "o cliente"', () => {
-    const out = buildProfileNotes([{ kind: 'objecao', title: 'Preço', body: '[cliente] achou caro' }], [])
+    const out = buildProfileNotes([{ kind: 'objecao', title: 'Objeção', body: '[cliente] achou caro' }], [])
     expect(out[0].body).toBe('o cliente achou caro')
   })
 
@@ -315,9 +317,9 @@ describe('aniversário e datas', () => {
 })
 
 describe('planos', () => {
-  test('perfil pela IA entra no plano Marketing e no Completo, não no Básico', () => {
+  test('perfil pela IA é só do plano Completo', () => {
     expect(MODULE_KEYS).toContain('perfilIa')
-    expect(PLANS.marketing.modulos).toContain('perfilIa')
+    expect(PLANS.marketing.modulos).not.toContain('perfilIa')
     expect(PLANS.completo.modulos).toContain('perfilIa')
     expect(PLANS.basico.modulos).not.toContain('perfilIa')
   })
