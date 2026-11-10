@@ -37,6 +37,8 @@ export const STATUS_LARGE_AUDIENCE = 1000
 export const STATUS_VIDEO_MAX_SECONDS = 90
 /** Tamanho máximo do arquivo de foto ou vídeo para status (limite usado pelo WhatsApp para status). */
 export const STATUS_MEDIA_MAX_BYTES = 16 * 1024 * 1024
+/** Envio sem resposta por tanto tempo vira falha (senão o agendador da conta ficaria preso). */
+export const STATUS_SEND_TIMEOUT_MS = 60_000
 export const STATUS_TEXT_MAX = 700
 export const STATUS_CAPTION_MAX = 1024
 /** Agendado que ficou mais de 24 h sem conseguir postar (app fechado, sem conexão) não sai mais. */
@@ -115,6 +117,48 @@ export function countStatusAudience(
     optedOut: r.optedOut ?? 0,
     large: total > STATUS_LARGE_AUDIENCE,
     limit: STATUS_LARGE_AUDIENCE
+  }
+}
+
+/**
+ * Duração (segundos) de um MP4, lida da caixa `mvhd` dentro de `moov`.
+ * null quando o arquivo não tem como ler (não é MP4 ou está corrompido).
+ */
+export function readMp4Seconds(data: Uint8Array): number | null {
+  const buf = Buffer.from(data.buffer, data.byteOffset, data.byteLength)
+  const walk = (start: number, end: number, want: string, inside: string | null): number | null => {
+    let pos = start
+    while (pos + 8 <= end) {
+      let size = buf.readUInt32BE(pos)
+      const type = buf.toString('latin1', pos + 4, pos + 8)
+      let header = 8
+      if (size === 1) {
+        if (pos + 16 > end) return null
+        size = Number(buf.readBigUInt64BE(pos + 8))
+        header = 16
+      } else if (size === 0) size = end - pos
+      if (size < header || pos + size > end) return null
+      if (inside === null && type === 'moov') return walk(pos + header, pos + size, 'mvhd', 'moov')
+      if (inside === 'moov' && type === want) {
+        const v = buf[pos + header]
+        const at = pos + header + 4
+        if (v === 1) {
+          if (at + 28 > end) return null
+          const scale = buf.readUInt32BE(at + 16)
+          return scale ? Number(buf.readBigUInt64BE(at + 20)) / scale : null
+        }
+        if (at + 16 > end) return null
+        const scale = buf.readUInt32BE(at + 8)
+        return scale ? buf.readUInt32BE(at + 12) / scale : null
+      }
+      pos += size
+    }
+    return null
+  }
+  try {
+    return walk(0, buf.length, 'mvhd', null)
+  } catch {
+    return null
   }
 }
 
@@ -242,6 +286,14 @@ export function createStatusPost(input: StatusInput): StatusPost {
     if (input.kind === 'imagem' && !/^image\/(jpeg|png|webp)$/.test(f.mime))
       throw new Error('Use foto em JPG, PNG ou WEBP')
     if (input.kind === 'video' && f.mime !== 'video/mp4') throw new Error('Use vídeo em MP4')
+    if (input.kind === 'video') {
+      const secs = readMp4Seconds(f.data)
+      if (secs == null) throw new Error('Não deu para ler a duração do vídeo. Use um MP4 válido.')
+      if (secs > STATUS_VIDEO_MAX_SECONDS)
+        throw new Error(
+          `O vídeo tem ${Math.round(secs)} segundos. O status aceita até ${STATUS_VIDEO_MAX_SECONDS} segundos. Corte o vídeo antes.`
+        )
+    }
   }
 
   if (input.audience.modo !== 'todos' && !input.audience.tags.filter(Boolean).length)
@@ -299,7 +351,8 @@ function finish(
 ): void {
   getDb()
     .prepare(
-      'UPDATE status_posts SET status = ?, error = ?, sent_at = ?, recipients_count = COALESCE(?, recipients_count), message_id = COALESCE(?, message_id) WHERE id = ?'
+      // só sai de 'agendado' ou 'enviando': nunca sobrescreve 'cancelado' (nem um resultado já gravado)
+      "UPDATE status_posts SET status = ?, error = ?, sent_at = ?, recipients_count = COALESCE(?, recipients_count), message_id = COALESCE(?, message_id) WHERE id = ? AND status IN ('agendado','enviando')"
     )
     .run(
       status,
@@ -347,7 +400,16 @@ export async function postStatus(p: StatusPost, sock: WASocket): Promise<StatusP
       if (p.background) opts.backgroundColor = p.background
       if (p.font) opts.font = p.font
     }
-    const sent = await sock.sendMessage(STATUS_JID, contentOf(p), opts)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const sent = await Promise.race([
+      sock.sendMessage(STATUS_JID, contentOf(p), opts),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error('O envio demorou demais e foi cancelado. Confira no celular se o status saiu.')),
+          STATUS_SEND_TIMEOUT_MS
+        )
+      })
+    ]).finally(() => clearTimeout(timer))
     finish(p.id, 'enviado', { recipients: jids.length, messageId: sent?.key.id ?? undefined })
     log.info('Status postado', { postagem: p.id, pessoas: jids.length })
     return 'enviado'

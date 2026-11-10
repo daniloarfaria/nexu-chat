@@ -267,7 +267,7 @@ Poste no **status do WhatsApp** da loja pelo computador. Ligue o módulo **Statu
 **Criar um status:** clique em **Novo status** e escolha:
 - **Texto:** até 700 letras, com cor de fundo e tipo de letra.
 - **Foto:** JPG, PNG ou WEBP, até 16 MB, com legenda opcional.
-- **Vídeo:** MP4 de até 90 segundos e 16 MB, com legenda opcional. Vídeo maior ou mais longo é recusado: corte antes de postar.
+- **Vídeo:** MP4 de até 90 segundos e 16 MB, com legenda opcional. Vídeo maior ou mais longo é recusado (o app confere o tamanho e a duração do arquivo; se não conseguir ler a duração, também recusa): corte antes de postar.
 
 A prévia ao lado mostra como fica.
 
@@ -284,7 +284,7 @@ Ficam sempre de fora quem pediu para não receber mensagens e quem ainda não te
 
 **Limite por dia:** por padrão, até **10 postagens por dia** por conta (contando as já postadas e as agendadas para o mesmo dia). Mude o número no topo da página (de 1 a 50). Postar demais seguido pode fazer o WhatsApp tratar o número como robô.
 
-**Histórico:** a lista mostra cada postagem com a situação (**Agendado**, **Postando**, **Postado**, **Falhou** ou **Cancelado**), o público, quantas pessoas e a data. Postagens agendadas podem ser **canceladas** antes da hora. O status some do WhatsApp em 24 horas, como qualquer status. Os arquivos de foto e vídeo ficam guardados no computador por 7 dias e depois são apagados.
+**Histórico:** a lista mostra cada postagem com a situação (**Agendado**, **Postando**, **Postado**, **Falhou** ou **Cancelado**), o público, quantas pessoas e a data. Postagens agendadas podem ser **canceladas** antes da hora. Se o WhatsApp não responder em 1 minuto, a postagem aparece como **Falhou** (confira no celular se o status saiu). O status some do WhatsApp em 24 horas, como qualquer status. Os arquivos de foto e vídeo ficam guardados no computador por 7 dias e depois são apagados.
 
 **Quem viu:** por enquanto o app não mostra quem viu. Confira no celular.
 
