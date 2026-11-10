@@ -11,7 +11,9 @@ const WAIT_REASON: Record<string, string> = {
   limite_hora: 'A IA atingiu o limite de respostas por hora',
   limite_conversa: 'A IA atingiu o limite de respostas desta conversa',
   limite_dia: 'O limite diário de envios foi atingido',
-  ia_fora: 'A IA não conseguiu responder (provedor fora do ar)'
+  repetida: 'O cliente repetiu a mesma mensagem (pode ser outro robô)',
+  ia_fora: 'A IA não conseguiu responder (provedor de IA fora do ar)',
+  ia_formato: 'A IA respondeu fora do formato esperado'
 }
 
 /** O que mostrar na etiqueta da conversa (quem está atendendo). */

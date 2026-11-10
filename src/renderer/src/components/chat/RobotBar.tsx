@@ -13,6 +13,8 @@ export function RobotBar({ accountId, jid }: { accountId: string; jid: string })
   const [state, setState] = useState<ChatAiState | null>(null)
   const [open, setOpen] = useState(false)
   const [extra, setExtra] = useState('')
+  const [robotOn, setRobotOn] = useState<boolean | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const { busy, error, run } = useAction()
 
   useEffect(() => {
@@ -23,8 +25,13 @@ export function RobotBar({ accountId, jid }: { accountId: string; jid: string })
         .then((s) => {
           if (!alive) return
           setState(s)
+          setLoadError(null)
           setExtra((cur) => (cur === '' || cur === s?.extra ? (s?.extra ?? '') : cur))
         })
+        .catch((e: Error) => alive && setLoadError(e.message))
+      window.api
+        .invoke('robot:settings-get', { accountId })
+        .then((c) => alive && setRobotOn(c.enabled))
         .catch(() => undefined)
     }
     load()
@@ -59,7 +66,13 @@ export function RobotBar({ accountId, jid }: { accountId: string; jid: string })
     <div className="border-b border-line bg-panel px-4 py-2" aria-label="Robô de atendimento">
       <div className="flex flex-wrap items-center gap-2">
         <Bot className="size-4 text-ink-3" aria-hidden />
-        {label ? <Badge tone={label.tone}>{label.text}</Badge> : <Badge>Sem robô nesta conversa</Badge>}
+        {robotOn === false ? (
+          <Badge tone="warn">Robô desligado</Badge>
+        ) : label ? (
+          <Badge tone={label.tone}>{label.text}</Badge>
+        ) : (
+          <Badge>Sem robô nesta conversa</Badge>
+        )}
         {label?.hint && <span className="text-[12.5px] text-ink-2">{label.hint}</span>}
         {state?.mode === 'espera' && state.agent && (
           <span className="text-[12.5px] text-ink-2">Atendente indicado: {state.agent}</span>
@@ -72,6 +85,8 @@ export function RobotBar({ accountId, jid }: { accountId: string; jid: string })
           size="sm"
           variant={ia ? 'secondary' : 'primary'}
           loading={busy === 'toggle'}
+          disabled={robotOn === false && !ia}
+          title={robotOn === false && !ia ? 'Ligue o robô em Configurações → Robô de atendimento' : undefined}
           onClick={() => void toggle()}
         >
           {ia ? (
@@ -107,9 +122,9 @@ export function RobotBar({ accountId, jid }: { accountId: string; jid: string })
           </div>
         </div>
       )}
-      {error && (
+      {(error || loadError) && (
         <p role="alert" className="mt-1 text-[12.5px] text-bad">
-          {error}
+          {error ?? loadError}
         </p>
       )}
     </div>

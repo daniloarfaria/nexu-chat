@@ -271,16 +271,18 @@ A IA responde os clientes pelo WhatsApp, em conversas individuais, usando o que 
 ### Ligar
 1. Ligue o módulo **Robô de atendimento com IA** e confira se o Assistente de IA tem um provedor cadastrado e o contexto do negócio preenchido.
 2. Em **Configurações → Robô de atendimento**, ligue o robô e escolha **quando a IA atende**:
-   - **Só conversas novas** (padrão): quem fala com a loja pela primeira vez é atendido pela IA. Conversas antigas continuam com você.
-   - **Só fora do horário de atendimento**: usa o horário da resposta automática "fora do horário" (ou segunda a sábado, das 8h às 18h, se não houver).
+   - **Só conversas novas** (padrão): quem fala com a loja pela primeira vez é atendido pela IA. Conversas antigas, ou que a loja começou, continuam com você: a IA nunca entra nelas nem as retoma sozinha, mesmo que você escreva um contexto extra ou devolva o atendimento pelo botão (só o botão **Devolver para a IA** liga a IA numa conversa antiga, e por escolha sua).
+   - **Só fora do horário de atendimento**: usa o horário da resposta automática "fora do horário" (ou segunda a sábado, das 8h às 18h, se não houver). A mensagem de boas-vindas e a de fora do horário não calam a IA: ela ainda responde à pergunta do cliente.
    - **Sempre**: inclui conversas antigas.
+
+Mensagens com mais de 15 minutos (por exemplo, as que chegam quando o app volta a conectar) não recebem resposta tardia da IA.
 3. Ajuste os limites: **respostas por hora** (somando todas as conversas do número) e **respostas por conversa** (em 24 horas).
 
 ### Quem está atendendo
 No topo de cada conversa individual há uma etiqueta: **IA atendendo**, **Atendimento humano** ou **Esperando atendente**.
-- **Assumir atendimento**: a IA para na hora. Se você escrever na conversa (pelo app ou pelo celular), ela também para sozinha.
+- **Assumir atendimento**: a IA para na hora. Se você escrever na conversa (texto, arquivo, localização, contato ou enquete, pelo app ou pelo celular), ela também para sozinha. Mensagens que o próprio WhatsApp envia pela sua conta (como a saudação ou a mensagem de ausência do WhatsApp Business) também fazem a IA parar: é o lado seguro, e o botão **Devolver para a IA** fica sempre à mão no topo da conversa.
 - **Devolver para a IA**: a IA volta a atender e, se o cliente ficou sem resposta, já responde.
-- **Retomada automática**: se você assumiu e o cliente ficou esperando por 30 minutos (dá para mudar em **Minutos até a IA retomar**), a IA retoma e a conversa mostra **IA retomou o atendimento**.
+- **Retomada automática** (só em conversas que a IA já atendeu): se você assumiu e o cliente ficou esperando por 30 minutos (dá para mudar em **Minutos até a IA retomar**), a IA retoma e a conversa mostra **IA retomou o atendimento**.
 - **Contexto extra**: escreva uma instrução só para aquela conversa (por exemplo, "ofereça a armação X"). Ela vai junto de cada resposta da IA.
 
 ### Passar para um atendente
@@ -295,11 +297,14 @@ Em **Atendentes e assuntos** escreva uma pessoa por linha, com os assuntos dela 
 O app avisa com uma notificação e a conversa entra no filtro **Esperando atendente**. O app não tem login por atendente: é um aviso e um filtro, não uma permissão. Quando alguém responde, a conversa passa a ser atendimento humano.
 
 ### Segurança
-- Respostas por **palavra-chave** (seção 8) e o pedido de **SAIR** vêm antes da IA. Quem pediu para não receber mensagens não recebe resposta da IA.
+- Respostas por **palavra-chave** (seção 8) e o pedido de **SAIR** vêm antes da IA. O SAIR é gravado mesmo que Campanhas e Lembretes estejam desligados. Quem pediu para não receber mensagens não recebe resposta da IA.
+- Só conversas individuais: nada de grupos, listas de transmissão, canais ou status.
+- Se o cliente repetir a mesma mensagem várias vezes ou devolver o seu próprio texto (sinal de outro robô), a IA não responde e avisa uma pessoa.
 - A IA **nunca responde em grupos**.
-- Antes de enviar, o app confere a resposta: preço, percentual, prazo, desconto ou brinde que não estejam no contexto da loja, no playbook ou na sua instrução bloqueiam o envio, e a conversa passa para uma pessoa. Links que a loja não informou são removidos.
+- Antes de enviar, o app confere a resposta: preço (em R$, reais ou por extenso), percentual, parcelas, prazo, desconto, brinde, oferta, telefone, Pix, e-mail e links que **não estejam no contexto da loja** (Assistente de IA → Meu negócio) ou na sua instrução da conversa bloqueiam o envio, e a conversa passa para uma pessoa. O playbook e o campo "O que a IA não pode falar" não servem de fonte para liberar nada. Resposta que cite regras internas, o playbook ou deixe escapar marcas de anonimização como [cliente] também é bloqueada, sem aviso ao cliente.
 - O que o cliente escreve é tratado como texto, nunca como ordem: pedidos como "ignore as regras" não mudam o comportamento da IA.
-- Toda resposta sai pela mesma fila das respostas automáticas (intervalo de segundos entre envios), mostra **digitando…** com um atraso parecido com o de uma pessoa e conta no **limite diário** de envios do número.
+- Toda resposta sai pela mesma fila das respostas automáticas (intervalo de segundos entre envios), mostra **digitando…** com um atraso parecido com o de uma pessoa e conta no **limite diário** de envios do número. Os limites por hora (até 60) e por conversa (até 30) são reservados ao enfileirar, e um último conferido vale na hora de enviar: se você assumir, desligar o robô, o cliente pedir SAIR ou chegar uma mensagem nova, a resposta que estava na fila é descartada.
+- Áudio do cliente: com a transcrição automática ligada (Configurações → Transcrição de áudio), a IA espera até 1 minuto pela transcrição; sem ela, passa para uma pessoa.
 - Se o provedor de IA ficar fora do ar, a IA **para**, a conversa vai para **Esperando atendente** e você recebe uma notificação. Nenhum texto genérico é enviado ao cliente.
 - A cada resposta, trechos **anonimizados** da conversa (sem telefone, CPF, e-mail nem endereço) vão para o provedor de IA que você configurou. Notas com dado de saúde nunca vão.
 
