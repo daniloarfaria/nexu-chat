@@ -11,6 +11,7 @@ export type PageId =
   | 'lembretes'
   | 'vendas'
   | 'funis'
+  | 'leads'
   | 'ia'
   | 'contas'
   | 'configuracoes'

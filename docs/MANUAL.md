@@ -144,6 +144,7 @@ Em **Configurações → Módulos** você liga e desliga as funções de cada co
 | Lembretes | Aniversário, pós-venda, revisão anual (seção 10) |
 | Vendas | Marcar o que virou venda e ver o retorno (seção 11) |
 | Assistente de IA | Sugestões de resposta, versões de campanha e playbook (seção 12) |
+| Planilha de leads (plano Marketing) | Traz os leads do formulário do site e mostra o resultado por origem do anúncio (seção 11, “Leads do site”) |
 
 ---
 
@@ -285,6 +286,24 @@ O menu **Funis** organiza os clientes em etapas, como num quadro de post-its.
 - **Cartão:** valor do negócio, nota, etiquetas, tempo na coluna, última mensagem e o botão **Abrir conversa**.
 - **Disparar para uma coluna:** no menu **⋯** da coluna, **Disparar campanha para a coluna** abre uma campanha nova com a coluna já escolhida. Ela segue todas as regras anti-bloqueio. Se houver filtro de etiquetas no quadro, ele vai junto.
 - Excluir um contato (LGPD) tira os cartões dele de todos os funis.
+
+### Leads do site (planilha e relatório por origem do anúncio)
+
+Para lojas que têm o site da agência com formulário gravando numa Google Planilha. Módulo **Planilha de leads** (plano Marketing). Ligue em **Configurações → Módulos**.
+
+**Configurar** (uma vez, em **Configurações → Integrações**):
+1. Cole o **link do Apps Script** (o que termina em `/exec`) e a **senha do formulário**. A senha fica guardada de forma protegida neste computador e nunca é mostrada de volta. Para trocar, digite a nova; em branco mantém a atual.
+2. A planilha precisa do **doGet novo** no Apps Script. Ele exige a senha e entrega só as linhas novas. A agência faz essa atualização (trecho de referência em `docs/apps-script-leads-doget.gs`). A planilha nunca é publicada na internet.
+3. Opcional: **Criar contato para cada lead novo**. O contato ganha a etiqueta “Lead site” e, se você escolher um funil, um cartão na primeira coluna dele. Só leads novos viram contato, e quem já é contato não é alterado.
+
+**Atualização:** o app busca leads novos a cada 30 minutos e também no botão **Atualizar agora**. Se a internet cair ou o Google demorar, o app avisa e tenta de novo depois, sem travar. A mesma linha da planilha nunca entra duas vezes.
+
+**Página Leads do site** (menu Marketing):
+- Os totais de **leads, conversaram, compraram e faturamento** no período escolhido.
+- Tabela **por origem (utm_source), por campanha (utm_campaign) e por anúncio (utm_content)**, com a **taxa de compra** (quem comprou dividido pelos leads). Leads sem origem aparecem em “(sem origem)”. **Exportar CSV** abre no Excel.
+- A lista dos leads recentes mostra, para cada um, se **virou conversa**, se **é contato**, em que **etapa do funil** está e se **virou venda** (com o valor).
+
+**Como o app liga o lead à conversa:** pelo telefone, com a mesma regra de DDD e código do país dos Contatos. Lead sem telefone válido fica na lista, mas não é cruzado. A venda só conta se foi marcada **depois** de o lead chegar. Se a mesma pessoa preencher o formulário duas vezes, a compra conta uma vez só.
 
 ---
 

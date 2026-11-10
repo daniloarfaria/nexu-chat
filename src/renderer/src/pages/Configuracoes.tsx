@@ -16,9 +16,10 @@ import { cn } from '../lib/cn'
 import { Protecao } from './Protecao'
 import { Transcricao } from './Transcricao'
 import { Licenca } from './Licenca'
+import { LeadsPlanilhaConfig } from '../components/LeadsPlanilhaConfig'
 import { useLicense } from '../lib/useLicense'
 
-type Tab = 'licenca' | 'backup' | 'modulos' | 'protecao' | 'transcricao' | 'sistema'
+type Tab = 'licenca' | 'backup' | 'modulos' | 'protecao' | 'transcricao' | 'integracoes' | 'sistema'
 
 const FREQ: Array<{ id: BackupSettings['frequency']; label: string }> = [
   { id: 'daily', label: 'Todo dia' },
@@ -437,6 +438,7 @@ export function Configuracoes(): React.JSX.Element {
     { id: 'modulos', label: 'Módulos' },
     { id: 'protecao', label: 'Proteção anti-bloqueio' },
     { id: 'transcricao', label: 'Transcrição de áudio' },
+    { id: 'integracoes', label: 'Integrações' },
     { id: 'sistema', label: 'Sistema' }
   ]
   return (
@@ -463,6 +465,7 @@ export function Configuracoes(): React.JSX.Element {
       {tab === 'modulos' && <ModulosTab />}
       {tab === 'protecao' && <Protecao />}
       {tab === 'transcricao' && <Transcricao />}
+      {tab === 'integracoes' && <LeadsPlanilhaConfig />}
       {tab === 'sistema' && <SistemaTab />}
     </div>
   )

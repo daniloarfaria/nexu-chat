@@ -4,6 +4,7 @@ import {
   CalendarClock,
   ChevronsUpDown,
   Contact,
+  FileSpreadsheet,
   House,
   Megaphone,
   MessagesSquare,
@@ -54,7 +55,8 @@ const NAV: Array<{ title?: string; items: NavItem[] }> = [
         icon: Users,
         module: (m) => m.gruposEnvio || m.gruposExtrair || m.gruposCriar || m.gruposModeracao
       },
-      { id: 'automacoes', label: 'Respostas automáticas', icon: Zap, module: (m) => m.respostasAuto }
+      { id: 'automacoes', label: 'Respostas automáticas', icon: Zap, module: (m) => m.respostasAuto },
+      { id: 'leads', label: 'Leads do site', icon: FileSpreadsheet, module: (m) => m.leadsPlanilha }
     ]
   },
   {
