@@ -9,7 +9,6 @@ import {
 import { findBirthdayInText, validDate } from '@shared/dates'
 import { normalizeDate, dayKey } from '@shared/rules'
 import { getDb, transaction } from './db'
-import { isSensitive } from './ai/sensitive'
 import * as people from './people'
 import { personFromChat } from './pipelines'
 
@@ -111,10 +110,6 @@ export function saveNote(accountId: string, personId: number, input: NoteInput):
   ownPerson(accountId, personId)
   const db = getDb()
   const { title, body } = clean(input)
-  if (isSensitive(`${title} ${body}`))
-    throw new Error(
-      'Esta nota parece ter dado sensível (saúde, como grau de óculos, religião, política...). Escreva sem isso: o app não guarda esse tipo de dado.'
-    )
   const kind: NoteKind = (NOTE_KINDS as readonly string[]).includes(input.kind) ? input.kind : 'geral'
   const now = Date.now()
   if (input.id) {

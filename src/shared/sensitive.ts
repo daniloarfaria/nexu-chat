@@ -6,7 +6,7 @@ import { fold } from '@shared/rules'
  * Comparação sem acento e sem maiúsculas.
  */
 const HEALTH =
-  /\b(grau|graus|dioptria\w*|miopia|miope|astigmatismo|hipermetropia|presbiopia|vista cansada|problemas? de vista|problemas? na vista|enxerga mal|catarata|glaucoma|ceratocone|receita medica|oftalmo\w*|diagnostic\w*|doenca\w*|diabet\w*|pressao alta|hipertens\w*|cancer|remedio\w*|medicament\w*|cirurgi\w*|laudo|exame\w*|deficien\w*|gravida\w*|gestante|depress\w*|ansiedade|psiquiatr\w*|hiv|cego|cega|surdo|surda|obeso|obesa|tdah|autis\w*|cadeirante|lentes? de contato|saude|esf|cil|eixo|adicao)\b/
+  /\b(grau|graus|dioptria\w*|miopia|miope|astigmatismo|hipermetropia|presbiopia|vista cansada|problemas? de vista|problemas? na vista|enxerga mal|catarata|glaucoma|ceratocone|receita medica|oftalmo\w*|diagnostic\w*|doenca\w*|diabet\w*|pressao alta|hipertens\w*|cancer|remedio\w*|medicament\w*|cirurgi\w*|laudo|exame\w*|deficien\w*|gravida\w*|gestante|depress\w*|ansiedade|psiquiatr\w*|hiv|cego|cega|surdo|surda|obeso|obesa|tdah|autis\w*|cadeirante|esf|cil|eixo|adicao)\b/
 
 const SENSITIVE_OTHER =
   /\b(religi\w*|evangelic\w*|catolic\w*|espirita|umbanda|candomble|ateu|ateia|igreja|pastor|padre|deus|fe|crente|cristao|crista|judeu|judia|muculmano|muculmana|budista|sindicat\w*|partido|politic\w*|bolsonar\w*|lula|homossexual|gay|lesbica|orientacao sexual|etnia|raca)\b/

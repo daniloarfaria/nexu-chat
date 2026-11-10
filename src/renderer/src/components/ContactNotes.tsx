@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Pencil, Pin, PinOff, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { NOTE_KINDS, NOTE_KIND_LABEL, type ContactNote, type NoteKind } from '@shared/types'
 import { birthdayInfo, untilLabel } from '@shared/dates'
+import { isSensitive } from '@shared/sensitive'
 import { cn } from '../lib/cn'
 import { useApp } from '../lib/store'
 import { useAction, useLoad } from '../lib/useAsync'
@@ -194,6 +195,9 @@ export function ContactNotes({
               placeholder="Ex.: prefere armação leve, comprou para a filha"
             />
           </Field>
+          {isSensitive(`${draft.title} ${draft.body}`) && (
+            <Notice tone="warn">Evite anotar dado de saúde: ele pode ir para a IA na nuvem.</Notice>
+          )}
           <div className="flex justify-end gap-2">
             <Button size="sm" variant="ghost" type="button" onClick={() => setDraft(null)}>
               Cancelar

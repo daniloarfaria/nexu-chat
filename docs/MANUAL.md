@@ -190,7 +190,7 @@ Como usar:
 - **Nova nota:** escolha o tipo (Geral, Perfil, Preferência, Objeção ou Família), dê um título se quiser e escreva. Dá para **fixar** (vai para o topo), **editar** e **apagar**.
 - Notas escritas por você valem em todos os planos (módulo Conversas).
 - Se a conversa ainda não é um contato da base, ele é criado com o nome e o número dela ao salvar a primeira nota.
-- Não anote **grau de óculos nem outros dados sensíveis** (saúde, religião, política, sindicato). O app **recusa salvar** a nota que parecer ter isso e pede para reescrever sem. Notas antigas com esse tipo de dado nunca vão para a IA.
+- Não anote **grau de óculos nem outros dados sensíveis** (saúde, religião, política, sindicato). Se você escrever algo assim, o app **avisa** ("evite anotar dado de saúde; ele pode ir para a IA na nuvem") mas salva a nota. Para proteger o cliente, a nota que parecer ter dado sensível **nunca entra** no que é enviado à IA.
 - As notas entram, **anonimizadas**, no contexto da **sugestão de resposta** da IA (nome e telefone viram marcadores). As escritas pela IA vão marcadas como "não confirmadas" e só entram com o módulo Perfil do cliente pela IA ligado.
 - **Excluir o contato apaga também as notas dele.**
 
