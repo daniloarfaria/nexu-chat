@@ -9,7 +9,7 @@ export type PageId =
   | 'automacoes'
   | 'lembretes'
   | 'status'
-  | 'vendas'
+  | 'painel'
   | 'funis'
   | 'leads'
   | 'ia'

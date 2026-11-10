@@ -55,6 +55,8 @@ import type {
   TagDef,
   Reminder,
   SalesSummary,
+  PanelData,
+  PanelQuery,
   StatusAudience,
   StatusKind,
   StatusPost,
@@ -381,6 +383,7 @@ export interface ApiMap {
   'deals:list': { args: [{ accountId: string; chatJid?: string; from?: number; to?: number }]; ret: Deal[] }
   'deals:delete': { args: [{ accountId: string; id: number }]; ret: void }
   'deals:summary': { args: [{ accountId: string; from: number; to: number }]; ret: SalesSummary }
+  'painel:data': { args: [PanelQuery]; ret: PanelData }
 
   // Planilha de leads
   'leads:config': { args: [{ accountId: string }]; ret: LeadsConfig }
@@ -603,6 +606,7 @@ export const API_CHANNELS: ApiChannel[] = [
   'deals:list',
   'deals:delete',
   'deals:summary',
+  'painel:data',
   'leads:config',
   'leads:config-save',
   'leads:sync',

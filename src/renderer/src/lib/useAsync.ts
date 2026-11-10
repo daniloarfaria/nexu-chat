@@ -1,32 +1,48 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
-/** Carrega dados do processo principal e recarrega quando as dependências mudam. */
+/**
+ * Carrega dados do processo principal e recarrega quando as dependências mudam.
+ * Só vale a resposta da última requisição (uma resposta lenta e antiga nunca sobrescreve a nova).
+ * Com `resetOnChange`, os dados antigos são descartados assim que as dependências mudam.
+ */
 export function useLoad<T>(
   fn: () => Promise<T>,
-  deps: unknown[]
+  deps: unknown[],
+  opts: { resetOnChange?: boolean } = {}
 ): { data: T | null; error: string | null; loading: boolean; reload: () => Promise<void> } {
   const [state, setState] = useState<{ data: T | null; error: string | null; loading: boolean }>({
     data: null,
     error: null,
     loading: true
   })
+  const fnRef = useRef(fn)
+  const seq = useRef(0)
   useEffect(() => {
-    let alive = true
-    fn()
-      .then((d) => alive && setState({ data: d, error: null, loading: false }))
-      .catch((e: Error) => alive && setState((s) => ({ ...s, error: e.message, loading: false })))
-    return () => {
-      alive = false
+    fnRef.current = fn
+  })
+  const resetOnChange = !!opts.resetOnChange
+  const run = useCallback(async (reset: boolean, showLoading: boolean): Promise<void> => {
+    const mine = ++seq.current
+    if (reset) setState({ data: null, error: null, loading: true })
+    else if (showLoading) setState((s) => ({ ...s, loading: true }))
+    try {
+      const d = await fnRef.current()
+      if (mine === seq.current) setState({ data: d, error: null, loading: false })
+    } catch (e) {
+      if (mine === seq.current) setState((s) => ({ ...s, error: (e as Error).message, loading: false }))
     }
+  }, [])
+  useEffect(() => {
+    void run(resetOnChange, false)
+    const counter = seq
+    return () => {
+      // invalida a requisição em andamento quando as dependências mudam ou a tela fecha
+      counter.current++
+    }
+    // As dependências são as informadas por quem chama; fn é lida pela ref, sempre a mais nova.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps)
-  const reload = async (): Promise<void> => {
-    try {
-      setState({ data: await fn(), error: null, loading: false })
-    } catch (e) {
-      setState((s) => ({ ...s, error: (e as Error).message, loading: false }))
-    }
-  }
+  const reload = useCallback((): Promise<void> => run(false, false), [run])
   return { ...state, reload }
 }
 

@@ -9,7 +9,7 @@ import type {
   LeadsReportRow,
   LeadsSyncResult
 } from '@shared/types'
-import { normalizePhone } from '@shared/rules'
+import { normalizePhone, phoneIdentity, phoneVariants } from '@shared/rules'
 import { getDb, getSetting, setSetting, transaction } from './db'
 import { sealString, unsealString } from './secure'
 import { listAccounts } from './accounts'
@@ -458,20 +458,6 @@ interface Match {
   pipeline: string | null
   stage: string | null
   deals: Array<{ at: number; cents: number }>
-}
-
-/** Telefones brasileiros antigos e atuais podem representar o mesmo WhatsApp. */
-function phoneVariants(phone: string): string[] {
-  const variants = [phone]
-  if (phone.startsWith('55')) {
-    if (phone.length === 13 && phone[4] === '9') variants.push(phone.slice(0, 4) + phone.slice(5))
-    else if (phone.length === 12) variants.push(phone.slice(0, 4) + '9' + phone.slice(4))
-  }
-  return variants
-}
-
-function phoneIdentity(phone: string): string {
-  return phoneVariants(phone).sort((a, b) => a.length - b.length)[0]
 }
 
 function matchPhones(accountId: string, phones: string[], includePlacement: boolean): Map<string, Match> {

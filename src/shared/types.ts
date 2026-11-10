@@ -476,6 +476,71 @@ export interface SalesSummary {
   byDay: Array<{ day: string; revenueCents: number; won: number }>
 }
 
+// ---------- Painel ----------
+export type PanelBucket = 'day' | 'week' | 'month'
+export type PanelOriginKind = 'campaign' | 'reminder' | 'recovery' | 'ad' | 'utm' | 'group' | 'organic'
+
+export interface PanelQuery {
+  /** Números (contas) incluídos; várias contas somam */
+  accountIds: string[]
+  from: number
+  to: number
+  bucket: PanelBucket
+  pipelineId?: number
+}
+
+export interface PanelFunnelStage {
+  id: number
+  name: string
+  kind: StageKind
+  count: number
+  valueCents: number
+  /** Cartões que estão nesta coluna ou em alguma coluna mais adiante (sem contar as de perda) */
+  reached: number
+  /** reached desta coluna dividido pelo da anterior; null na primeira, nas de perda ou sem base */
+  rateFromPrev: number | null
+  /** Média de dias que os cartões desta coluna estão parados */
+  avgIdleDays: number | null
+}
+
+export interface PanelData {
+  totals: {
+    revenueCents: number
+    won: number
+    lost: number
+    avgTicketCents: number
+    newChats: number
+    /** Pessoas novas do período (primeira mensagem recebida) que têm venda ganha até hoje */
+    newChatsSold: number
+    recovered: number
+    recoveredCents: number
+  }
+  pipelines: Array<{ id: number; name: string; accountId: string; accountName: string }>
+  funnel: { pipelineId: number; name: string; stages: PanelFunnelStage[] } | null
+  revenue: Array<{ key: string; label: string; revenueCents: number; won: number }>
+  origins: Array<{
+    kind: PanelOriginKind
+    won: number
+    lost: number
+    revenueCents: number
+    /** Faturado dividido pelas vendas com valor (venda de valor 0 não entra) */
+    avgTicketCents: number
+    /** Ganhas / (ganhas + perdidas) marcadas nesta origem. Não é conversão de conversas. */
+    closeRate: number | null
+  }>
+  lostReasons: Array<{ reason: string; count: number }>
+  /** O que o painel consegue medir de verdade neste período */
+  coverage: {
+    hasAdData: boolean
+    hasLeadData: boolean
+    hasRecovery: boolean
+    /** Módulo Anúncios da Meta ligado em algum dos números escolhidos */
+    adModule: boolean
+    /** Módulo Planilha de leads ligado em algum dos números escolhidos */
+    leadModule: boolean
+  }
+}
+
 export const LOST_REASONS = [
   'Preço',
   'Sem estoque',

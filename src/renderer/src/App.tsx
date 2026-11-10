@@ -13,7 +13,7 @@ import { Automacoes } from './pages/Automacoes'
 import { Grupos } from './pages/Grupos'
 import { Lembretes } from './pages/Lembretes'
 import { Status } from './pages/Status'
-import { Vendas } from './pages/Vendas'
+import { Painel } from './pages/Painel'
 import { IA } from './pages/IA'
 import { Funis } from './pages/Funis'
 import { Leads } from './pages/Leads'
@@ -42,8 +42,8 @@ function Page(): React.JSX.Element {
       return <Lembretes />
     case 'status':
       return <Status />
-    case 'vendas':
-      return <Vendas />
+    case 'painel':
+      return <Painel />
     case 'ia':
       return <IA />
     case 'funis':

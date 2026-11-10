@@ -147,7 +147,7 @@ Em **Configurações → Módulos** você liga e desliga as funções de cada co
 | Lembretes | Aniversário, pós-venda, revisão anual (seção 10) |
 | Status do WhatsApp | Postar texto, foto ou vídeo no status, agora ou agendado (seção "Status", logo depois de Lembretes). Vem desligado; faz parte do plano Marketing |
 | Anúncios da Meta | Mostra quais conversas vieram de anúncio de clique para o WhatsApp (seção "Anúncios da Meta", depois de Vendas). Vem desligado; faz parte do plano Marketing |
-| Vendas | Marcar o que virou venda e ver o retorno (seção 11) |
+| Vendas | Marcar o que virou venda e ver o retorno no Painel (seção 11) |
 | Assistente de IA | Sugestões de resposta, versões de campanha e playbook (seção 12) |
 | Planilha de leads (plano Marketing) | Traz os leads do formulário do site e mostra o resultado por origem do anúncio (seção 11, “Leads do site”) |
 | Perfil do cliente pela IA | Botão **Mapear perfil** e o mapeamento automático das notas do cliente (seção 5). Vem desligado; é do plano Completo e só liga com o Assistente de IA ligado. Ligar autoriza enviar trechos anonimizados das conversas à IA em segundo plano, sem clique. Dá para desligar a qualquer momento por causa da LGPD |
@@ -327,12 +327,22 @@ No topo de cada conversa:
 - **Virou venda:** valor, produto e forma de pagamento;
 - **Perdida:** motivo (preço, sem estoque, só pesquisando…).
 
-O painel **Vendas** mostra:
-- faturamento pelo WhatsApp, número de vendas, ticket médio e conversão;
-- **de onde vieram as vendas:** a venda conta para a campanha ou o lembrete enviado ao cliente nos 7 dias anteriores, com o valor faturado **por mensagem enviada**;
-- os motivos de perda mais comuns.
+A página **Painel** (antes chamada Vendas) mostra, com filtro de **período** e de **número** (um número, ou todos juntos):
+- **Números do topo:** faturado, vendas, ticket médio, conversas novas, quantas dessas conversas viraram venda e vendas recuperadas;
+- **Faturamento:** gráfico por dia, semana ou mês, com botão "Ver em tabela";
+- **Funil:** escolha um funil e veja quantos clientes chegaram a cada coluna, quantos passaram da anterior para a seguinte e há quantos dias estão parados;
+- **De onde vieram as vendas:** campanha, lembrete, recuperação, anúncio, site (UTM) e espontâneo, com vendas, faturado, ticket e **fechamento** (das vendas e perdas que você marcou naquela origem, quantas foram vendas; não é a conversão das conversas novas). "Site (UTM)" e "Anúncio" só aparecem com o módulo ligado;
+- os motivos de perda mais comuns;
+- a lista de registros (quando um só número está escolhido).
 
-Se a conversa veio de um anúncio e nenhuma campanha foi enviada ao cliente nos 7 dias anteriores, a venda aparece com a origem **Anúncio** (módulo Anúncios da Meta ligado).
+**O que o Painel mede e o que não mede**
+- Só entra o que você marcou na conversa ("Virou venda" ou "Perdida"). Venda não marcada não aparece.
+- **Conversas novas** são pessoas cuja primeira mensagem recebida caiu no período (grupos não contam). O mesmo cliente com o número e com o identificador novo do WhatsApp conta uma vez só. **Viraram venda** conta, entre essas pessoas, quem tem venda ganha marcada **até hoje**, mesmo que tenha fechado depois do período.
+- O ticket médio não conta venda marcada com valor zero.
+- O **funil** é a foto de hoje: o app não guarda o histórico de passagens. "Passaram" soma os clientes que estão naquela coluna ou em uma mais adiante, e as colunas de perda ficam de fora.
+- A venda conta para a campanha ou o lembrete enviado ao cliente nos 7 dias anteriores. Se não houve nenhum, e a conversa veio de anúncio (módulo Anúncios da Meta ligado), aparece como **Anúncio** (até 30 dias depois do primeiro contato). Se o telefone do cliente estava na planilha de leads do site até 30 dias antes da venda, aparece como **Site (UTM)**. Sem nada disso, é **Espontâneo**.
+- Sem o aviso do WhatsApp de que veio de anúncio, ou sem a planilha de leads, essas vendas caem em Espontâneo. O Painel avisa quando não há dado de anúncio ou de planilha.
+- **Recuperação** ainda não está disponível: mostra zero até essa função existir.
 
 ### Funis (kanban)
 
@@ -385,7 +395,7 @@ Use uma senha própria da integração, longa e aleatória, diferente da senha d
 Quando o cliente clica num anúncio de "Enviar mensagem" do Facebook ou do Instagram e chama a loja no WhatsApp, o app percebe e guarda de onde ele veio. Ligue em **Configurações → Módulos → Anúncios da Meta** (plano Marketing).
 
 - A conversa ganha a etiqueta **Veio de anúncio**, na lista e no topo da conversa.
-- A venda dessa conversa entra no painel **Vendas** com a origem **Anúncio** se fechar em até **30 dias** depois do primeiro contato vindo do anúncio (e sem campanha ou lembrete enviado nos 7 dias anteriores). Passado esse prazo, a venda conta como espontânea.
+- A venda dessa conversa entra no **Painel** com a origem **Anúncio** se fechar em até **30 dias** depois do primeiro contato vindo do anúncio (e sem campanha ou lembrete enviado nos 7 dias anteriores). Passado esse prazo, a venda conta como espontânea.
 - Se o WhatsApp trocar o identificador da conversa pelo número do cliente, a etiqueta e a origem acompanham. Ao excluir a conversa ou apagar os dados da conta, a origem some junto.
 - O app olha também as conversas antigas, aos poucos e sem travar, logo depois de abrir.
 - Fica guardado só neste computador: a origem (Facebook ou Instagram), o número do anúncio, o endereço dele e, quando o WhatsApp entrega, o código de clique (`ctwa_clid`). Nada é enviado para a Meta nesta etapa.
