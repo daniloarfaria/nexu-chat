@@ -91,6 +91,7 @@ As fotos dos contatos e dos grupos aparecem na lista, no topo da conversa e, nos
   - **Apagar para todos** uma mensagem sua.
 - Clique numa citação para pular até a mensagem original.
 - **Buscar nas mensagens** (lupa no alto à direita): procura dentro de todas as conversas.
+- **Notas do cliente:** na faixa abaixo do nome (onde ficam as etiquetas), o botão **notas** abre o bloco de notas daquele cliente (veja "Notas do cliente" na seção 5).
 
 ### Enviar arquivos e outros conteúdos
 Clique no **clipe** ao lado da caixa de texto:
@@ -147,6 +148,7 @@ Em **Configurações → Módulos** você liga e desliga as funções de cada co
 | Status do WhatsApp | Postar texto, foto ou vídeo no status, agora ou agendado (seção "Status", logo depois de Lembretes). Vem desligado; faz parte do plano Marketing |
 | Vendas | Marcar o que virou venda e ver o retorno (seção 11) |
 | Assistente de IA | Sugestões de resposta, versões de campanha e playbook (seção 12) |
+| Perfil do cliente pela IA | Botão **Mapear perfil** e o mapeamento automático das notas do cliente (seção 5). Vem desligado; faz parte dos planos Marketing e Completo. Dá para desligar a qualquer momento por causa da LGPD |
 
 ---
 
@@ -170,6 +172,33 @@ O menu **Contatos** é a base de clientes da loja, usada por campanhas e lembret
 - **Não receber:** quem responde **SAIR** (ou "parar", "não quero mais"…) entra sozinho nessa lista e recebe uma confirmação. Você também pode marcar à mão.
 - **Excluir** atende pedidos de exclusão de dados (LGPD). Apaga o contato junto com as conversas, mensagens, fotos e arquivos recebidos e as vendas registradas. Se a pessoa tinha pedido para não receber, só o número fica guardado na lista de bloqueio, para ela nunca mais receber, mesmo se voltar numa planilha.
 - **Exportar** gera um CSV com todos os contatos.
+- **Aniversário e datas do contato:** na ficha, o campo **Aniversário** mostra a idade (quando há o ano) e quantos dias faltam. Nos campos de data que você criar (por exemplo `data_compra`), aparece ao lado quando a data volta.
+  - A ficha lista os **Lembretes enviados**, uma linha por envio, como "Lembrete de aniversário enviado em 12/03/2027". O que ainda está programado aparece como "programado".
+  - Se o cliente disser a data na conversa ("meu aniversário é dia 12/03", "nasci em..."), o app pergunta **"Salvar 12/03 como aniversário?"** no bloco de notas. **Nada é salvo sem o seu clique** em **Salvar aniversário**; **Agora não** esconde a sugestão para sempre. A sugestão só aparece para quem ainda não tem aniversário e só vale para o que o **cliente** escreveu.
+  - Enviar os lembretes continua na seção 10 (módulo Lembretes, plano Marketing). Ver e editar as datas na ficha vale para todos os planos.
+
+### Notas do cliente
+
+Cada cliente tem um bloco com **quantas notas você quiser**, para lembrar de gostos, objeções e família. Elas aparecem em três lugares, sempre as mesmas:
+- na **ficha do contato** (Contatos);
+- na **faixa da conversa**, botão **notas**;
+- na **janela do cartão do funil**, no lado direito.
+
+Como usar:
+- **Nova nota:** escolha o tipo (Geral, Perfil, Preferência, Objeção ou Família), dê um título se quiser e escreva. Dá para **fixar** (vai para o topo), **editar** e **apagar**.
+- Notas escritas por você valem em todos os planos (módulo Conversas).
+- Se a conversa ainda não é um contato da base, ele é criado com o nome e o número dela ao salvar a primeira nota.
+- Não anote **grau de óculos nem outros dados de saúde**. Isso é dado sensível pela LGPD.
+- As notas entram, **anonimizadas**, no contexto da **sugestão de resposta** da IA (nome e telefone viram marcadores).
+- **Excluir o contato apaga também as notas dele.**
+
+**Mapear perfil com IA** (módulo "Perfil do cliente pela IA", planos Marketing e Completo):
+- O botão **Mapear perfil** manda a conversa para a IA, **anonimizada**, e ela anota o que o cliente disse, por exemplo "prefere armação leve", "comprou para a filha", "achou caro". Essas notas ficam marcadas **IA** e você pode editar ou apagar.
+- A IA recebe as notas que já existem e **só propõe o que é novo**. Se não achar nada, o app avisa.
+- A IA **nunca anota saúde** (grau ou receita de óculos, doenças, remédios), religião, política nem telefone ou endereço. O app confere o texto de novo antes de salvar e descarta o que parecer sensível.
+- **Sozinho:** quando uma conversa fica **2 horas parada** depois de pelo menos **10 mensagens novas**, o app mapeia o perfil sem você pedir. Isso vale só para contatos que já estão na base e para conversas dos últimos 3 dias, e no máximo 3 por vez. Para **desligar**, tire o módulo em Configurações → Módulos.
+- Precisa de um provedor de IA configurado (seção 12).
+
 
 ---
 
@@ -256,7 +285,7 @@ Mensagens automáticas em datas de cada cliente, enviadas **uma vez por pessoa**
 - **Dias depois de uma data:** ex.: 7 dias depois da `data_compra` (pós-venda).
 - **Todo ano na data:** ex.: revisão anual de grau um ano depois da compra.
 
-Use os modelos prontos. A lista mostra quantos contatos recebem **hoje**. Os envios saem no horário escolhido, respeitando a Proteção anti-bloqueio, e aparecem em Campanhas como "Lembrete: …".
+Use os modelos prontos. Cada envio fica registrado na ficha do contato, em **Lembretes enviados** (seção 5). A lista mostra quantos contatos recebem **hoje**. Os envios saem no horário escolhido, respeitando a Proteção anti-bloqueio, e aparecem em Campanhas como "Lembrete: …".
 
 ---
 
@@ -431,6 +460,7 @@ No rodapé do menu: ☀ claro, ☾ escuro ou **automático** (segue o computador
 - Documentos salvos a partir das conversas recebem a marca de "baixado da internet": o Windows/Office e o Mac continuam avisando antes de abrir arquivos perigosos.
 - Envie mensagens de marketing só para clientes que já compraram. Quem responde SAIR vai automaticamente para a lista de não receber.
 - A IA recebe as conversas anonimizadas por padrão (seção 12).
+- As notas do cliente ficam só no computador da loja, são apagadas junto com o contato e não guardam dado de saúde (seção 5). O mapeamento de perfil pela IA pode ser desligado em Configurações → Módulos.
 
 ---
 
