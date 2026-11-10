@@ -11,7 +11,7 @@ import { wa } from './wa/manager'
 import { moderateGroupMessage, welcomeParticipants } from './groups'
 import { log } from './log'
 import { enqueueSend } from './outbox'
-import { onClientMessage, onOwnMessage, startRobot } from './iaAtendimento'
+import { onClientMessage, onOwnMessage, robotActive, startRobot } from './iaAtendimento'
 
 /**
  * Tudo que reage a mensagens recebidas:
@@ -183,7 +183,8 @@ async function onIncoming(accountId: string, m: MessageItem): Promise<void> {
   onCampaignReply(accountId, m.chatJid)
 
   // "SAIR": sempre respeitado quando a loja usa campanhas
-  if ((account.modules.campanhas || account.modules.lembretes) && isOptOut(m.text)) {
+  // (também quando só o robô de IA está ligado: o pedido de sair sempre vence)
+  if ((account.modules.campanhas || account.modules.lembretes || robotActive(accountId)) && isOptOut(m.text)) {
     const already = isOptedOut(accountId, m.chatJid)
     optOutByJid(accountId, m.chatJid)
     // Só confirma depois de gravado
@@ -193,18 +194,22 @@ async function onIncoming(accountId: string, m: MessageItem): Promise<void> {
   }
 
   // Respostas por palavra-chave têm prioridade; sem regra para a mensagem, o robô de IA assume
-  onClientMessage(accountId, m, await autoReply(sock, account, m))
+  // O robô registra quem atende ANTES de qualquer espera (a resposta automática leva segundos)
+  onClientMessage(accountId, m, 'register')
+  // Só regra por palavra-chave silencia a IA; boas-vindas e fora do horário são seguidas pela resposta da IA
+  const answered = await autoReply(sock, account, m)
+  onClientMessage(accountId, m, answered === 'keyword' ? 'register' : 'answer')
 }
 
-/** Responde pela regra de palavra-chave, fora do horário ou boas-vindas. Devolve true se respondeu. */
+/** Responde pela regra de palavra-chave, fora do horário ou boas-vindas. Devolve o tipo da regra que respondeu. */
 async function autoReply(
   sock: WASocket,
   account: NonNullable<ReturnType<typeof getAccount>>,
   m: MessageItem
-): Promise<boolean> {
+): Promise<AutoRule['kind'] | null> {
   const accountId = account.id
-  if (!account.modules.respostasAuto) return false
-  if (autoCountLastHour(accountId) >= MAX_AUTO_PER_HOUR) return false
+  if (!account.modules.respostasAuto) return null
+  if (autoCountLastHour(accountId) >= MAX_AUTO_PER_HOUR) return null
   const rules = listRules(accountId)
   const rule = pickRule(rules, m.text, {
     now: new Date(),
@@ -212,7 +217,7 @@ async function autoReply(
     recentlyAnswered: (id) =>
       answeredRecently(accountId, id, m.chatJid, Math.max(1, rules.find((r) => r.id === id)?.cooldownMin ?? 60))
   })
-  if (!rule) return false
+  if (!rule) return null
   const person = findPersonByJid(accountId, m.chatJid)
   const chat = getChats(accountId, [m.chatJid])[0]
   const name = person?.name ?? m.senderName ?? chat?.name ?? ''
@@ -226,7 +231,7 @@ async function autoReply(
     .prepare('INSERT INTO auto_log (account_id, rule_id, jid, at) VALUES (?, ?, ?, ?)')
     .run(accountId, rule.id, m.chatJid, Date.now())
   await reply(sock, accountId, m.chatJid, text)
-  return true
+  return rule.kind
 }
 
 export function startAutomation(): void {

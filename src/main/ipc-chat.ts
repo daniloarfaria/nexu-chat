@@ -134,12 +134,18 @@ export function registerChatIpc(handle: Handle, getWindow: () => BrowserWindow |
         address: z.string().max(300).optional()
       })
       .strict(),
-    (a) => send.sendLocation(sock(a.accountId), a.accountId, a.jid, a)
+    async (a) => {
+      await send.sendLocation(sock(a.accountId), a.accountId, a.jid, a)
+      noteHumanMessage(a.accountId, a.jid)
+    }
   )
   handle(
     'messages:send-contact',
     z.object({ accountId, jid, name: z.string().min(1).max(100), phone: z.string().min(8).max(25) }).strict(),
-    (a) => send.sendContactCard(sock(a.accountId), a.accountId, a.jid, a)
+    async (a) => {
+      await send.sendContactCard(sock(a.accountId), a.accountId, a.jid, a)
+      noteHumanMessage(a.accountId, a.jid)
+    }
   )
   handle(
     'messages:send-poll',
@@ -152,7 +158,10 @@ export function registerChatIpc(handle: Handle, getWindow: () => BrowserWindow |
         multiple: z.boolean()
       })
       .strict(),
-    (a) => send.sendPoll(sock(a.accountId), a.accountId, a.jid, a)
+    async (a) => {
+      await send.sendPoll(sock(a.accountId), a.accountId, a.jid, a)
+      noteHumanMessage(a.accountId, a.jid)
+    }
   )
   handle('messages:react', z.object({ accountId, jid, id: msgId, emoji: z.string().max(16) }).strict(), (a) =>
     send.react(sock(a.accountId), a.accountId, a.jid, a.id, a.emoji)

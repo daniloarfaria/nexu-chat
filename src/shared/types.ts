@@ -178,7 +178,7 @@ export interface ChatItem {
   /** Conversa que começou num anúncio de clique para o WhatsApp */
   fromAd?: boolean
   /** Quem atende: a IA, uma pessoa, ou a conversa espera um atendente. Vazio quando o robô nunca tocou nela. */
-  ai?: { mode: 'ia' | 'humano' | 'espera'; reason: string | null } | null
+  ai?: { mode: 'ia' | 'humano' | 'espera'; reason: ChatAiReason | null } | null
 }
 
 export type MessageType =
@@ -1054,10 +1054,29 @@ export interface RobotSettings {
 
 export type ChatAiMode = 'ia' | 'humano' | 'espera'
 
+/** Por que a conversa está assim. 'antiga': a IA nunca atendeu e nunca retoma sozinha. */
+export type ChatAiReason =
+  | 'novo'
+  | 'devolvido'
+  | 'retomou'
+  | 'atendente'
+  | 'antiga'
+  | 'transferido'
+  | 'pediu_humano'
+  | 'risco'
+  | 'sem_resposta'
+  | 'midia'
+  | 'fechar_venda'
+  | 'repetida'
+  | 'limite_hora'
+  | 'limite_conversa'
+  | 'limite_dia'
+  | 'ia_fora'
+  | 'ia_formato'
+
 export interface ChatAiState {
   mode: ChatAiMode
-  /** Por que está assim: novo, devolvido, retomou, atendente, transferido, pediu_humano, risco, sem_resposta, midia, limite, ia_fora. */
-  reason: string | null
+  reason: ChatAiReason | null
   topic: string | null
   agent: string | null
   /** Contexto extra escrito pelo atendente só para esta conversa. */

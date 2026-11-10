@@ -1,6 +1,15 @@
 import { EventEmitter } from 'node:events'
 import { isJidGroup, isLidUser, jidNormalizedUser, proto, type Chat, type Contact, type WAMessage } from 'baileys'
-import type { ChatFilter, ChatItem, MediaInfo, MessageExtra, MessageItem, MessageType, SyncState } from '@shared/types'
+import type {
+  ChatAiReason,
+  ChatFilter,
+  ChatItem,
+  MediaInfo,
+  MessageExtra,
+  MessageItem,
+  MessageType,
+  SyncState
+} from '@shared/types'
 import { getDb, transaction } from '../db'
 import { log } from '../log'
 import { extractAdAttribution, recordAttribution } from '../ads'
@@ -541,7 +550,7 @@ function toChat(r: ChatRow): ChatItem {
     muted: r.muted_until === -1 || r.muted_until > now,
     readOnly: !!r.read_only,
     fromAd: !!r.from_ad,
-    ai: r.ai_mode ? { mode: r.ai_mode as 'ia' | 'humano' | 'espera', reason: r.ai_reason } : null
+    ai: r.ai_mode ? { mode: r.ai_mode as 'ia' | 'humano' | 'espera', reason: r.ai_reason as ChatAiReason | null } : null
   }
 }
 

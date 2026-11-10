@@ -38,8 +38,8 @@ export function registerRobotIpc(handle: Handle): void {
             enabled: z.boolean(),
             when: z.enum(['new', 'always', 'away']),
             resumeMin: z.number().int().min(5).max(1440),
-            perHour: z.number().int().min(1).max(200),
-            perChat: z.number().int().min(1).max(100),
+            perHour: z.number().int().min(1).max(60),
+            perChat: z.number().int().min(1).max(30),
             handoffOnClose: z.boolean(),
             agentsText: z.string().max(3000)
           })

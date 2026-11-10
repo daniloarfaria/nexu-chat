@@ -1,10 +1,12 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const h = vi.hoisted(() => ({
   jobs: [] as Array<Promise<unknown>>,
+  hold: false,
+  held: [] as Array<() => Promise<unknown>>,
   sent: [] as Array<{ jid: string; text: string }>,
   sock: { sendPresenceUpdate: async () => undefined } as Record<string, unknown> | null
 }))
@@ -21,7 +23,8 @@ vi.mock('../src/main/ai/router', () => ({
 }))
 vi.mock('../src/main/outbox', () => ({
   enqueueSend: (_acc: string, job: () => Promise<unknown>): boolean => {
-    h.jobs.push(job().catch(() => undefined))
+    if (h.hold) h.held.push(job)
+    else h.jobs.push(job().catch(() => undefined))
     return true
   }
 }))
@@ -51,9 +54,14 @@ const JID = '5511987650001@s.whatsapp.net'
 const mockComplete = vi.mocked(complete)
 
 let seq = 0
-function addMsg(fromMe: boolean, text: string | null, jid = JID, type = 'text', id?: string): MessageItem {
+const nowSec = (): number => Math.floor(Date.now() / 1000)
+const DAY = 86_400
+// a resposta automática espera 1,5 s+ (digitando) de verdade
+const WAIT = { timeout: 12_000, interval: 25 }
+
+function addMsg(fromMe: boolean, text: string | null, jid = JID, type = 'text', id?: string, at?: number): MessageItem {
   const mid = id ?? `m${++seq}`
-  const ts = 1_700_000_000 + seq
+  const ts = at ?? nowSec() - 300 + seq
   const db = getDb()
   db.prepare('INSERT OR IGNORE INTO chats (account_id, jid, name, last_ts, is_group) VALUES (?, ?, ?, ?, ?)').run(
     ACC,
@@ -100,7 +108,14 @@ async function flush(): Promise<void> {
   await Promise.all(h.jobs.splice(0))
 }
 
+afterEach(() => {
+  vi.useRealTimers()
+  for (const e of ['incoming', 'status', 'group-participants']) storeEvents.removeAllListeners(e)
+})
+
 beforeEach(() => {
+  h.hold = false
+  h.held.length = 0
   R.resetRobotTimers()
   closeDb()
   openDb(join(mkdtempSync(join(tmpdir(), 'dsp-robo-')), 'db.sqlite'))
@@ -185,9 +200,8 @@ describe('saída da IA', () => {
   test('desconto que está no contexto da loja pode ser dito', () => {
     expect(R.checkReply('Hoje tem 10% de desconto.', 'Promoção: 10% de desconto no pix').ok).toBe(true)
   })
-  test('links inventados saem do texto, os da loja ficam', () => {
-    const a = R.checkReply('Veja em http://golpe.com e fale conosco.', 'Site: https://otica.com.br')
-    expect(a.ok && a.text).toBe('Veja em e fale conosco.')
+  test('link inventado bloqueia, o da loja passa', () => {
+    expect(R.checkReply('Veja em http://golpe.com e fale conosco.', 'Site: https://otica.com.br').ok).toBe(false)
     const b = R.checkReply('Veja https://otica.com.br', 'Site: https://otica.com.br')
     expect(b.ok && b.text).toContain('https://otica.com.br')
   })
@@ -241,7 +255,7 @@ describe('módulo e plano', () => {
   test('limites da configuração ficam em faixa segura', () => {
     const s = R.saveRobotSettings(ACC, { resumeMin: 1, perHour: 9999, perChat: -5 })
     expect(s.resumeMin).toBe(5)
-    expect(s.perHour).toBe(200)
+    expect(s.perHour).toBe(60)
     expect(s.perChat).toBe(1)
   })
 })
@@ -277,17 +291,17 @@ describe('conversa nova atendida pela IA', () => {
     expect(mockComplete.mock.calls[0][0].prompt).toContain('Ofereça a armação X')
   })
   test('conversa antiga não é atendida no modo "só conversas novas"', () => {
-    addMsg(false, 'oi')
-    addMsg(true, 'olá, tudo bem?')
+    addMsg(false, 'oi', JID, 'text', undefined, nowSec() - 5 * DAY)
+    addMsg(true, 'olá, tudo bem?', JID, 'text', undefined, nowSec() - 5 * DAY + 60)
     const m = addMsg(false, 'quero uma armação')
     R.onClientMessage(ACC, m)
-    expect(R.getChatAi(ACC, JID)?.mode).toBe('humano')
+    expect(R.getChatAi(ACC, JID)).toMatchObject({ mode: 'humano', reason: 'antiga' })
     expect(mockComplete).not.toHaveBeenCalled()
   })
   test('"sempre" atende também conversa antiga', () => {
     R.saveRobotSettings(ACC, { when: 'always' })
-    addMsg(false, 'oi')
-    addMsg(true, 'olá')
+    addMsg(false, 'oi', JID, 'text', undefined, nowSec() - 5 * DAY)
+    addMsg(true, 'olá', JID, 'text', undefined, nowSec() - 5 * DAY + 60)
     R.onClientMessage(ACC, addMsg(false, 'quero uma armação'))
     expect(R.getChatAi(ACC, JID)?.mode).toBe('ia')
   })
@@ -344,9 +358,10 @@ describe('atendente assume, devolve e a IA retoma', () => {
     R.assumeChat(ACC, JID)
     addMsg(false, 'alguém aí?')
     mockComplete.mockResolvedValue(reply('Oi! Posso ajudar?'))
+    vi.useFakeTimers()
     const st = R.giveBackToAi(ACC, JID)
     expect(st).toMatchObject({ mode: 'ia', reason: 'devolvido' })
-    await new Promise((r) => setTimeout(r, 30))
+    await vi.advanceTimersByTimeAsync(10)
     await flush()
     expect(h.sent).toHaveLength(1)
   })
@@ -355,11 +370,12 @@ describe('atendente assume, devolve e a IA retoma', () => {
     R.noteHumanMessage(ACC, JID)
     R.onClientMessage(ACC, addMsg(false, 'e então?'))
     mockComplete.mockResolvedValue(reply('Oi! Já te ajudo.'))
+    vi.useFakeTimers()
     expect(R.resumeIdleChats(Date.now() + 10 * 60_000)).toBe(0)
     expect(R.getChatAi(ACC, JID)?.mode).toBe('humano')
     expect(R.resumeIdleChats(Date.now() + 31 * 60_000)).toBe(1)
     expect(R.getChatAi(ACC, JID)).toMatchObject({ mode: 'ia', reason: 'retomou' })
-    await new Promise((r) => setTimeout(r, 30))
+    await vi.advanceTimersByTimeAsync(10)
     await flush()
     expect(h.sent).toHaveLength(1)
   })
@@ -570,7 +586,7 @@ describe('prioridade: palavra-chave vem antes da IA', () => {
     startAutomation()
     const m = addMsg(false, 'qual o preço?')
     storeEvents.emit('incoming', { accountId: ACC, message: m })
-    await new Promise((r) => setTimeout(r, 50))
+    await vi.waitFor(() => expect(h.sent).toHaveLength(1), WAIT)
     await flush()
     expect(h.sent).toEqual([{ jid: JID, text: 'Veja a tabela.' }])
     expect(mockComplete).not.toHaveBeenCalled()
@@ -578,8 +594,6 @@ describe('prioridade: palavra-chave vem antes da IA', () => {
     // sem regra, a IA responde
     mockComplete.mockResolvedValue(reply('Posso ajudar!'))
     storeEvents.emit('incoming', { accountId: ACC, message: addMsg(false, 'bom dia') })
-    await new Promise((r) => setTimeout(r, 50))
-    await flush()
-    expect(h.sent.at(-1)?.text).toBe('Posso ajudar!')
+    await vi.waitFor(() => expect(h.sent.at(-1)?.text).toBe('Posso ajudar!'), WAIT)
   })
 })
