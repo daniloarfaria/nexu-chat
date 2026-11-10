@@ -3,7 +3,11 @@
  * formulário extra do compositor): fecha só esse item e não deixa o Esc chegar à janela em volta.
  * Devolve true quando tratou o Esc.
  */
-export function escapeInner(e: { key: string; stopPropagation: () => void }, isOpen: boolean, close: () => void): boolean {
+export function escapeInner(
+  e: { key: string; stopPropagation: () => void },
+  isOpen: boolean,
+  close: () => void
+): boolean {
   if (e.key !== 'Escape' || !isOpen) return false
   e.stopPropagation()
   close()

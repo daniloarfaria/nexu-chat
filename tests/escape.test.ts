@@ -38,9 +38,17 @@ describe('fechar a janela com alteração não salva', () => {
 
   it('com alteração: pergunta e só fecha se a pessoa confirmar', () => {
     const close = vi.fn()
-    guardedClose(() => true, () => false, close)
+    guardedClose(
+      () => true,
+      () => false,
+      close
+    )
     expect(close).not.toHaveBeenCalled()
-    guardedClose(() => true, () => true, close)
+    guardedClose(
+      () => true,
+      () => true,
+      close
+    )
     expect(close).toHaveBeenCalledOnce()
   })
 })

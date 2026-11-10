@@ -348,7 +348,11 @@ function mp4(seconds: number, timescale = 1000): Uint8Array {
   const mvhd = Buffer.alloc(100)
   mvhd.writeUInt32BE(timescale, 12)
   mvhd.writeUInt32BE(Math.round(seconds * timescale), 16)
-  return Buffer.concat([box('ftyp', Buffer.from('isom0000')), box('moov', box('mvhd', mvhd)), box('mdat', Buffer.alloc(16))])
+  return Buffer.concat([
+    box('ftyp', Buffer.from('isom0000')),
+    box('moov', box('mvhd', mvhd)),
+    box('mdat', Buffer.alloc(16))
+  ])
 }
 
 describe('duração do vídeo (validada no processo principal)', () => {

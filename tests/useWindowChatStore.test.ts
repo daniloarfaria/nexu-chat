@@ -28,6 +28,14 @@ vi.stubGlobal('window', {
 })
 vi.stubGlobal('document', { hasFocus: () => true })
 
+// O projeto de testes (node) não enxerga o `window` tipado do app: só para o chatStore.ts compilar aqui
+declare global {
+  interface Window {
+    api: import('../src/shared/api').BridgeApi
+    ui: { setFocusedChat(v: { accountId: string; jid: string } | null): void }
+  }
+}
+
 import { useWindowChatStore } from '../src/renderer/src/lib/chatStore'
 import { liveChatStores } from '../src/renderer/src/lib/chatStoreCore'
 

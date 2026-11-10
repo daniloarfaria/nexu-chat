@@ -132,7 +132,9 @@ function CardPanel({
   )
   const name = card.name || formatPhone(card.phone)
   const dirty = parseMoney(value) !== card.valueCents || (note.trim() || null) !== (card.note ?? null)
-  dirtyRef.current = dirty
+  useEffect(() => {
+    dirtyRef.current = dirty
+  }, [dirty, dirtyRef])
 
   async function changeTags(next: string[]): Promise<void> {
     const add = next.filter((t) => !tags.includes(t))
