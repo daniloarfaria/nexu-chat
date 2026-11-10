@@ -161,7 +161,9 @@ describe('reprocessar o histórico', () => {
 describe('origem da venda', () => {
   test('venda de conversa que veio de anúncio ganha a origem Anúncio', () => {
     store.saveMessages(ACC, [adMsg()], { live: true })
-    getDb().prepare('UPDATE chat_attribution SET first_ts = ?').run(Math.floor(Date.now() / 1000))
+    getDb()
+      .prepare('UPDATE chat_attribution SET first_ts = ?')
+      .run(Math.floor(Date.now() / 1000))
     const d = saveDeal(ACC, { chatJid: PN, status: 'won', amountCents: 10000 })
     expect(d.sourceType).toBe('ad')
     expect(d.sourceName).toBe('Anúncio')
