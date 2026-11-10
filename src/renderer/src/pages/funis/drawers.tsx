@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   ArrowDown,
   ArrowUp,
@@ -22,6 +22,7 @@ import {
   type TagDef
 } from '@shared/types'
 import { cn } from '../../lib/cn'
+import { guardedClose } from '../../lib/escape'
 import { formatPhone } from '../../lib/format'
 import { openChat, resolveChatJid } from '../../lib/openChat'
 import { ChatStoreProvider, useWindowChatStore } from '../../lib/chatStore'
@@ -64,8 +65,16 @@ type CardProps = {
  * A conversa usa um estado próprio, então não troca a conversa aberta na tela Conversas.
  */
 export function CardWindow(props: CardProps & { notes?: ReactNode }): React.JSX.Element {
-  const { accountId, card, onClose } = props
+  const { accountId, card } = props
   const name = card.name || formatPhone(card.phone)
+  // Valor ou nota digitados e não salvos: Esc/clique fora não podem jogar fora sem perguntar
+  const dirtyRef = useRef(false)
+  const onClose = (): void =>
+    guardedClose(
+      () => dirtyRef.current,
+      () => confirm('Há valor ou nota sem salvar. Fechar mesmo assim?'),
+      props.onClose
+    )
   const [jid, setJid] = useState<string | null>(card.jid)
   const store = useWindowChatStore(accountId, jid)
 
@@ -89,7 +98,7 @@ export function CardWindow(props: CardProps & { notes?: ReactNode }): React.JSX.
             <div className="grid flex-1 place-items-center bg-sunken text-[13.5px] text-ink-2">Abrindo a conversa…</div>
           )}
         </section>
-        <CardPanel {...props} />
+        <CardPanel {...props} onClose={onClose} dirtyRef={dirtyRef} closeNow={props.onClose} />
       </ChatStoreProvider>
     </Modal>
   )
@@ -104,8 +113,15 @@ function CardPanel({
   onMove,
   onChanged,
   onClose,
+  dirtyRef,
+  closeNow,
   notes
-}: CardProps & { notes?: ReactNode }): React.JSX.Element {
+}: CardProps & {
+  notes?: ReactNode
+  dirtyRef: { current: boolean }
+  /** fecha sem perguntar (depois de tirar o cartão do funil) */
+  closeNow: () => void
+}): React.JSX.Element {
   const [value, setValue] = useState(moneyInput(card.valueCents))
   const [note, setNote] = useState(card.note ?? '')
   const [tags, setTags] = useState(card.tags)
@@ -116,6 +132,7 @@ function CardPanel({
   )
   const name = card.name || formatPhone(card.phone)
   const dirty = parseMoney(value) !== card.valueCents || (note.trim() || null) !== (card.note ?? null)
+  dirtyRef.current = dirty
 
   async function changeTags(next: string[]): Promise<void> {
     const add = next.filter((t) => !tags.includes(t))
@@ -147,7 +164,7 @@ function CardPanel({
     const ok = await run('rm', () => window.api.invoke('pipelines:remove-cards', { accountId, cardIds: [card.id] }))
     if (ok !== undefined) {
       onChanged()
-      onClose()
+      closeNow()
     }
   }
 

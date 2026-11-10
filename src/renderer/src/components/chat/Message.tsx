@@ -26,6 +26,7 @@ import type { MediaInfo, MessageItem } from '@shared/types'
 import { cn } from '../../lib/cn'
 import { useChatStore } from '../../lib/chatStore'
 import { formatBytes } from '../../lib/format'
+import { escapeInner } from '../../lib/escape'
 import { duration, msgTime } from './time'
 import { Avatar } from './Avatar'
 
@@ -575,7 +576,10 @@ export const Message = memo(function Message({
 
         {/* Ações ao passar o mouse */}
         {!m.deleted && accountId && (
-          <div className="relative flex shrink-0 items-center gap-0.5 self-center opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+          <div
+            onKeyDown={(e) => escapeInner(e, picker, () => setPicker(false))}
+            className="relative flex shrink-0 items-center gap-0.5 self-center opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
+          >
             <button
               aria-label="Reagir"
               onClick={() => setPicker((v) => !v)}

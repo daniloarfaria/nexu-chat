@@ -18,6 +18,7 @@ import {
 import { useChatStore } from '../../lib/chatStore'
 import { useActiveAccount } from '../../lib/store'
 import { cn } from '../../lib/cn'
+import { escapeInner } from '../../lib/escape'
 import { Button, Input } from '../ui'
 
 type Extra = 'location' | 'contact' | 'poll' | null
@@ -336,7 +337,7 @@ function ComposerInner({ jid, disabled }: { jid: string; disabled?: string | nul
           </div>
         ) : (
           <>
-            <div className="relative">
+            <div className="relative" onKeyDown={(e) => escapeInner(e, menu, () => setMenu(false))}>
               <Button
                 variant="ghost"
                 aria-label="Anexar"
@@ -408,6 +409,7 @@ function ComposerInner({ jid, disabled }: { jid: string; disabled?: string | nul
                   e.preventDefault()
                   void submit()
                 }
+                if (escapeInner(e, !!extra, () => setExtra(null))) return // fecha o formulário extra, não a janela
                 if (e.key === 'Escape' && (replyTo || editing)) {
                   e.stopPropagation() // cancela a resposta/edição sem fechar a janela em volta
                   setReply(null)
@@ -513,7 +515,11 @@ function ExtraForm({
   }
 
   return (
-    <form onSubmit={send} className="flex flex-col gap-2.5 border-b border-line bg-sunken px-4 py-3">
+    <form
+      onSubmit={send}
+      onKeyDown={(e) => escapeInner(e, true, onClose)}
+      className="flex flex-col gap-2.5 border-b border-line bg-sunken px-4 py-3"
+    >
       <div className="flex items-center justify-between">
         <span className="text-[13.5px] font-semibold">
           {kind === 'location' ? 'Enviar localização' : kind === 'contact' ? 'Enviar contato' : 'Criar enquete'}

@@ -320,7 +320,7 @@ O menu **Funis** organiza os clientes em etapas, como num quadro de post-its.
   - **À direita**, os dados do cartão: coluna, etiquetas, valor do negócio, nota, tempo na coluna e em que outros funis o contato está.
   - Contato que ainda não conversou: a conversa aparece vazia e você pode mandar a primeira mensagem.
   - A conversa aberta na tela **Conversas** não muda.
-  - **Esc**, o **X** ou um clique fora fecham a janela. O quadro continua onde estava, com a mesma rolagem e os mesmos filtros.
+  - **Esc**, o **X** ou um clique fora fecham a janela. O quadro continua onde estava, com a mesma rolagem e os mesmos filtros. Se houver **valor ou nota sem salvar**, o app pergunta antes de fechar. Dentro da janela, o **Esc** fecha primeiro o que estiver aberto por cima (seletor de reação, menu de anexo, formulário de localização, contato ou enquete) e só depois a janela.
   - **Abrir na tela Conversas** leva para a conversa na tela inteira.
 - **Disparar para uma coluna:** no menu **⋯** da coluna, **Disparar campanha para a coluna** abre uma campanha nova com a coluna já escolhida. Ela segue todas as regras anti-bloqueio. Se houver filtro de etiquetas no quadro, ele vai junto.
 - Excluir um contato (LGPD) tira os cartões dele de todos os funis.
