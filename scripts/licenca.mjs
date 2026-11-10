@@ -34,7 +34,8 @@ const PLANS = {
     'gruposModeracao',
     'funil',
     'status',
-    'metaConversoes'
+    'metaConversoes',
+    'leadsPlanilha'
   ],
   completo: [
     'conversas',
@@ -51,6 +52,7 @@ const PLANS = {
     'ia',
     'status',
     'metaConversoes',
+    'leadsPlanilha',
     'perfilIa'
   ]
 }
