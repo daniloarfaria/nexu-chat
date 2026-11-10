@@ -381,6 +381,37 @@ describe('gerente do motor local', () => {
     expect(deps.children[0].forced).toBe(true)
   })
 
+  test('paradas ao mesmo tempo esperam a mesma saída e não sobem dois motores', async () => {
+    const deps = fakeDeps()
+    const e = new LocalEngine(deps)
+    await e.run(spec(), async () => 'ok')
+    const c0 = deps.children[0]
+    c0.stubborn = true
+    vi.useFakeTimers()
+    let second = false
+    const p1 = e.stop()
+    const p2 = e.stop().then(() => (second = true))
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(second).toBe(false) // a segunda parada não resolve antes do processo sair
+    await vi.advanceTimersByTimeAsync(5000)
+    await Promise.all([p1, p2])
+    expect(c0.killed).toBe(true)
+    vi.useRealTimers()
+    await e.run(spec(), async () => 'ok')
+    expect(deps.children.filter((c) => !c.killed)).toHaveLength(1)
+  })
+
+  test('depois de shutdown não aceita tarefa nova e o motor fica parado', async () => {
+    const deps = fakeDeps()
+    const e = new LocalEngine(deps)
+    await e.run(spec(), async () => 'ok')
+    await e.shutdown()
+    expect(e.running).toBe(false)
+    await expect(e.run(spec(), async () => 'x')).rejects.toThrow(/encerrando/)
+    await expect(e.exclusive(async () => 'x')).rejects.toThrow(/encerrando/)
+    expect(deps.children).toHaveLength(1)
+  })
+
   test('argumentos enxutos: só 127.0.0.1, contexto curto, mmap, uma conversa, sem cache', () => {
     const a = engineArgs({ ...spec(), threads: 3 }, 41234, 'chave')
     const val = (k: string): string => a[a.indexOf(k) + 1]

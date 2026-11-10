@@ -39,6 +39,8 @@ export interface EngineDeps {
   waitReady(baseUrl: string, apiKey: string, child: EngineChild): Promise<void>
 }
 
+const CLOSING = 'O app está encerrando: a IA no computador não aceita tarefas novas'
+
 export const IDLE_MS = 5 * 60_000
 /** Tempo para o motor fechar sozinho antes de ser morto à força. */
 export const STOP_TIMEOUT_MS = 5000
@@ -69,6 +71,8 @@ export class LocalEngine {
   private tailP: Promise<unknown> = Promise.resolve()
   private idleTimer: ReturnType<typeof setTimeout> | null = null
   private pending = 0
+  private stopping: Promise<void> | null = null
+  private closing = false
 
   constructor(
     private deps: EngineDeps,
@@ -85,9 +89,14 @@ export class LocalEngine {
 
   /** Põe uma tarefa na fila (uma por vez). */
   private enqueue<T>(task: () => Promise<T>): Promise<T> {
+    if (this.closing) return Promise.reject(new Error(CLOSING))
     this.pending++
     this.clearIdle()
-    const p = this.tailP.then(task, task)
+    const guarded = async (): Promise<T> => {
+      if (this.closing) throw new Error(CLOSING)
+      return task()
+    }
+    const p = this.tailP.then(guarded, guarded)
     this.tailP = p.then(
       () => this.done(),
       () => this.done()
@@ -129,6 +138,7 @@ export class LocalEngine {
     if (this.child && this.current?.key === key) return this.current
     await this.stop() // outro modelo: nunca dois ao mesmo tempo (espera o anterior sair)
     const port = await this.deps.freePort()
+    if (this.closing) throw new Error(CLOSING)
     const apiKey = randomBytes(24).toString('hex')
     const child = this.deps.spawn(spec, port, apiKey)
     const baseUrl = `http://127.0.0.1:${port}/v1`
@@ -150,15 +160,34 @@ export class LocalEngine {
   }
 
   /**
+   * Encerramento do app: para o motor e recusa qualquer tarefa nova (na fila ou futura).
+   * Só resolve quando o processo saiu.
+   */
+  async shutdown(): Promise<void> {
+    this.closing = true
+    await this.stop()
+  }
+
+  /**
    * Desliga o motor (libera toda a memória) e só resolve quando o processo saiu de verdade.
    * No Windows isso importa: arquivos de processo vivo não podem ser apagados.
+   * Chamadas ao mesmo tempo recebem a mesma espera (nunca resolvem antes da saída).
    */
-  async stop(timeoutMs = STOP_TIMEOUT_MS): Promise<void> {
+  stop(timeoutMs = STOP_TIMEOUT_MS): Promise<void> {
     this.clearIdle()
+    if (this.stopping) return this.stopping
     const c = this.child
+    if (!c) return Promise.resolve()
     this.child = null
     this.current = null
-    if (!c) return
+    const p = this.killAndWait(c, timeoutMs).finally(() => {
+      if (this.stopping === p) this.stopping = null
+    })
+    this.stopping = p
+    return p
+  }
+
+  private async killAndWait(c: EngineChild, timeoutMs: number): Promise<void> {
     let exited = false
     const gone = new Promise<void>((r) => c.onExit(() => ((exited = true), r())))
     const wait = (ms: number): Promise<void> => {
