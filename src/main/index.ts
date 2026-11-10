@@ -22,6 +22,7 @@ import { startReminders } from './reminders'
 import { startStatus, statusEvents } from './status'
 import { groupEvents } from './groups'
 import { avatarEvents, setAvatarSocketGetter } from './wa/avatars'
+import { shutdownLocalAi } from './ai/local/service'
 
 const APP_ID = 'br.com.disparador.app'
 const VERSION_RECHECK_MS = 6 * 60 * 60 * 1000
