@@ -175,10 +175,15 @@ if (!app.requestSingleInstanceLock()) {
       () => mainWindow,
       () => {
         quitting = true
-        wa.shutdown()
-        closeDb()
-        app.relaunch()
-        app.exit(0)
+        // app.exit() pula os eventos de saída: para a IA local antes
+        void shutdownLocalAi()
+          .catch(() => undefined)
+          .finally(() => {
+            wa.shutdown()
+            closeDb()
+            app.relaunch()
+            app.exit(0)
+          })
       }
     )
 
@@ -258,6 +263,8 @@ if (!app.requestSingleInstanceLock()) {
       quitting = true
       runBackup()
         .catch(() => undefined)
+        .then(() => shutdownLocalAi())
+        .catch(() => undefined)
         .finally(() => {
           wa.shutdown()
           closeDb()
@@ -265,9 +272,16 @@ if (!app.requestSingleInstanceLock()) {
         })
       return
     }
+    // para a IA local e espera o processo sair antes de fechar de vez
+    e.preventDefault()
     quitting = true
-    wa.shutdown()
-    closeDb()
+    void shutdownLocalAi()
+      .catch(() => undefined)
+      .finally(() => {
+        wa.shutdown()
+        closeDb()
+        app.quit()
+      })
   })
 
   app.on('window-all-closed', () => {

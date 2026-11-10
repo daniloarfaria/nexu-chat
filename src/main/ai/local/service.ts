@@ -58,16 +58,18 @@ async function extract(archive: string, dest: string, signal: AbortSignal): Prom
   }
 }
 
-/** Nome do programa de um PID (para só matar um llama-server antigo, nunca outro programa). */
-async function processName(pid: number): Promise<string | null> {
+/** Caminho completo do programa de um PID (para só matar um llama-server nosso, nunca outro programa). */
+async function processPath(pid: number): Promise<string | null> {
   try {
     if (process.platform === 'win32') {
-      const { stdout } = await run('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], {
-        timeout: 10_000,
-        windowsHide: true
-      })
-      return /^"([^"]+)"/.exec(stdout.trim())?.[1] ?? null
+      const { stdout } = await run(
+        'powershell.exe',
+        ['-NoProfile', '-NonInteractive', '-Command', `(Get-Process -Id ${Math.trunc(pid)} -ErrorAction Stop).Path`],
+        { timeout: 15_000, windowsHide: true }
+      )
+      return stdout.trim() || null
     }
+    // No macOS, `comm=` já devolve o caminho completo do executável
     const { stdout } = await run('ps', ['-p', String(pid), '-o', 'comm='], { timeout: 10_000 })
     return stdout.trim() || null
   } catch {
@@ -81,7 +83,7 @@ export const _deps = {
   extract,
   engineDeps: realEngineDeps as EngineDeps,
   hardware: (): HardwareInfo => detectHardware(app.getPath('userData')),
-  processName,
+  processPath,
   killPid: (pid: number): void => {
     process.kill(pid)
   },
@@ -89,7 +91,22 @@ export const _deps = {
   remove: (path: string): Promise<void> => rm(path, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
 }
 
+/** Apaga motor.pid só se ainda for o PID deste motor (um motor antigo que sai tarde não apaga o do novo). */
+function releasePidFile(pid: number): void {
+  try {
+    if (readFileSync(pidFile(), 'utf8').trim() !== String(pid)) return
+    rmSync(pidFile(), { force: true })
+  } catch {
+    /* arquivo já não existe */
+  }
+}
+export const _releasePidFile = releasePidFile
+
 let engine: LocalEngine | null = null
+/** Só para testes: descarta o gerente do motor. */
+export function _resetEngine(): void {
+  engine = null
+}
 function getEngine(): LocalEngine {
   if (!engine) {
     const base = _deps.engineDeps
@@ -101,7 +118,8 @@ function getEngine(): LocalEngine {
         if (child.pid) {
           mkdirSync(runDir(), { recursive: true })
           writeFileSync(pidFile(), String(child.pid))
-          child.onExit(() => rmSync(pidFile(), { force: true }))
+          const pid = child.pid
+          child.onExit(() => releasePidFile(pid))
         }
         return child
       }
@@ -291,16 +309,18 @@ async function removePath(path: string): Promise<void> {
 
 /** Desliga o modelo médio e apaga o arquivo dele (volta a usar só o leve). */
 export async function disableMedium(): Promise<LocalAiStatus> {
-  await getEngine().stop() // espera o processo sair antes de apagar (Windows trava arquivo em uso)
   const m = mediumModel()
-  try {
-    await removePath(modelPath(m.file))
-    clearPartial(modelPath(m.file))
-  } finally {
-    const s = getState()
-    setState({ mediumEnabled: false, models: s.models.filter((x) => x !== m.id) })
-    registerProvider()
-  }
+  // pela fila: espera a tarefa em andamento e o processo sair antes de apagar (Windows trava arquivo em uso)
+  await getEngine().exclusive(async () => {
+    try {
+      await removePath(modelPath(m.file))
+      clearPartial(modelPath(m.file))
+    } finally {
+      const s = getState()
+      setState({ mediumEnabled: false, models: s.models.filter((x) => x !== m.id) })
+      registerProvider()
+    }
+  })
   return localStatus()
 }
 
@@ -310,20 +330,29 @@ export async function removeLocal(): Promise<LocalAiStatus> {
     installing.abort.abort() // para o download ou mata o tar
     await installing.done
   }
-  await getEngine().stop()
-  try {
-    await removePath(baseDir())
-  } finally {
-    // mesmo se algum arquivo ficou preso, o app para de usar a IA local
-    setSetting('ai.local', DEFAULT)
-    removeLocalProvider()
-  }
+  await getEngine().exclusive(async () => {
+    try {
+      await removePath(baseDir())
+    } finally {
+      // mesmo se algum arquivo ficou preso, o app para de usar a IA local
+      setSetting('ai.local', DEFAULT)
+      removeLocalProvider()
+    }
+  })
   return localStatus()
 }
 
 /** Whisper e o modelo de texto nunca rodam juntos: a transcrição local entra na mesma fila. */
 export function exclusiveLocal<T>(fn: () => Promise<T>): Promise<T> {
   return getEngine().exclusive(fn)
+}
+
+/** O caminho completo é o llama-server desta instalação (dentro de ai-local/engine/<versão>/)? */
+function isEngineExe(path: string): boolean {
+  const ci = (x: string): string => (process.platform === 'win32' ? x.toLowerCase() : x)
+  const p = ci(resolve(path))
+  const root = ci(resolve(engineDir()))
+  return p.startsWith(root + sep) && ci(basename(p)) === ci(exeName)
 }
 
 /** Motor que ficou rodando depois de o app cair: encerra, se for mesmo o llama-server. */
@@ -333,8 +362,8 @@ export async function killOrphan(): Promise<boolean> {
   const pid = Number(readFileSync(file, 'utf8').trim())
   rmSync(file, { force: true })
   if (!Number.isInteger(pid) || pid <= 0 || pid === process.pid) return false
-  const name = await _deps.processName(pid)
-  if (!name || basename(name).toLowerCase() !== exeName.toLowerCase()) return false
+  const path = await _deps.processPath(pid)
+  if (!path || !isEngineExe(path)) return false
   try {
     _deps.killPid(pid)
     log.info('Motor da IA local antigo encerrado', { pid })
@@ -371,5 +400,19 @@ export function initLocalAi(): void {
       return modelInstalled(m.id) ? m.ctx : lightModel().ctx
     }
   )
-  app.on('will-quit', () => void engine?.stop())
+  let quitReady = false
+  app.on('will-quit', (e) => {
+    if (quitReady || !engine?.running) return
+    // espera o motor sair de verdade antes de o app fechar
+    e.preventDefault()
+    void shutdownLocalAi().finally(() => {
+      quitReady = true
+      app.quit()
+    })
+  })
+}
+
+/** Encerramento do app (ou reinício): para o motor, espera sair e recusa tarefas novas. */
+export async function shutdownLocalAi(): Promise<void> {
+  await getEngine().shutdown()
 }

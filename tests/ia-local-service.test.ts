@@ -95,8 +95,9 @@ beforeEach(() => {
   memGb = 8
   extractHook = null
   svc._deps.remove = realRemove
-  svc._deps.processName = async () => null
+  svc._deps.processPath = async () => null
   svc._deps.killPid = () => undefined
+  svc._resetEngine()
   svc.initLocalAi()
 })
 
@@ -207,18 +208,70 @@ describe('IA local: endurecimento', () => {
     mkdirSync(dirname(pid), { recursive: true })
 
     writeFileSync(pid, '4242')
-    svc._deps.processName = async () => '/Users/x/ai-local/engine/b12143/llama-x/' + exe
+    svc._deps.processPath = async () => join(base(), 'engine', ENGINE_VERSION, 'llama-x', exe)
     expect(await svc.killOrphan()).toBe(true)
     expect(killed).toEqual([4242])
     expect(existsSync(pid)).toBe(false)
 
     writeFileSync(pid, '4243')
-    svc._deps.processName = async () => 'Safari' // o PID foi reaproveitado por outro programa
+    svc._deps.processPath = async () => 'Safari' // o PID foi reaproveitado por outro programa
+    expect(await svc.killOrphan()).toBe(false)
+    expect(killed).toEqual([4242])
+
+    writeFileSync(pid, '4244')
+    // mesmo nome de programa, mas de outro lugar (outro llama-server do usuário): não encerra
+    svc._deps.processPath = async () => join('/Users/x/outro', exe)
+    expect(await svc.killOrphan()).toBe(false)
+    svc._deps.processPath = async () => exe // só o nome, sem caminho completo
+    writeFileSync(pid, '4245')
     expect(await svc.killOrphan()).toBe(false)
     expect(killed).toEqual([4242])
 
     writeFileSync(pid, 'lixo')
     expect(await svc.killOrphan()).toBe(false)
     expect(killed).toEqual([4242])
+  })
+})
+
+describe('IA local: encerramento e PID', () => {
+  test('motor antigo que sai tarde não apaga o PID do motor novo', () => {
+    const pid = join(base(), 'run', 'motor.pid')
+    mkdirSync(dirname(pid), { recursive: true })
+    writeFileSync(pid, '222')
+    svc._releasePidFile(111) // o antigo saiu depois do novo subir
+    expect(existsSync(pid)).toBe(true)
+    svc._releasePidFile(222)
+    expect(existsSync(pid)).toBe(false)
+  })
+
+  test('encerrar o app para o motor e recusa tarefa nova', async () => {
+    await svc.installLocal('leve', onP)
+    await startEngine()
+    const antes = children.length
+    expect(children.at(-1)?.killed).toBe(false)
+    await svc.shutdownLocalAi()
+    expect(children.at(-1)?.killed).toBe(true)
+    await startEngine() // o pedido falha, mas nenhum motor novo sobe
+    expect(children).toHaveLength(antes)
+  })
+
+  test('remover passa pela fila: espera a tarefa em andamento terminar', async () => {
+    await svc.installLocal('leve', onP)
+    let release!: () => void
+    const gate = new Promise<void>((r) => (release = r))
+    let ended = false
+    const task = svc.exclusiveLocal(async () => {
+      await gate
+      ended = true
+    })
+    let removed = false
+    const rm = svc.removeLocal().then(() => (removed = true))
+    await new Promise((r) => setTimeout(r, 50))
+    expect(removed).toBe(false)
+    release()
+    await task
+    await rm
+    expect(ended).toBe(true)
+    expect(removed).toBe(true)
   })
 })
