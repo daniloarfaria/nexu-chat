@@ -400,6 +400,30 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX status_posts_due ON status_posts (status, scheduled_at);
   CREATE INDEX status_posts_account ON status_posts (account_id, created_at);
+  `,
+  // notas do cliente e datas
+  `
+  CREATE TABLE contact_notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL DEFAULT 'geral',
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    author TEXT NOT NULL DEFAULT 'atendente',
+    pinned INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE INDEX contact_notes_person ON contact_notes (person_id, pinned DESC, updated_at DESC);
+  -- até onde a IA já leu a conversa de cada contato (disparo automático) e sugestões já dispensadas
+  CREATE TABLE contact_profile_state (
+    person_id INTEGER PRIMARY KEY REFERENCES people(id) ON DELETE CASCADE,
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    last_ts INTEGER NOT NULL DEFAULT 0,
+    birthday_suggestion TEXT,
+    birthday_dismissed INTEGER NOT NULL DEFAULT 0
+  );
   `
 ]
 

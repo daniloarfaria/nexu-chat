@@ -19,6 +19,11 @@ import type {
   AiUsageEntry,
   AutoRule,
   BusinessContext,
+  BirthdaySuggestion,
+  ContactNote,
+  DateHistoryItem,
+  NoteInput,
+  ProfileMapResult,
   LocalAiProgress,
   LocalAiStatus,
   Campaign,
@@ -228,6 +233,25 @@ export interface ApiMap {
   }
   'pipelines:chat-tags': { args: [{ accountId: string; chatJid: string; tags: string[] }]; ret: string[] }
   'pipelines:person': { args: [{ accountId: string; personId: number }]; ret: CardPlacement[] }
+
+  // Notas do cliente e datas (alvo: o contato ou a conversa dele)
+  'notes:list': {
+    args: [{ accountId: string; personId?: number; chatJid?: string }]
+    ret: { personId: number | null; notes: ContactNote[] }
+  }
+  'notes:save': {
+    args: [{ accountId: string; personId?: number; chatJid?: string; note: NoteInput }]
+    ret: ContactNote
+  }
+  'notes:pin': { args: [{ accountId: string; id: number; pinned: boolean }]; ret: void }
+  'notes:delete': { args: [{ accountId: string; id: number }]; ret: void }
+  'notes:map': { args: [{ accountId: string; personId?: number; chatJid?: string }]; ret: ProfileMapResult }
+  'dates:info': {
+    args: [{ accountId: string; personId?: number; chatJid?: string }]
+    ret: { personId: number | null; history: DateHistoryItem[]; suggestion: BirthdaySuggestion | null }
+  }
+  'dates:birthday-set': { args: [{ accountId: string; personId: number; birthday: string }]; ret: string }
+  'dates:suggestion-dismiss': { args: [{ accountId: string; personId: number }]; ret: void }
 
   // Campanhas
   'antiban:get': { args: [{ accountId: string }]; ret: AntiBanSettings }
@@ -511,6 +535,14 @@ export const API_CHANNELS: ApiChannel[] = [
   'pipelines:chat-profile',
   'pipelines:chat-tags',
   'pipelines:person',
+  'notes:list',
+  'notes:save',
+  'notes:pin',
+  'notes:delete',
+  'notes:map',
+  'dates:info',
+  'dates:birthday-set',
+  'dates:suggestion-dismiss',
   'antiban:get',
   'antiban:set',
   'campaigns:list',

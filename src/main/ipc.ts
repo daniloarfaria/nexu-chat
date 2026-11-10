@@ -17,6 +17,7 @@ import { markNovidadesSeen, pendingNovidades } from './novidades'
 import { NEXU_SITE, SITE_PAGES, type SitePage } from '@shared/site'
 import { registerBusinessIpc } from './ipc-business'
 import { registerStatusIpc } from './ipc-status'
+import { registerNotesIpc } from './ipc-notes'
 import { checkForUpdates, downloadUpdate, getUpdateStatus, installUpdate } from './updater'
 
 export type Handle = <C extends ApiChannel>(channel: C, schema: z.ZodTypeAny | null, fn: Handler<C>) => void
@@ -141,6 +142,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null, relaunch: () 
   registerChatIpc(handle, getWindow)
   registerBusinessIpc(handle, getWindow)
   registerStatusIpc(handle)
+  registerNotesIpc(handle)
 
   handle('backup:get', null, () => backup.getBackupSettings())
   handle(
