@@ -374,6 +374,13 @@ describe('duração do vídeo (validada no processo principal)', () => {
     expect(S.readMp4Seconds(mp4(12.5, 600))).toBeCloseTo(12.5)
   })
 
+  test('mvhd com duração 0 ou 0xFFFFFFFF (fragmentado) conta como não lido e é recusado', () => {
+    for (const d of [mp4(0), mp4(0xffffffff / 1000)]) {
+      expect(S.readMp4Seconds(d)).toBeNull()
+      expect(() => S.createStatusPost(video(d))).toThrow(/duração/)
+    }
+  })
+
   test('arquivo que não é MP4 legível é recusado', () => {
     expect(() => S.createStatusPost(video(new Uint8Array([1, 2, 3])))).toThrow(/duração/)
   })

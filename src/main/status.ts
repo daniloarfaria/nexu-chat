@@ -145,11 +145,14 @@ export function readMp4Seconds(data: Uint8Array): number | null {
         if (v === 1) {
           if (at + 28 > end) return null
           const scale = buf.readUInt32BE(at + 16)
-          return scale ? Number(buf.readBigUInt64BE(at + 20)) / scale : null
+          const dur = buf.readBigUInt64BE(at + 20)
+          // 0 ou todos os bits ligados: MP4 fragmentado/sem duração declarada
+          return scale && dur !== 0n && dur !== 0xffffffffffffffffn ? Number(dur) / scale : null
         }
         if (at + 16 > end) return null
         const scale = buf.readUInt32BE(at + 8)
-        return scale ? buf.readUInt32BE(at + 12) / scale : null
+        const dur = buf.readUInt32BE(at + 12)
+        return scale && dur !== 0 && dur !== 0xffffffff ? dur / scale : null
       }
       pos += size
     }
