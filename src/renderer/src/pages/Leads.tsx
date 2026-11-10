@@ -106,7 +106,7 @@ export function Leads(): React.JSX.Element {
             </Button>
           }
         >
-          Em Configurações → Integrações, informe o link do Apps Script e a senha do formulário. O app busca os leads a
+          Em Configurações → Integrações, informe o link do Apps Script e a senha da integração. O app busca os leads a
           cada 30 minutos.
         </Empty>
       ) : (
@@ -208,7 +208,7 @@ export function Leads(): React.JSX.Element {
                             </div>
                           </td>
                           <td className="py-2 text-ink-2">
-                            {[l.utmSource, l.utmCampaign].filter(Boolean).join(' / ') || '—'}
+                            {[l.utmSource, l.utmCampaign].filter(Boolean).join(' / ') || 'Sem informação'}
                           </td>
                           <td className="py-2">
                             <div className="flex flex-wrap gap-1">
@@ -221,7 +221,7 @@ export function Leads(): React.JSX.Element {
                               )}
                             </div>
                           </td>
-                          <td className="tabular py-2 text-right">{l.won ? money(l.valueCents) : '—'}</td>
+                          <td className="tabular py-2 text-right">{l.won ? money(l.valueCents) : 'Sem venda'}</td>
                         </tr>
                       ))}
                     </tbody>

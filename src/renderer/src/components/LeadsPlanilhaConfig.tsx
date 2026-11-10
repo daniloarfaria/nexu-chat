@@ -77,7 +77,7 @@ export function LeadsPlanilhaConfig(): React.JSX.Element {
   return (
     <Section
       title="Planilha de leads"
-      description="Traz para o app os leads que o formulário do site gravou na planilha, a cada 30 minutos. Nada fica público: o app pede com a senha do formulário."
+      description="Traz para o app os leads que o formulário do site gravou na planilha, a cada 30 minutos. Nada fica público: o app pede com a senha da integração."
       actions={
         c?.lastSyncAt ? (
           <Badge tone={c.lastError ? 'bad' : 'ok'}>
@@ -100,12 +100,12 @@ export function LeadsPlanilhaConfig(): React.JSX.Element {
           />
         </Field>
         <Field
-          label="Senha do formulário"
+          label="Senha da integração"
           htmlFor="lp-secret"
           hint={
             c?.hasSecret
               ? 'Já há uma senha guardada (protegida neste computador). Deixe em branco para manter.'
-              : 'A mesma senha do formulário do site (SEGREDO_FORMULARIO).'
+              : 'A senha própria da integração, a mesma da propriedade SEGREDO_INTEGRACAO_LEADS do script. Use uma senha longa e diferente da do formulário.'
           }
         >
           <Input
@@ -122,7 +122,7 @@ export function LeadsPlanilhaConfig(): React.JSX.Element {
           <div>
             <div className="text-[14px] font-medium">Criar contato para cada lead novo</div>
             <div className="text-[13px] text-ink-2">
-              O contato ganha a etiqueta “Lead site”. O lead preencheu o formulário, então há consentimento.
+              O contato ganha a etiqueta “Lead site”. Confira que o formulário do site tem o aviso de consentimento.
             </div>
           </div>
         </div>

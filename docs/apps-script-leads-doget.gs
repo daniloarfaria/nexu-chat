@@ -1,32 +1,41 @@
 /**
- * REFERÊNCIA: novo doGet do Codigo.gs (modelo Apps Script da agência) para o Nexu Chat buscar os leads.
- *
- * Como usar: no Codigo.gs do cliente, SUBSTITUA a função doGet() antiga por este bloco
- * (as constantes ABAS e PROPRIEDADE_SEGREDO já existem no modelo; não duplique) e
- * publique uma nova versão da implantação (Implantar → Gerenciar implantações → Editar → Nova versão).
- *
- * Segurança (LGPD):
- *  - Exige a mesma senha do formulário (propriedade do script SEGREDO_FORMULARIO), enviada no parâmetro "segredo".
- *  - Sem a senha certa, não devolve nenhum lead. Nada fica público; NÃO publique a planilha como CSV.
- *  - Só devolve linhas mais novas que "desde" (milissegundos desde 1970), no máximo MAX_LINHAS por chamada.
- *
- * Resposta: { ok: true, leads: [ { aba, ts, nome, email, telefone, interesse, mensagem,
- *             utm_source, utm_medium, utm_campaign, utm_content, utm_term, pagina } ] }
- *   ou { ok: false, erro: '...' }
+ * Referência do endpoint de leads do Nexu Chat.
+ * Integre o doPost ao roteador do formulário existente: pedidos de leads têm
+ * operacao: 'leads'; os demais devem continuar no manipulador do formulário.
+ * Configure SEGREDO_INTEGRACAO_LEADS com senha própria, longa e aleatória,
+ * diferente de SEGREDO_FORMULARIO. Preserve ABAS do modelo do cliente.
+ * doGet existe só para compatibilidade: segredo na URL pode ficar em logs e históricos.
+ * Prefira POST com JSON { operacao: 'leads', segredo, desde, offset }.
+ * Publique uma nova versão da implantação após atualizar.
  */
 const MAX_LINHAS = 2000;
 
+// No modelo da agência o doPost do formulário já existe: NÃO duplique. Coloque no começo dele:
+//   if (corpo.operacao === 'leads') return buscarLeads_(corpo);
+// (o doPost abaixo é só a referência isolada).
+function doPost(e) {
+  let params;
+  try { params = JSON.parse(e.postData.contents); }
+  catch (_) { return responderLeads_({ ok: false, erro: 'Não autorizado' }); }
+  return buscarLeads_(params);
+}
+
 function doGet(e) {
-  const params = (e && e.parameter) || {};
+  return buscarLeads_((e && e.parameter) || {});
+}
 
-  // Abrir o link no navegador, sem senha, só mostra que o script está no ar (nenhum dado).
-  if (!params.segredo) {
-    return ContentService.createTextOutput('Formulário: ativo.');
-  }
-
-  const segredo = PropertiesService.getScriptProperties().getProperty(PROPRIEDADE_SEGREDO);
-  if (!segredo) return responderLeads_({ ok: false, erro: 'Senha do formulário não configurada no Apps Script.' });
-  if (params.segredo !== segredo) return responderLeads_({ ok: false, erro: 'Não autorizado.' });
+function buscarLeads_(params) {
+  const cache = CacheService.getScriptCache();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(5000);
+  let autorizado = false;
+  try {
+    const falhas = Number(cache.get('leads:falhas') || 0);
+    const segredo = PropertiesService.getScriptProperties().getProperty('SEGREDO_INTEGRACAO_LEADS');
+    autorizado = falhas < 20 && !!segredo && params.segredo === segredo;
+    if (!autorizado) cache.put('leads:falhas', String(Math.min(falhas + 1, 20)), 300);
+  } finally { lock.releaseLock(); }
+  if (!autorizado) return responderLeads_({ ok: false, erro: 'Não autorizado' });
 
   const desde = Number(params.desde) > 0 ? Number(params.desde) : 0;
   const planilha = SpreadsheetApp.getActiveSpreadsheet();
@@ -41,7 +50,7 @@ function doGet(e) {
       const data = linha[0];
       if (!(data instanceof Date)) return; // linha sem data válida (editada à mão): ignora
       const ts = data.getTime();
-      if (ts <= desde) return;
+      if (ts <= desde || ts > Date.now() + 86400000) return;
       const lead = { aba: config.nome, ts: ts };
       config.campos.forEach(function (campo, i) {
         lead[campo] = String(linha[i + 1] == null ? '' : linha[i + 1]);
@@ -51,7 +60,8 @@ function doGet(e) {
   });
 
   leads.sort(function (a, b) { return a.ts - b.ts; });
-  return responderLeads_({ ok: true, leads: leads.slice(0, MAX_LINHAS) });
+  const offset = Math.max(0, Math.floor(Number(params.offset) || 0));
+  return responderLeads_({ ok: true, leads: leads.slice(offset, offset + MAX_LINHAS) });
 }
 
 function responderLeads_(objeto) {

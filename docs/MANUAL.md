@@ -331,9 +331,11 @@ O menu **Funis** organiza os clientes em etapas, como num quadro de post-its.
 Para lojas que têm o site da agência com formulário gravando numa Google Planilha. Módulo **Planilha de leads** (plano Marketing). Ligue em **Configurações → Módulos**.
 
 **Configurar** (uma vez, em **Configurações → Integrações**):
-1. Cole o **link do Apps Script** (o que termina em `/exec`) e a **senha do formulário**. A senha fica guardada de forma protegida neste computador e nunca é mostrada de volta. Para trocar, digite a nova; em branco mantém a atual.
-2. A planilha precisa do **doGet novo** no Apps Script. Ele exige a senha e entrega só as linhas novas. A agência faz essa atualização (trecho de referência em `docs/apps-script-leads-doget.gs`). A planilha nunca é publicada na internet.
-3. Opcional: **Criar contato para cada lead novo**. O contato ganha a etiqueta “Lead site” e, se você escolher um funil, um cartão na primeira coluna dele. Só leads novos viram contato, e quem já é contato não é alterado.
+1. Cole o **link do Apps Script** (o que termina em `/exec`) e a **senha da integração**. A senha fica guardada de forma protegida neste computador e nunca é mostrada de volta. Para trocar, digite a nova; em branco mantém a atual.
+2. A planilha precisa do **doPost novo** no Apps Script. Ele exige a senha e entrega só as linhas novas. A agência faz essa atualização (trecho de referência em `docs/apps-script-leads-doget.gs`). A planilha nunca é publicada na internet.
+3. Opcional: **Criar contato para cada lead novo**. O contato ganha a etiqueta “Lead site” e, se você escolher um funil, um cartão na primeira coluna dele. Contatos existentes também recebem a etiqueta e o cartão, preservando seus dados. Falhas nessa criação ficam pendentes para nova tentativa.
+
+Use uma senha própria da integração, longa e aleatória, diferente da senha do formulário do site, na propriedade `SEGREDO_INTEGRACAO_LEADS`. O app envia a senha no corpo JSON de um POST. O `doGet` é mantido apenas por compatibilidade: a senha na URL pode aparecer em históricos e registros; prefira POST. Confira que o formulário do site tem o aviso de consentimento. Ainda não há rotina de retenção dos leads; defina e execute a exclusão conforme a política da loja.
 
 **Atualização:** o app busca leads novos a cada 30 minutos e também no botão **Atualizar agora**. Se a internet cair ou o Google demorar, o app avisa e tenta de novo depois, sem travar. A mesma linha da planilha nunca entra duas vezes.
 

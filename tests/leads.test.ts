@@ -1,7 +1,8 @@
 import { beforeEach, afterEach, describe, expect, test, vi } from 'vitest'
-import { mkdtempSync } from 'node:fs'
+import { readFileSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { runInNewContext } from 'node:vm'
 
 vi.mock('electron', () => ({
   app: { getPath: () => tmpdir() },
@@ -20,6 +21,7 @@ import { MODULE_KEYS, PLANS } from '../src/shared/types'
 const ACC = '44444444-4444-4444-8444-444444444444'
 const URL_OK = 'https://script.google.com/macros/s/AKfycbxTESTE/exec'
 const T0 = Date.now() - 5 * 86_400_000
+const S = Math.floor(T0 / 1000) // chats.last_ts fica em segundos
 
 beforeEach(() => {
   closeDb()
@@ -44,11 +46,8 @@ const lead = (o: Record<string, unknown> = {}): Record<string, unknown> => ({
 })
 
 function stubFetch(leads: unknown[]): ReturnType<typeof vi.fn> {
-  const f = vi.fn(async () => ({
-    ok: true,
-    status: 200,
-    text: async () => JSON.stringify({ ok: true, leads })
-  }))
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const f = vi.fn(async (_url: string, _options?: RequestInit) => new Response(JSON.stringify({ ok: true, leads })))
   vi.stubGlobal('fetch', f)
   return f
 }
@@ -100,8 +99,9 @@ describe('sincronização', () => {
     const r2 = await L.syncLeads(ACC)
     expect(r2).toMatchObject({ ok: true, added: 0 })
     expect(L.listLeads(ACC, {}).total).toBe(2)
-    expect(String(f.mock.calls[0][0])).toContain('segredo=s')
-    expect(String(f.mock.calls[1][0])).toContain('desde=')
+    expect(JSON.parse(String(f.mock.calls[0][1]?.body))).toMatchObject({ segredo: 's' })
+    expect(String(f.mock.calls[0][0])).not.toContain('segredo')
+    expect(JSON.parse(String(f.mock.calls[1][1]?.body)).desde).toBeGreaterThan(0)
   })
   test('falha de rede devolve erro e não lança', async () => {
     L.saveConfig(ACC, { url: URL_OK, secret: 's' })
@@ -119,16 +119,12 @@ describe('sincronização', () => {
     L.saveConfig(ACC, { url: URL_OK, secret: 's' })
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => ({ ok: true, status: 200, text: async () => '<html>login</html>' }))
+      vi.fn(async () => new Response('<html>login</html>'))
     )
     expect((await L.syncLeads(ACC)).ok).toBe(false)
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => ({
-        ok: true,
-        status: 200,
-        text: async () => JSON.stringify({ ok: false, erro: 'Senha inválida' })
-      }))
+      vi.fn(async () => new Response(JSON.stringify({ ok: false, erro: 'Senha inválida' })))
     )
     expect((await L.syncLeads(ACC)).ok).toBe(false)
   })
@@ -161,7 +157,7 @@ describe('casamento pelo telefone', () => {
       ACC,
       '5511987650001@s.whatsapp.net',
       'Ana',
-      T0
+      S + 5
     )
     const p = people.savePerson(ACC, { name: 'Ana', phone: '11987650001' })
     const pl = funil(['Novo', 'Fechado'])
@@ -176,7 +172,7 @@ describe('casamento pelo telefone', () => {
       ACC,
       '999@lid',
       'Bruno',
-      T0
+      S + 5
     )
 
     const items = L.listLeads(ACC, {}).items
@@ -218,7 +214,7 @@ describe('relatório por UTM', () => {
       db.prepare('INSERT INTO chats (account_id, jid, last_ts) VALUES (?, ?, ?)').run(
         ACC,
         `551198765000${n}@s.whatsapp.net`,
-        T0
+        S + 5
       )
     saveDeal(ACC, { chatJid: '5511987650001@s.whatsapp.net', status: 'won', amountCents: 30000 })
     saveDeal(ACC, { chatJid: '5511987650001@s.whatsapp.net', status: 'won', amountCents: 10000 })
@@ -261,5 +257,81 @@ describe('lead novo vira contato', () => {
     stubFetch([lead()])
     expect(await L.syncLeads(ACC)).toMatchObject({ added: 1, contacts: 0 })
     expect(people.listPeople({ accountId: ACC, limit: 10, offset: 0 }).total).toBe(0)
+  })
+})
+
+describe('recuperação dos contatos e orientação de privacidade', () => {
+  test('contato existente recebe etiqueta e cartão sem perder dados', async () => {
+    const p = people.savePerson(ACC, { name: 'Nome mantido', phone: '11987650001', tags: ['Cliente'] })
+    const pl = funil(['Entrou'])
+    L.saveConfig(ACC, { url: URL_OK, secret: 's', createContacts: true, pipelineId: pl.id })
+    stubFetch([lead()])
+    await L.syncLeads(ACC)
+    expect(people.getPerson(ACC, p.id)).toMatchObject({ name: 'Nome mantido', tags: ['Cliente', 'Lead site'] })
+    expect(pipes.placementsOfPerson(ACC, p.id)[0]?.stageName).toBe('Entrou')
+  })
+  test('retoma cartão pendente após falha, mesmo sem receber novamente o lead', async () => {
+    const pl = funil(['Entrou'])
+    L.saveConfig(ACC, { url: URL_OK, secret: 's', createContacts: true, pipelineId: pl.id })
+    const spy = vi.spyOn(pipes, 'addPeople').mockImplementationOnce(() => {
+      throw new Error('falha simulada')
+    })
+    stubFetch([lead()])
+    await L.syncLeads(ACC)
+    spy.mockRestore()
+    stubFetch([])
+    await L.syncLeads(ACC)
+    const p = people.findPersonByJid(ACC, '5511987650001@s.whatsapp.net')!
+    expect(pipes.placementsOfPerson(ACC, p.id)[0]?.stageName).toBe('Entrou')
+    expect(L.listLeads(ACC, {}).total).toBe(1)
+  })
+  test('orienta conferir consentimento e informa ausência de retenção automática', () => {
+    const ui = readFileSync('src/renderer/src/components/LeadsPlanilhaConfig.tsx', 'utf8')
+    expect(ui.toLowerCase()).toContain('confira que o formulário do site tem o aviso de consentimento')
+    expect(readFileSync('docs/MANUAL.md', 'utf8')).toContain('não há rotina de retenção dos leads')
+  })
+})
+
+describe('script de referência', () => {
+  test('POST e GET usam segredo exclusivo, erro único e contador de falhas', () => {
+    const cache = new Map<string, string>()
+    const context = {
+      CacheService: {
+        getScriptCache: () => ({ get: (k: string) => cache.get(k), put: (k: string, v: string) => cache.set(k, v) })
+      },
+      LockService: { getScriptLock: () => ({ waitLock: vi.fn(), releaseLock: vi.fn() }) },
+      PropertiesService: {
+        getScriptProperties: () => ({
+          getProperty: (k: string) => (k === 'SEGREDO_INTEGRACAO_LEADS' ? 'exclusivo' : 'formulario')
+        })
+      },
+      ContentService: {
+        MimeType: { JSON: 'json' },
+        createTextOutput: (body: string) => ({
+          body,
+          setMimeType() {
+            return this
+          }
+        })
+      },
+      SpreadsheetApp: { getActiveSpreadsheet: () => ({ getSheetByName: () => null }) },
+      ABAS: {},
+      doPost: undefined as unknown as (e: unknown) => { body: string },
+      doGet: undefined as unknown as (e: unknown) => { body: string }
+    }
+    runInNewContext(readFileSync('docs/apps-script-leads-doget.gs', 'utf8'), context)
+    for (const segredo of ['', 'errada', 'formulario']) {
+      expect(JSON.parse(context.doPost({ postData: { contents: JSON.stringify({ segredo }) } }).body)).toEqual({
+        ok: false,
+        erro: 'Não autorizado'
+      })
+    }
+    expect(cache.get('leads:falhas')).toBe('3')
+    expect(
+      JSON.parse(context.doPost({ postData: { contents: JSON.stringify({ segredo: 'exclusivo' }) } }).body)
+    ).toEqual({ ok: true, leads: [] })
+    expect(JSON.parse(context.doGet({ parameter: { segredo: 'exclusivo' } }).body)).toEqual({ ok: true, leads: [] })
+    cache.set('leads:falhas', '20')
+    expect(JSON.parse(context.doGet({ parameter: { segredo: 'exclusivo' } }).body).erro).toBe('Não autorizado')
   })
 })
