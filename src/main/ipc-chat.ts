@@ -140,6 +140,7 @@ export function registerChatIpc(handle: Handle, getWindow: () => BrowserWindow |
     async (a) => {
       await send.sendLocation(sock(a.accountId), a.accountId, a.jid, a)
       noteHumanMessage(a.accountId, a.jid)
+      onHumanMessage(a.accountId, a.jid)
     }
   )
   handle(
@@ -148,6 +149,7 @@ export function registerChatIpc(handle: Handle, getWindow: () => BrowserWindow |
     async (a) => {
       await send.sendContactCard(sock(a.accountId), a.accountId, a.jid, a)
       noteHumanMessage(a.accountId, a.jid)
+      onHumanMessage(a.accountId, a.jid)
     }
   )
   handle(
@@ -164,6 +166,7 @@ export function registerChatIpc(handle: Handle, getWindow: () => BrowserWindow |
     async (a) => {
       await send.sendPoll(sock(a.accountId), a.accountId, a.jid, a)
       noteHumanMessage(a.accountId, a.jid)
+      onHumanMessage(a.accountId, a.jid)
     }
   )
   handle('messages:react', z.object({ accountId, jid, id: msgId, emoji: z.string().max(16) }).strict(), (a) =>

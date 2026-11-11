@@ -233,7 +233,7 @@ if (!app.requestSingleInstanceLock()) {
     startAutomation()
     robotEvents.on('changed', (p: unknown) => send('robot:changed', p))
     recoveryEvents.on('changed', (p: unknown) => send('recovery:changed', p))
-    recoveryEvents.on('approval', (p: { accountId: string; jid: string; n: number }) => {
+    recoveryEvents.on('approval', () => {
       if (!Notification.isSupported()) return
       const n = new Notification({
         title: 'Mensagem de recuperação para aprovar',
