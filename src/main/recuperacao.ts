@@ -400,11 +400,7 @@ function touch(accountId: string): void {
 // ---------- Quem entra ----------
 
 /** Etiqueta ou etapa de funil "orçamento" no contato, ou cartão em andamento em algum funil. */
-export function qualifyReason(
-  accountId: string,
-  jid: string,
-  s: RecoverySettings
-): 'orcamento' | 'funil' | null {
+export function qualifyReason(accountId: string, jid: string, s: RecoverySettings): 'orcamento' | 'funil' | null {
   const pid = personIdOfChat(accountId, jid)
   if (pid == null) return null
   const db = getDb()
@@ -541,7 +537,9 @@ export async function scanCandidates(accountId: string, now = Date.now()): Promi
     // "A loja respondeu e o cliente sumiu": a última mensagem é da loja e já passou o prazo
     if (!last || !last.fromMe || last.ts > nowS - idleS) continue
     const lc = db
-      .prepare("SELECT MAX(ts) AS t FROM messages WHERE account_id = ? AND chat_jid = ? AND from_me = 0 AND type <> 'system'")
+      .prepare(
+        "SELECT MAX(ts) AS t FROM messages WHERE account_id = ? AND chat_jid = ? AND from_me = 0 AND type <> 'system'"
+      )
       .get(accountId, jid) as { t: number | null }
     const lastClientTs = lc.t ?? 0
     // O cliente precisa ter falado, e há pouco tempo
@@ -549,9 +547,9 @@ export async function scanCandidates(accountId: string, now = Date.now()): Promi
     const jids = relatedJids(accountId, jid)
     if (isOptedOut(accountId, jid)) continue
     // Conversa que o robô passou para um atendente, ou resposta do robô a caminho: não é a hora
-    const mode = db.prepare('SELECT mode FROM chat_ai_mode WHERE account_id = ? AND chat_jid = ?').get(accountId, jid) as
-      | { mode: string }
-      | undefined
+    const mode = db
+      .prepare('SELECT mode FROM chat_ai_mode WHERE account_id = ? AND chat_jid = ?')
+      .get(accountId, jid) as { mode: string } | undefined
     if (mode?.mode === 'espera' || robotBusy(accountId, jid)) continue
     // Venda ou perda já marcada depois da última mensagem do cliente: acabou
     const deal = db
@@ -625,7 +623,9 @@ function advance(f: FollowupRow, n: number, s: RecoverySettings, fromMs: number)
 
 function concludeFollowup(f: FollowupRow, now: number): void {
   getDb()
-    .prepare("UPDATE followups SET status = 'concluido', next_due_at = NULL, updated_at = ? WHERE id = ? AND status = 'ativo'")
+    .prepare(
+      "UPDATE followups SET status = 'concluido', next_due_at = NULL, updated_at = ? WHERE id = ? AND status = 'ativo'"
+    )
     .run(now, f.id)
 }
 
@@ -651,7 +651,11 @@ function clientWroteSince(f: FollowupRow): boolean {
 }
 
 /** Escreve a próxima tentativa de um acompanhamento que venceu. */
-async function generateAttempt(f: FollowupRow, s: RecoverySettings, now: number): Promise<'escrita' | 'parou' | 'falhou' | 'adiou'> {
+async function generateAttempt(
+  f: FollowupRow,
+  s: RecoverySettings,
+  now: number
+): Promise<'escrita' | 'parou' | 'falhou' | 'adiou'> {
   const accountId = f.account_id
   const jid = f.chat_jid
   const n = f.attempts_done + 1
@@ -684,8 +688,7 @@ async function generateAttempt(f: FollowupRow, s: RecoverySettings, now: number)
   const chat = getChats(accountId, [jid])[0]
   const names = [chat?.name].filter(Boolean) as string[]
   const pb = getDb().prepare('SELECT content FROM playbooks WHERE account_id = ?').get(accountId) as
-    | { content: string }
-    | undefined
+    { content: string } | undefined
   const history = msgs.slice(-15).map((m) => ({
     fromMe: m.fromMe,
     text: anonymize(m.text ?? (m.transcript ? `[áudio] ${m.transcript}` : `[${m.type}]`), names)
@@ -703,7 +706,8 @@ async function generateAttempt(f: FollowupRow, s: RecoverySettings, now: number)
 
   let raw: string
   try {
-    raw = (await complete({ task: 'recuperacao', tier: 'smart', customerData: true, system, prompt, maxTokens: 400 })).text
+    raw = (await complete({ task: 'recuperacao', tier: 'smart', customerData: true, system, prompt, maxTokens: 400 }))
+      .text
   } catch (e) {
     log.warn('IA indisponível na recuperação de vendas', { erro: String((e as Error).message).slice(0, 200) })
     failGeneration(f, now)
@@ -760,7 +764,9 @@ async function generateAttempt(f: FollowupRow, s: RecoverySettings, now: number)
       Date.now(),
       auto ? Date.now() : null
     )
-  getDb().prepare('UPDATE followups SET next_due_at = NULL, fail_count = 0, updated_at = ? WHERE id = ?').run(Date.now(), f.id)
+  getDb()
+    .prepare('UPDATE followups SET next_due_at = NULL, fail_count = 0, updated_at = ? WHERE id = ?')
+    .run(Date.now(), f.id)
   touch(accountId)
   if (!auto) recoveryEvents.emit('approval', { accountId, jid, n })
   return 'escrita'
@@ -799,7 +805,9 @@ const sendingNow = new Set<number>()
 const sentLast24h = (accountId: string, now: number): number =>
   (
     getDb()
-      .prepare("SELECT COUNT(*) AS n FROM followup_attempts WHERE account_id = ? AND status = 'enviada' AND sent_at > ?")
+      .prepare(
+        "SELECT COUNT(*) AS n FROM followup_attempts WHERE account_id = ? AND status = 'enviada' AND sent_at > ?"
+      )
       .get(accountId, now - DAY_MS) as { n: number }
   ).n
 
@@ -840,10 +848,9 @@ function verdict(a: AttemptRow, now: number): Verdict {
 
 function discardAttempt(a: AttemptRow, why: string, stop: StopReason | undefined, now: number): void {
   const db = getDb()
-  db.prepare("UPDATE followup_attempts SET status = 'descartada', error = ? WHERE id = ? AND status IN ('pendente', 'aprovada')").run(
-    why.slice(0, 200),
-    a.id
-  )
+  db.prepare(
+    "UPDATE followup_attempts SET status = 'descartada', error = ? WHERE id = ? AND status IN ('pendente', 'aprovada')"
+  ).run(why.slice(0, 200), a.id)
   const f = followup(a.followup_id)
   if (!f || f.status !== 'ativo') return
   if (stop) {
@@ -991,7 +998,8 @@ export function approveAttempt(accountId: string, id: number, editedText?: strin
   if (editedText != null && editedText.trim() && editedText.trim() !== a.text.trim()) {
     const s = getRecoverySettings(accountId)
     const offer = offerFor(s, a.n)
-    if ((offer?.phrase ?? null) !== a.offer) throw new Error('A regra de desconto mudou. Descarte esta mensagem e espere a próxima.')
+    if ((offer?.phrase ?? null) !== a.offer)
+      throw new Error('A regra de desconto mudou. Descarte esta mensagem e espere a próxima.')
     const composed = composeText(editedText.trim().slice(0, 1500), offer)
     const checked = composed.ok
       ? checkRecoveryReply(composed.text, { source: allowedContext(accountId), offer })
@@ -1004,7 +1012,9 @@ export function approveAttempt(accountId: string, id: number, editedText?: strin
     edited = 1
   }
   getDb()
-    .prepare("UPDATE followup_attempts SET status = 'aprovada', text = ?, edited = ?, approved_at = ? WHERE id = ? AND status = 'pendente'")
+    .prepare(
+      "UPDATE followup_attempts SET status = 'aprovada', text = ?, edited = ?, approved_at = ? WHERE id = ? AND status = 'pendente'"
+    )
     .run(text, edited, Date.now(), id)
   touch(accountId)
   deliverApproved(accountId)
@@ -1029,7 +1039,9 @@ export function stopFollowupById(accountId: string, id: number): void {
 
 export function listFollowups(accountId: string, limit = 60): RecoveryFollowupItem[] {
   const rows = getDb()
-    .prepare("SELECT * FROM followups WHERE account_id = ? AND stop_reason IS NOT 'sem_interesse' ORDER BY updated_at DESC LIMIT ?")
+    .prepare(
+      "SELECT * FROM followups WHERE account_id = ? AND stop_reason IS NOT 'sem_interesse' ORDER BY updated_at DESC LIMIT ?"
+    )
     .all(accountId, limit) as unknown as FollowupRow[]
   const names = new Map(getChats(accountId, [...new Set(rows.map((r) => r.chat_jid))]).map((c) => [c.jid, c.name]))
   return rows.map((f) => ({

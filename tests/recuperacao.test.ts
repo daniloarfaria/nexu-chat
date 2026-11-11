@@ -63,15 +63,9 @@ function addMsg(fromMe: boolean, text: string, at: number, jid = JID): MessageIt
     at
   )
   db.prepare('UPDATE chats SET last_ts = MAX(last_ts, ?) WHERE account_id = ? AND jid = ?').run(at, ACC, jid)
-  db.prepare('INSERT INTO messages (account_id, chat_jid, id, from_me, ts, type, text) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
-    ACC,
-    jid,
-    id,
-    fromMe ? 1 : 0,
-    at,
-    'text',
-    text
-  )
+  db.prepare(
+    'INSERT INTO messages (account_id, chat_jid, id, from_me, ts, type, text) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(ACC, jid, id, fromMe ? 1 : 0, at, 'text', text)
   return { id, chatJid: jid, fromMe, ts: at, type: 'text', text } as unknown as MessageItem
 }
 
@@ -120,7 +114,10 @@ beforeEach(() => {
   updateAccount(ACC, { modules: { ia: true, recuperacao: true } })
   R.saveRecoverySettings(ACC, { enabled: true })
   setAntiBan(ACC, { hourStart: 0, hourEnd: 24, days: [0, 1, 2, 3, 4, 5, 6] })
-  saveBusinessContext(ACC, { products: 'Armação a partir de R$ 199. Lente pronta em 7 dias.', hours: 'Seg a sáb, 9h às 18h' })
+  saveBusinessContext(ACC, {
+    products: 'Armação a partir de R$ 199. Lente pronta em 7 dias.',
+    hours: 'Seg a sáb, 9h às 18h'
+  })
   R.tuning.sleep = async () => undefined
   h.jobs.length = 0
   h.sent.length = 0
@@ -176,7 +173,16 @@ describe('desconto: o número vem só da regra', () => {
     expect(all).not.toContain('à vista')
     expect(all).not.toContain(offer.phrase)
     // Sem desconto na tentativa: a IA é proibida de oferecer
-    const q = R.buildRecoveryPrompt({ context: 'x', playbook: null, notes: '', history: [], n: 1, of: 3, offer: null, daysSilent: 1 })
+    const q = R.buildRecoveryPrompt({
+      context: 'x',
+      playbook: null,
+      notes: '',
+      history: [],
+      n: 1,
+      of: 3,
+      offer: null,
+      daysSilent: 1
+    })
     expect(q.system).toContain('Não ofereça desconto')
   })
 
@@ -224,7 +230,9 @@ describe('desconto: o número vem só da regra', () => {
       bad('Oi! Temos um desconto para você.', null)
       bad('Oi! Hoje está com 10% de abatimento.', null)
       bad('Oi! Tem promoção até sexta.', null)
-      expect(R.checkRecoveryReply('Temos desconto de 10%', { source: `${src} Desconto de 10% à vista.`, offer: null }).ok).toBe(false)
+      expect(
+        R.checkRecoveryReply('Temos desconto de 10%', { source: `${src} Desconto de 10% à vista.`, offer: null }).ok
+      ).toBe(false)
     })
 
     test('o valor do contexto da loja continua valendo', () => {
@@ -291,7 +299,12 @@ describe('fluxo: aprovar antes', () => {
   })
 
   test('o desconto entra só na tentativa configurada e é o texto da regra', async () => {
-    R.saveRecoverySettings(ACC, { discountPct: 10, discountFrom: 2, discountCondition: 'na compra à vista', attempts: 2 })
+    R.saveRecoverySettings(ACC, {
+      discountPct: 10,
+      discountFrom: 2,
+      discountCondition: 'na compra à vista',
+      attempts: 2
+    })
     quoteChat()
     mockComplete.mockResolvedValueOnce(ai('Oi! Ficou alguma dúvida?'))
     await runUntilQueued()
@@ -299,7 +312,9 @@ describe('fluxo: aprovar antes', () => {
     R.approveAttempt(ACC, R.listQueue(ACC)[0].id)
     await flush()
     // avança o relógio da 2ª tentativa
-    getDb().prepare('UPDATE followups SET next_due_at = ?').run(Date.now() - 1000)
+    getDb()
+      .prepare('UPDATE followups SET next_due_at = ?')
+      .run(Date.now() - 1000)
     mockComplete.mockResolvedValueOnce(ai('De novo por aqui! Consegui {DESCONTO} para você.'))
     expect(await R.processDue(ACC)).toBe(1)
     const q = R.listQueue(ACC)[0]
@@ -323,7 +338,9 @@ describe('fluxo: aprovar antes', () => {
     }
     await R.scanCandidates(ACC)
     for (let i = 0; i < 2; i++) {
-      getDb().prepare('UPDATE followups SET next_due_at = ? WHERE status = ?').run(Date.now() - 1000, 'ativo')
+      getDb()
+        .prepare('UPDATE followups SET next_due_at = ? WHERE status = ?')
+        .run(Date.now() - 1000, 'ativo')
       await R.processDue(ACC)
     }
     expect(R.listQueue(ACC)).toHaveLength(0)
@@ -336,7 +353,9 @@ describe('fluxo: aprovar antes', () => {
     mockComplete.mockRejectedValue(new Error('fora'))
     await R.scanCandidates(ACC)
     for (let i = 0; i < 3; i++) {
-      getDb().prepare('UPDATE followups SET next_due_at = ? WHERE status = ?').run(Date.now() - 1000, 'ativo')
+      getDb()
+        .prepare('UPDATE followups SET next_due_at = ? WHERE status = ?')
+        .run(Date.now() - 1000, 'ativo')
       await R.processDue(ACC)
     }
     expect(fup()).toMatchObject({ status: 'parado', stop_reason: 'ia_fora' })
@@ -506,15 +525,19 @@ describe('quem entra', () => {
         .run(ACC, '5511987650001', JID, Date.now(), Date.now()).lastInsertRowid
     )
     const pl = Number(
-      db.prepare("INSERT INTO pipelines (account_id, name, created_at) VALUES (?, 'Vendas', ?)").run(ACC, Date.now()).lastInsertRowid
+      db.prepare("INSERT INTO pipelines (account_id, name, created_at) VALUES (?, 'Vendas', ?)").run(ACC, Date.now())
+        .lastInsertRowid
     )
     const stage = (name: string, kind: string, pos: number): number =>
       Number(
-        db.prepare('INSERT INTO pipeline_stages (pipeline_id, name, kind, position) VALUES (?, ?, ?, ?)').run(pl, name, kind, pos)
-          .lastInsertRowid
+        db
+          .prepare('INSERT INTO pipeline_stages (pipeline_id, name, kind, position) VALUES (?, ?, ?, ?)')
+          .run(pl, name, kind, pos).lastInsertRowid
       )
     const won = stage('Ganho', 'won', 1)
-    const card = db.prepare('INSERT INTO pipeline_cards (pipeline_id, stage_id, person_id, position, created_at, moved_at) VALUES (?, ?, ?, 1, ?, ?)')
+    const card = db.prepare(
+      'INSERT INTO pipeline_cards (pipeline_id, stage_id, person_id, position, created_at, moved_at) VALUES (?, ?, ?, 1, ?, ?)'
+    )
     const c = Number(card.run(pl, won, pid, Date.now(), Date.now()).lastInsertRowid)
     expect(await R.scanCandidates(ACC)).toBe(0)
     db.prepare('UPDATE pipeline_cards SET stage_id = ? WHERE id = ?').run(stage('Conversa', 'open', 0), c)
@@ -528,8 +551,9 @@ describe('quem entra', () => {
     addMsg(true, 'Olá!', nowSec() - 3600) // há 1 hora: cedo
     const phone = JID.split('@')[0]
     const pid = Number(
-      getDb().prepare('INSERT INTO people (account_id, phone, jid, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(ACC, phone, JID, 1, 1)
-        .lastInsertRowid
+      getDb()
+        .prepare('INSERT INTO people (account_id, phone, jid, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
+        .run(ACC, phone, JID, 1, 1).lastInsertRowid
     )
     getDb().prepare('INSERT INTO person_tags (person_id, tag) VALUES (?, ?)').run(pid, 'orçamento')
     expect(await R.scanCandidates(ACC)).toBe(0)
@@ -540,8 +564,12 @@ describe('quem entra', () => {
 
   test('conversa velha (semanas) não é acordada ao ligar a regra', async () => {
     quoteChat()
-    getDb().prepare('UPDATE messages SET ts = ts - ?').run(20 * DAY)
-    getDb().prepare('UPDATE chats SET last_ts = last_ts - ?').run(20 * DAY)
+    getDb()
+      .prepare('UPDATE messages SET ts = ts - ?')
+      .run(20 * DAY)
+    getDb()
+      .prepare('UPDATE chats SET last_ts = last_ts - ?')
+      .run(20 * DAY)
     expect(await R.scanCandidates(ACC)).toBe(0)
   })
 
@@ -600,7 +628,9 @@ describe('quem entra', () => {
     R.resetRecoveryState()
     mockComplete.mockResolvedValueOnce({ text: '{"interesse":true}', provider: 't', model: 'm' })
     expect(await R.scanCandidates(ACC)).toBe(1)
-    expect((getDb().prepare('SELECT reason_in FROM followups').get() as { reason_in: string }).reason_in).toBe('interesse')
+    expect((getDb().prepare('SELECT reason_in FROM followups').get() as { reason_in: string }).reason_in).toBe(
+      'interesse'
+    )
   })
 })
 
@@ -656,7 +686,9 @@ describe('venda recuperada em Vendas e no Painel', () => {
     await runUntilQueued()
     R.approveAttempt(ACC, R.listQueue(ACC)[0].id)
     await flush()
-    getDb().prepare('UPDATE followup_attempts SET valid_until = ?').run(Date.now() - 1000)
+    getDb()
+      .prepare('UPDATE followup_attempts SET valid_until = ?')
+      .run(Date.now() - 1000)
     saveDeal(ACC, { chatJid: JID, status: 'won', amountCents: 9000 })
     expect(R.recoveryStats(ACC)).toMatchObject({ recovered: 1, discountCents: 0 })
   })

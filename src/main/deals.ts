@@ -68,12 +68,12 @@ export function saveDeal(
     : recovery
       ? 'recovery'
       : touch
-      ? touch.kind === 'reminder'
-        ? 'reminder'
-        : 'campaign'
-      : fromAd
-        ? 'ad'
-        : 'organic'
+        ? touch.kind === 'reminder'
+          ? 'reminder'
+          : 'campaign'
+        : fromAd
+          ? 'ad'
+          : 'organic'
   const id = getDb()
     .prepare(
       `INSERT INTO deals (account_id, chat_jid, status, amount_cents, product, payment, reason, note, source_type, source_id, source_name, created_at)
@@ -98,7 +98,11 @@ export function saveDeal(
     linkDeal(
       accountId,
       d.chatJid,
-      { id: Number(id), status: d.status, amountCents: d.status === 'won' ? Math.max(0, Math.round(d.amountCents)) : 0 },
+      {
+        id: Number(id),
+        status: d.status,
+        amountCents: d.status === 'won' ? Math.max(0, Math.round(d.amountCents)) : 0
+      },
       recovery
     )
   return listDeals(accountId, { id: Number(id) })[0]

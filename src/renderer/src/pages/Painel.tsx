@@ -304,7 +304,9 @@ export function Painel(): React.JSX.Element {
                 [
                   'Recuperadas',
                   t.recovered.toLocaleString('pt-BR'),
-                  data.coverage.hasRecovery ? money(t.recoveredCents) : 'ainda sem recuperação'
+                  data.coverage.hasRecovery
+                    ? `${money(t.recoveredCents)}${t.recoveredDiscountCents ? `, desconto ${money(t.recoveredDiscountCents)}` : ''}`
+                    : 'ainda sem recuperação'
                 ]
               ] as Array<[string, string, string]>
             ).map(([l, v, sub]) => (

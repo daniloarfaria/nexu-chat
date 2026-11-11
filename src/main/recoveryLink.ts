@@ -119,8 +119,7 @@ export function linkDeal(
          WHERE followup_id = ? AND status = 'enviada' ORDER BY sent_at DESC LIMIT 1`
       )
       .get(touch.followupId) as
-      | { discount_pct: number | null; discount_cap_cents: number | null; valid_until: number | null }
-      | undefined
+      { discount_pct: number | null; discount_cap_cents: number | null; valid_until: number | null } | undefined
     const valid = !!a && a.discount_pct != null && (a.valid_until == null || a.valid_until >= now)
     const discount = valid
       ? estimateDiscountCents(deal.amountCents, { pct: a!.discount_pct!, capCents: a!.discount_cap_cents })

@@ -98,7 +98,7 @@ test('P2: origens separam campanha, anúncio, recuperação, UTM da planilha e e
   expect(by.recovery).toMatchObject({ won: 1, revenueCents: 4000 })
   expect(by.utm).toMatchObject({ won: 1, revenueCents: 8000 })
   expect(by.organic).toMatchObject({ won: 0, lost: 1 })
-  expect(r.totals).toMatchObject({ recovered: 1, recoveredCents: 4000 })
+  expect(r.totals).toMatchObject({ recovered: 1, recoveredCents: 4000, recoveredDiscountCents: 0 })
   expect(r.coverage).toMatchObject({ hasLeadData: true, hasRecovery: true })
 })
 

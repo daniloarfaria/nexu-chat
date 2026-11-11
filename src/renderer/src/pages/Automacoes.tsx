@@ -14,8 +14,10 @@ import {
   PageHeader,
   Select,
   Switch,
+  Tabs,
   Textarea
 } from '../components/ui'
+import { RecuperarVendas } from '../components/RecuperarVendas'
 import { cn } from '../lib/cn'
 
 const DAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
@@ -204,7 +206,7 @@ function RuleForm({
   )
 }
 
-export function Automacoes(): React.JSX.Element {
+function RespostasAuto(): React.JSX.Element {
   const account = useActiveAccount()
   const accountId = account?.id ?? ''
   const [editing, setEditing] = useState<Draft | null>(null)
@@ -302,6 +304,36 @@ export function Automacoes(): React.JSX.Element {
       </div>
       {editing && (
         <RuleForm accountId={accountId} rule={editing} onDone={() => (setEditing(null), void list.reload())} />
+      )}
+    </div>
+  )
+}
+
+export function Automacoes(): React.JSX.Element {
+  const account = useActiveAccount()
+  const [tab, setTab] = useState<'respostas' | 'recuperar'>('respostas')
+  // Sem o módulo de recuperação, a tela é a de sempre
+  if (!account?.modules.recuperacao) return <RespostasAuto />
+  return (
+    <div>
+      <Tabs
+        value={tab}
+        onChange={setTab}
+        items={[
+          { id: 'respostas', label: 'Respostas automáticas' },
+          { id: 'recuperar', label: 'Recuperar vendas' }
+        ]}
+      />
+      {tab === 'respostas' ? (
+        <RespostasAuto />
+      ) : (
+        <>
+          <PageHeader
+            title="Recuperar vendas"
+            description="A IA chama de volta quem pediu orçamento e sumiu, com até 3 mensagens e um desconto que só você define."
+          />
+          <RecuperarVendas />
+        </>
       )}
     </div>
   )
