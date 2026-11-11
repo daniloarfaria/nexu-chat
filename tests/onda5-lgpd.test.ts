@@ -64,3 +64,45 @@ describe('item 1: exclusão a pedido apaga tudo da pessoa', () => {
     ])
   })
 })
+
+describe('itens 2 e 16: IA na nuvem', () => {
+  test('nuvem recebe o prompt sem linhas sensíveis; a IA do computador recebe o original', async () => {
+    const { requestFor, complete, saveProvider, minuteWindowSize } = await import('../src/main/ai/router')
+    const { dropSensitiveLines } = await import('../src/main/ai/privacy')
+    const req = {
+      task: 't',
+      tier: 'smart' as const,
+      system: 's',
+      prompt: 'Cliente: quero ver armações\nCliente: meu grau é -2,50',
+      customerData: true,
+      cloudSanitize: dropSensitiveLines
+    }
+    expect(requestFor({ preset: 'local' }, req).prompt).toContain('-2,50')
+    const nuvem = requestFor({ preset: 'groq' }, req).prompt
+    expect(nuvem).toContain('armações')
+    expect(nuvem).not.toContain('-2,50')
+
+    // fluxo completo com provedor da nuvem sem limite por minuto
+    const prov = saveProvider({
+      preset: 'custom',
+      name: 'Nuvem',
+      baseUrl: 'https://api.exemplo.com/v1',
+      apiKey: 'k',
+      modelFast: 'm',
+      modelSmart: 'm',
+      trainsOnData: false
+    })
+    const bodies: string[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_u: string, o?: RequestInit) => {
+        bodies.push(String(o?.body))
+        return new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }], usage: {} }))
+      })
+    )
+    await complete(req)
+    vi.unstubAllGlobals()
+    expect(bodies[0]).not.toContain('-2,50')
+    expect(minuteWindowSize(prov.id)).toBe(0)
+  })
+})

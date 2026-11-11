@@ -11,6 +11,7 @@ import { sendAndStore } from './wa/send'
 import { wa } from './wa/manager'
 import { complete } from './ai/router'
 import { anonymize } from './ai/anonymize'
+import { dropSensitiveLines } from './ai/privacy'
 import { allowedContext, businessContext } from './ai/context'
 import { contextNotes } from './ai/profile'
 import { personIdOfChat } from './notes'
@@ -858,7 +859,7 @@ async function respondInner(accountId: string, jid: string): Promise<Outcome> {
   const history = msgs.slice(-15).map((m) => ({ fromMe: m.fromMe, text: anonymize(bodyOf(m), names) }))
   const { system, prompt } = buildPrompt({
     context,
-    playbook: pb?.content ?? null,
+    playbook: pb?.content ? anonymize(pb.content, names) : null,
     notes: contextNotes(accountId, personIdOfChat(accountId, jid), names),
     extra: anonymize(extra, names),
     history,
@@ -869,7 +870,15 @@ async function respondInner(accountId: string, jid: string): Promise<Outcome> {
   let raw: string
   try {
     raw = (
-      await complete({ task: 'robo_atendimento', tier: 'smart', customerData: true, system, prompt, maxTokens: 500 })
+      await complete({
+        task: 'robo_atendimento',
+        tier: 'smart',
+        customerData: true,
+        cloudSanitize: dropSensitiveLines,
+        system,
+        prompt,
+        maxTokens: 500
+      })
     ).text
   } catch (e) {
     log.warn('IA indisponível no robô de atendimento', { erro: String((e as Error).message).slice(0, 200) })
