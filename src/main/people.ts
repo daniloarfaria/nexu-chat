@@ -302,6 +302,19 @@ export function optOutByJid(accountId: string, jid: string): void {
   })
 }
 
+/**
+ * Mesma regra de isOptedOut, para conferir muitas pessoas de uma vez (lê a lista de supressão uma só vez).
+ * Considera número (com e sem o nono dígito), JID e LID mapeado.
+ */
+export function optedOutChecker(accountId: string): (jidOrPhone: string | null | undefined) => boolean {
+  const keys = new Set(
+    (getDb().prepare('SELECT key FROM suppression WHERE account_id = ?').all(accountId) as Array<{ key: string }>).map(
+      (r) => r.key
+    )
+  )
+  return (jidOrPhone) => !!jidOrPhone && identityKeys(accountId, jidOrPhone).some((k) => keys.has(k))
+}
+
 export function isOptedOut(accountId: string, jidOrPhone: string): boolean {
   const keys = identityKeys(accountId, jidOrPhone)
   const hit = getDb()
