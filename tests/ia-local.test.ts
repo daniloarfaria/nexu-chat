@@ -579,11 +579,7 @@ describe('roteador: pedido grande demais para a IA local', () => {
     expect(local().cooldownUntil).toBe(0)
     // continua disponível para o próximo pedido
     expect(
-      candidates(
-        listProviders(),
-        { customerData: false, tier: 'fast' },
-        { privacy: 'anonimizar', paidMonthlyLimit: 0 }
-      )
+      candidates(listProviders(), { customerData: false, tier: 'fast' }, { privacy: 'anonimizar', paidMonthlyLimit: 0 })
     ).toHaveLength(1)
   })
 

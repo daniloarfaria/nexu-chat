@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Cloud, Cpu, ExternalLink, HardDrive, MemoryStick, ShieldCheck, Trash2 } from 'lucide-react'
 import type { LocalAiProgress, LocalAiStatus } from '@shared/types'
 import { useAction, useLoad } from '../../lib/useAsync'
-import { Badge, Button, Drawer, Field, Input, Notice } from '../../components/ui'
+import { Badge, Button, Drawer, Field, Input, Notice, Switch } from '../../components/ui'
 import { cn } from '../../lib/cn'
 
 const CLOUD_OPTIONS = [
@@ -14,7 +14,8 @@ const CLOUD_OPTIONS = [
     steps: 'Crie a chave no site do Groq (pode entrar com a conta do Google):',
     how: 'Clique em “Create API Key”, copie e cole aqui:',
     hint: 'gsk_...',
-    note: 'Mais rápida e escreve melhor. Tem faixa gratuita com limites; confira no site do provedor. A Groq diz que não usa os textos para treinar.'
+    note: 'Mais rápida e escreve melhor. Tem faixa gratuita com limites; confira no site do provedor. A Groq diz que não usa os textos para treinar.',
+    askCustomers: false
   },
   {
     preset: 'nvidia' as const,
@@ -24,7 +25,8 @@ const CLOUD_OPTIONS = [
     steps: 'Entre em build.nvidia.com com a sua conta e abra a página de chaves:',
     how: 'Clique em “Generate API Key”, copie e cole aqui. O modelo padrão pode ser trocado depois em Provedores.',
     hint: 'nvapi-...',
-    note: 'Tem faixa gratuita com limites; confira no site do provedor. A chave é sua e fica guardada criptografada neste computador.'
+    note: 'Tem faixa gratuita com limites; confira no site do provedor. A chave é sua e fica guardada criptografada neste computador. Não há garantia pública de que os textos não são usados para treinar.',
+    askCustomers: true
   },
   {
     preset: 'deepseek' as const,
@@ -34,7 +36,8 @@ const CLOUD_OPTIONS = [
     steps: 'Entre em platform.deepseek.com e abra a página de chaves:',
     how: 'Crie a chave, copie e cole aqui. O modelo pode ser trocado depois em Provedores.',
     hint: 'sk-...',
-    note: 'Cobrado por uso (costuma ser barato); confira os preços no site do provedor. Os trechos anonimizados vão para os servidores da DeepSeek, que ficam fora do Brasil; confira a política de privacidade antes de usar com dados de clientes. Em Provedores você pode marcar “não usar em conversas de clientes”.'
+    note: 'Cobrado por uso (costuma ser barato); confira os preços no site do provedor. Os trechos anonimizados vão para os servidores da DeepSeek, que ficam fora do Brasil; confira a política de privacidade antes de usar com dados de clientes.',
+    askCustomers: true
   }
 ]
 
@@ -213,15 +216,21 @@ function CloudCard({
   opt,
   id,
   hasKey,
+  noCustomerData,
   onChange
 }: {
   opt: (typeof CLOUD_OPTIONS)[number]
   id: number | null
   hasKey: boolean
+  /** Como está gravado; vazio quando o provedor ainda não foi cadastrado */
+  noCustomerData: boolean | null
   onChange: () => void
 }): React.JSX.Element {
   const [key, setKey] = useState('')
   const [ok, setOk] = useState(false)
+  // antes de cadastrar, a escolha fica aqui; depois, vale o que está gravado
+  const [wantCust, setWantCust] = useState(false)
+  const useCust = noCustomerData == null ? wantCust : !noCustomerData
   const { busy, error, run } = useAction()
   const fid = `${opt.preset}-key`
   return (
@@ -243,6 +252,28 @@ function CloudCard({
         As conversas saem do computador, com nomes e telefones trocados por marcadores, conforme a privacidade
         escolhida.
       </p>
+      {opt.askCustomers && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-line p-3">
+          <div>
+            <b>Usar em conversas de clientes</b>
+            <div className="text-[12px] text-ink-2">
+              Vem desligado: assim este provedor só faz tarefas sem dado de cliente, como variações de campanha. Ligue
+              só depois de ler o aviso acima.
+            </div>
+          </div>
+          <Switch
+            label={`Usar ${opt.name} em conversas de clientes`}
+            checked={useCust}
+            onChange={(v) => {
+              setWantCust(v)
+              if (id != null)
+                void run('c', () =>
+                  window.api.invoke('ai:provider-save', { id, preset: opt.preset, noCustomerData: !v })
+                ).then(onChange)
+            }}
+          />
+        </div>
+      )}
       {error && <Notice tone="bad">{error}</Notice>}
       {ok && <Notice tone="ok">Funcionando. A IA na nuvem já está pronta.</Notice>}
       {!hasKey && !ok && (
@@ -282,7 +313,8 @@ function CloudCard({
                     id: id ?? undefined,
                     preset: opt.preset,
                     apiKey: key.trim(),
-                    enabled: true
+                    enabled: true,
+                    ...(opt.askCustomers ? { noCustomerData: !useCust } : {})
                   })
                   try {
                     return await window.api.invoke('ai:provider-test', { id: saved.id })
@@ -357,7 +389,14 @@ export function ConfigurarIA({ onClose }: { onClose: () => void }): React.JSX.El
           {CLOUD_OPTIONS.map((opt) => {
             const cur = (providers.data ?? []).find((p) => p.preset === opt.preset)
             return (
-              <CloudCard key={opt.preset} opt={opt} id={cur?.id ?? null} hasKey={!!cur?.hasKey} onChange={reload} />
+              <CloudCard
+                key={opt.preset}
+                opt={opt}
+                id={cur?.id ?? null}
+                hasKey={!!cur?.hasKey}
+                noCustomerData={cur ? !!cur.noCustomerData : null}
+                onChange={reload}
+              />
             )
           })}
         </div>

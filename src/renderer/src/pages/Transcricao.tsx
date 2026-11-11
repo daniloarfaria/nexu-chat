@@ -11,10 +11,24 @@ const MODES = [
 ] as const
 
 const ENGINES = [
-  { id: 'auto', label: 'Automático', desc: 'Usa o Whisper do computador; se não houver, a Groq.' },
+  {
+    id: 'auto',
+    label: 'Automático',
+    desc: 'Usa o Whisper do computador; se não houver, a Groq (quando a privacidade deixar).'
+  },
   { id: 'local', label: 'Só no computador', desc: 'O áudio nunca sai daqui (precisa do Whisper instalado).' },
-  { id: 'groq', label: 'Só Groq', desc: 'Whisper na nuvem, gratuito, não treina com os dados.' }
+  {
+    id: 'groq',
+    label: 'Só Groq',
+    desc: 'Whisper na nuvem: o áudio sai do computador. Não vale na privacidade Estrita.'
+  }
 ] as const
+
+const GROQ_BLOCKED: Record<NonNullable<TranscribeStatus['groqBlocked']>, string> = {
+  'sem-clientes': 'a Groq está com "usar em conversas de clientes" desligado em Assistente de IA → Provedores',
+  estrita: 'a privacidade Estrita (Assistente de IA → Provedores) não deixa o áudio sair do computador',
+  treina: 'a Groq está marcada como "pode treinar com os dados"'
+}
 
 function Item({
   ok,
@@ -136,7 +150,17 @@ export function Transcricao(): React.JSX.Element {
       <Section title="Whisper da Groq (nuvem)">
         <p className="text-[13.5px] text-ink-2">
           {st.groq ? (
-            <>Disponível: usa a chave da Groq cadastrada no Assistente de IA.</>
+            <>
+              Disponível: usa a chave da Groq cadastrada no Assistente de IA. O áudio do cliente é enviado para a Groq
+              como está (áudio não é anonimizado).
+            </>
+          ) : st.groqBlocked ? (
+            <>
+              Bloqueado pela privacidade: {GROQ_BLOCKED[st.groqBlocked]}. Nenhum áudio é enviado para a Groq.{' '}
+              {st.local.ready
+                ? 'Os áudios são transcritos no computador.'
+                : 'Sem o Whisper no computador, os áudios ficam sem transcrição.'}
+            </>
           ) : (
             <>Cadastre a Groq em Assistente de IA → Provedores (gratuito) para transcrever sem instalar nada.</>
           )}
