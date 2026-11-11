@@ -25,7 +25,7 @@ import { cn } from '../../lib/cn'
 import { guardedClose } from '../../lib/escape'
 import { formatPhone } from '../../lib/format'
 import { openChat, resolveChatJid } from '../../lib/openChat'
-import { ChatStoreProvider, useWindowChatStore } from '../../lib/chatStore'
+import { ChatStoreProvider, useShownJid, useWindowChatStore } from '../../lib/chatStore'
 import { money, useAction, useLoad } from '../../lib/useAsync'
 import { Button, Checkbox, Drawer, Field, Input, Modal, Notice, Select, Tabs, Textarea } from '../../components/ui'
 import { ChatView } from '../../components/chat/ChatView'
@@ -78,6 +78,8 @@ export function CardWindow(props: CardProps & { notes?: ReactNode }): React.JSX.
     )
   const [jid, setJid] = useState<string | null>(card.jid)
   const store = useWindowChatStore(accountId, jid)
+  // Depois da fusão LID/número a janela segue o número (o store já aponta para ele)
+  const shownJid = useShownJid(store, jid)
 
   // Contato sem conversa ainda: cria pelo número, como o botão "Abrir conversa" fazia
   useEffect(() => {
@@ -93,8 +95,8 @@ export function CardWindow(props: CardProps & { notes?: ReactNode }): React.JSX.
     <Modal label={`Cartão de ${name}`} onClose={onClose} className="h-[85vh] w-[90vw] max-w-[1400px] flex-row">
       <ChatStoreProvider store={store}>
         <section aria-label="Conversa" className="flex min-w-0 flex-1 flex-col">
-          {jid ? (
-            <ChatView key={jid} jid={jid} embedded fallbackName={card.name || undefined} />
+          {shownJid ? (
+            <ChatView key={shownJid} jid={shownJid} embedded fallbackName={card.name || undefined} />
           ) : (
             <div className="grid flex-1 place-items-center bg-sunken text-[13.5px] text-ink-2">Abrindo a conversa…</div>
           )}
@@ -126,7 +128,7 @@ function CardPanel({
   const [value, setValue] = useState(moneyInput(card.valueCents))
   const [note, setNote] = useState(card.note ?? '')
   const [tags, setTags] = useState(card.tags)
-  const { busy, error, run } = useAction()
+  const { busy, error, run, attempt } = useAction()
   const places = useLoad(
     () => window.api.invoke('pipelines:person', { accountId, personId: card.personId }),
     [accountId, card.personId, card.stageId]
@@ -151,7 +153,7 @@ function CardPanel({
   }
 
   async function save(): Promise<void> {
-    const ok = await run('save', () =>
+    const ok = await attempt('save', () =>
       window.api.invoke('pipelines:update-card', {
         accountId,
         cardId: card.id,
@@ -159,13 +161,13 @@ function CardPanel({
         note: note.trim() || null
       })
     )
-    if (ok !== undefined) onChanged()
+    if (ok) onChanged()
   }
 
   async function remove(): Promise<void> {
     if (!confirm(`Tirar ${name} deste funil? O contato continua na sua base.`)) return
-    const ok = await run('rm', () => window.api.invoke('pipelines:remove-cards', { accountId, cardIds: [card.id] }))
-    if (ok !== undefined) {
+    const ok = await attempt('rm', () => window.api.invoke('pipelines:remove-cards', { accountId, cardIds: [card.id] }))
+    if (ok) {
       onChanged()
       closeNow()
     }
@@ -308,7 +310,7 @@ export function PipelineEditor({
     }))
   )
   const [open, setOpen] = useState<string | null>(null)
-  const { busy, error, run } = useAction()
+  const { busy, error, run, attempt } = useAction()
 
   const patch = (key: string, p: Partial<DraftStage>): void =>
     setStages((l) => l.map((s) => (s.key === key ? { ...s, ...p } : s)))
@@ -351,8 +353,8 @@ export function PipelineEditor({
       )
     )
       return
-    const ok = await run('del', () => window.api.invoke('pipelines:delete', { accountId, id: pipeline.id }))
-    if (ok !== undefined) onClose('deleted')
+    const ok = await attempt('del', () => window.api.invoke('pipelines:delete', { accountId, id: pipeline.id }))
+    if (ok) onClose('deleted')
   }
 
   const removed = (pipeline.stages ?? []).filter((s) => !stages.some((d) => d.id === s.id) && s.count > 0)

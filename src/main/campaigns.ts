@@ -47,6 +47,27 @@ export function countSend(accountId: string): void {
     .run(accountId, dayKey())
 }
 
+/**
+ * Reserva uma vaga do limite diário de forma atômica (campanhas e robô dividem o mesmo contador).
+ * Devolve false se o limite já foi atingido. Quem reservou e não enviou chama releaseDailySend.
+ */
+export function reserveDailySend(accountId: string, limit: number): boolean {
+  const day = dayKey()
+  const r = getDb()
+    .prepare(
+      `INSERT INTO send_log (account_id, day, sent) SELECT ?1, ?2, 1 WHERE ?3 > 0
+       ON CONFLICT DO UPDATE SET sent = sent + 1 WHERE sent < ?3`
+    )
+    .run(accountId, day, limit)
+  return Number(r.changes) > 0
+}
+
+export function releaseDailySend(accountId: string): void {
+  getDb()
+    .prepare('UPDATE send_log SET sent = MAX(0, sent - 1) WHERE account_id = ? AND day = ?')
+    .run(accountId, dayKey())
+}
+
 // ---------- Campanhas ----------
 
 interface Row {

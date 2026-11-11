@@ -42,6 +42,8 @@ interface Stored {
   lastAdded: number
   pendingSince?: number
   pendingOffset?: number
+  /** Muda quando o link da planilha troca: uma atualização de geração antiga não grava nada. */
+  generation?: number
 }
 
 interface Pending {
@@ -113,7 +115,15 @@ export function saveConfig(accountId: string, input: LeadsConfigInput): LeadsCon
     secret,
     createContacts,
     pipelineId,
-    cursor: url === cur.url ? cur.cursor : null
+    // Link novo = planilha nova: recomeça do zero (cursor e paginação) e invalida atualizações em andamento
+    ...(url === cur.url
+      ? {}
+      : {
+          cursor: null,
+          pendingSince: undefined,
+          pendingOffset: undefined,
+          generation: (cur.generation ?? 0) + 1
+        })
   })
   return getConfig(accountId)
 }
@@ -278,6 +288,8 @@ async function fetchLeads(c: Stored, desde: number, offset: number): Promise<{ r
 
 const running = new Set<string>()
 
+class StaleConfig extends Error {}
+
 export async function syncLeads(accountId: string): Promise<LeadsSyncResult> {
   const c = load(accountId)
   if (!c.url || !c.secret)
@@ -285,6 +297,7 @@ export async function syncLeads(accountId: string): Promise<LeadsSyncResult> {
   if (running.has(accountId)) return { ok: false, added: 0, contacts: 0, error: 'Já está atualizando' }
   running.add(accountId)
   try {
+    const generation = c.generation ?? 0
     const desde = c.pendingSince ?? Math.max(0, (c.cursor ?? 0) - OVERLAP_MS)
     let offset = c.pendingOffset ?? 0
     let added = 0
@@ -292,7 +305,9 @@ export async function syncLeads(accountId: string): Promise<LeadsSyncResult> {
     let cursor = c.cursor ?? 0
     for (let page = 0; page < 10; page++) {
       const batch = await fetchLeads(c, desde, offset)
-      const saved = saveRaws(accountId, batch.raws, c)
+      // O link foi trocado durante a atualização: o resultado é da planilha antiga e não é gravado
+      if ((load(accountId).generation ?? 0) !== generation) throw new StaleConfig()
+      const saved = await saveRaws(accountId, batch.raws, c)
       added += saved.added
       contacts += saved.contacts
       cursor = Math.max(cursor, saved.maxTs)
@@ -311,6 +326,13 @@ export async function syncLeads(accountId: string): Promise<LeadsSyncResult> {
     }
     return { ok: true, added, contacts }
   } catch (e) {
+    if (e instanceof StaleConfig)
+      return {
+        ok: false,
+        added: 0,
+        contacts: 0,
+        error: 'O link da planilha mudou durante a atualização. Atualize de novo.'
+      }
     const msg =
       e instanceof Error
         ? e.name === 'TimeoutError'
@@ -329,7 +351,11 @@ export async function syncLeads(accountId: string): Promise<LeadsSyncResult> {
   }
 }
 
-function saveRaws(accountId: string, raws: RawLead[], c: Stored): { added: number; contacts: number; maxTs: number } {
+async function saveRaws(
+  accountId: string,
+  raws: RawLead[],
+  c: Stored
+): Promise<{ added: number; contacts: number; maxTs: number }> {
   const db = getDb()
   const ins = db.prepare(
     `INSERT OR IGNORE INTO leads (account_id, dedupe_key, tab, created_at, name, email, phone, interest,
@@ -367,12 +393,15 @@ function saveRaws(accountId: string, raws: RawLead[], c: Stored): { added: numbe
       setSetting(pendingKey, [...pending, ...fresh])
     }
   })
-  const contacts = c.createContacts ? makeContacts(accountId, getSetting(pendingKey, []), c.pipelineId) : 0
+  const contacts = c.createContacts ? await makeContacts(accountId, getSetting(pendingKey, []), c.pipelineId) : 0
   return { added: fresh.length, contacts, maxTs }
 }
 
 /** Lead novo vira contato com a etiqueta "Lead site" e cartão na primeira coluna do funil escolhido. */
-function makeContacts(accountId: string, fresh: Pending[], pipelineId: number | null): number {
+/** Quantos leads são processados entre uma gravação da fila e outra (e uma cedida ao event loop). */
+const CONTACT_BATCH = 50
+
+async function makeContacts(accountId: string, fresh: Pending[], pipelineId: number | null): Promise<number> {
   const db = getDb()
   let firstStage: number | null = null
   if (pipelineId != null) {
@@ -388,9 +417,15 @@ function makeContacts(accountId: string, fresh: Pending[], pipelineId: number | 
   const save = (rest: Pending[]): void => setSetting(pendingKey, [...rest, ...remaining])
   for (let i = 0; i < fresh.length; i++) {
     const f = fresh[i]
-    const rest = fresh.slice(i + 1)
+    const endOfBatch = (i + 1) % CONTACT_BATCH === 0 || i === fresh.length - 1
+    const flush = async (): Promise<void> => {
+      if (!endOfBatch) return
+      // A fila é regravada só ao fim de cada lote (antes era a cada lead) e o app respira entre lotes
+      save(fresh.slice(i + 1))
+      await new Promise<void>((r) => setImmediate(r))
+    }
     if (!f.phone) {
-      save(rest)
+      await flush()
       continue
     }
     try {
@@ -408,7 +443,7 @@ function makeContacts(accountId: string, fresh: Pending[], pipelineId: number | 
       log.warn('Não foi possível criar o contato de um lead', { tentativa: tries })
       if (tries < 3) remaining.push({ ...f, tries })
     }
-    save(rest)
+    await flush()
   }
   return n
 }

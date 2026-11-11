@@ -22,6 +22,7 @@ import { complete } from './router'
 import { isSensitive } from '@shared/sensitive'
 export { isSensitive }
 import { anonymize } from './anonymize'
+import { dropSensitiveLines } from './privacy'
 import { businessContext } from './context'
 
 /**
@@ -265,6 +266,8 @@ export async function mapProfile(
       task: opts.auto ? 'perfil_cliente_auto' : 'perfil_cliente',
       tier: 'fast', // extração simples: a IA no computador primeiro
       customerData: true,
+      // Na nuvem (inclusive como reserva da IA do computador) saem as linhas com dado sensível
+      cloudSanitize: dropSensitiveLines,
       system: `${PROFILE_SYSTEM}\n\nContexto da loja:\n${businessContext(accountId, 2500)}`,
       prompt: `Notas que já existem:\n${have}\n\nConversa (mais antiga primeiro):\n<conversa>\n${convo}\n</conversa>\n\nDevolva o JSON.`,
       maxTokens: 900

@@ -7,6 +7,7 @@ import { effectiveDailyLimit, OPT_OUT_FOOTER, randomBetween, renderTemplate, sen
 import { isOptedOut, markHasWa } from './people'
 import { wa } from './wa/manager'
 import { sendAndStore } from './wa/send'
+import { lockChat } from './outbox'
 import { canonJid } from './wa/store'
 import { getAccount, listAccounts } from './accounts'
 import { log } from './log'
@@ -197,8 +198,7 @@ class CampaignEngine extends EventEmitter {
       }
     } else {
       r.failStreak = 0
-      r.sinceLongPause++
-      C.countSend(accountId)
+      r.sinceLongPause++ // a vaga do limite diário já foi reservada na hora do envio
     }
     const delay = randomBetween(s.minDelay, s.maxDelay) * 1000
     this.set(accountId, { phase: 'waiting', campaignId: campaign.id, nextAt: Date.now() + delay })
@@ -214,6 +214,9 @@ class CampaignEngine extends EventEmitter {
   ): Promise<'sent' | 'fail' | 'skip'> {
     this.set(accountId, { phase: 'sending', campaignId: c.id, nextAt: null })
     let jid = t.jid
+    let unlock: (() => void) | null = null
+    let reserved = false
+    let delivered = false
     try {
       // Pessoas: confere opt-out na hora e se o número tem WhatsApp
       if (c.kind !== 'groups') {
@@ -240,6 +243,9 @@ class CampaignEngine extends EventEmitter {
           }
         }
       }
+      // O robô de atendimento pode estar falando com esta pessoa agora: um envio por vez por conversa
+      unlock = lockChat(accountId, jid!)
+      if (!unlock) return 'skip'
       const vars = t.vars ? (JSON.parse(t.vars) as Record<string, string>) : {}
       const tpl = c.templates[Math.floor(Math.random() * c.templates.length)]
       let text = renderTemplate(tpl, vars)
@@ -270,7 +276,11 @@ class CampaignEngine extends EventEmitter {
       } else {
         content = { text }
       }
+      // Reserva a vaga do limite diário na hora de enviar (o robô divide o mesmo limite)
+      if (!C.reserveDailySend(accountId, effectiveDailyLimit(C.getAntiBan(accountId)))) return 'skip'
+      reserved = true
       const sent = await sendAndStore(sock, accountId, jid!, content)
+      delivered = true
       // Áudio não tem legenda: manda o texto em seguida
       // O principal já foi: marca como enviado antes do complemento, para nunca reenviar em dobro
       C.markTarget(c.id, t.seq, 'sent', { messageId: sent?.key.id ?? undefined, jid: jid! })
@@ -281,10 +291,13 @@ class CampaignEngine extends EventEmitter {
       }
       return 'sent'
     } catch (e) {
+      if (reserved && !delivered) C.releaseDailySend(accountId)
       const msg = (e as Error).message ?? String(e)
       C.markTarget(c.id, t.seq, 'failed', { error: msg.slice(0, 300), jid: jid ?? undefined })
       log.warn('Falha no envio de campanha', { campanha: c.id, erro: msg })
       return 'fail'
+    } finally {
+      unlock?.()
     }
   }
 }

@@ -38,7 +38,7 @@ export function ContactNotes({
   const dates = useLoad(() => window.api.invoke('dates:info', { accountId, ...target }), [accountId, key])
   const [draft, setDraft] = useState<Draft | null>(null)
   const [info, setInfo] = useState<string | null>(null)
-  const { busy, error, setError, run } = useAction()
+  const { busy, error, setError, run, attempt } = useAction()
 
   const notes = list.data?.notes ?? []
   const suggestion = dates.data?.suggestion ?? null
@@ -65,14 +65,16 @@ export function ContactNotes({
   }
 
   async function pin(n: ContactNote): Promise<void> {
-    const ok = await run('pin' + n.id, () => window.api.invoke('notes:pin', { accountId, id: n.id, pinned: !n.pinned }))
-    if (ok !== undefined) await reload()
+    const ok = await attempt('pin' + n.id, () =>
+      window.api.invoke('notes:pin', { accountId, id: n.id, pinned: !n.pinned })
+    )
+    if (ok) await reload()
   }
 
   async function remove(n: ContactNote): Promise<void> {
     if (!confirm(`Apagar a nota "${n.title}"?`)) return
-    const ok = await run('del' + n.id, () => window.api.invoke('notes:delete', { accountId, id: n.id }))
-    if (ok !== undefined) await reload()
+    const ok = await attempt('del' + n.id, () => window.api.invoke('notes:delete', { accountId, id: n.id }))
+    if (ok) await reload()
   }
 
   async function map(): Promise<void> {
@@ -101,8 +103,8 @@ export function ContactNotes({
 
   async function dismissBirthday(): Promise<void> {
     if (personId == null) return
-    const r = await run('bday-no', () => window.api.invoke('dates:suggestion-dismiss', { accountId, personId }))
-    if (r !== undefined) await reload()
+    const ok = await attempt('bday-no', () => window.api.invoke('dates:suggestion-dismiss', { accountId, personId }))
+    if (ok) await reload()
   }
 
   return (

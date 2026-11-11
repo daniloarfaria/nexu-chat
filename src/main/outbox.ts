@@ -22,3 +22,21 @@ export function enqueueSend(accountId: string, job: () => Promise<unknown>): boo
   chains.set(accountId, next)
   return true
 }
+
+const busyChats = new Set<string>()
+
+/**
+ * Exclusão mútua por conversa entre campanhas e robô: só um envio por vez para a mesma pessoa.
+ * Devolve a função que libera, ou null se a conversa já está em uso.
+ */
+export function lockChat(accountId: string, jid: string): (() => void) | null {
+  const k = `${accountId}\u0000${jid}`
+  if (busyChats.has(k)) return null
+  busyChats.add(k)
+  let freed = false
+  return () => {
+    if (freed) return
+    freed = true
+    busyChats.delete(k)
+  }
+}
