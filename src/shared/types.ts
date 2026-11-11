@@ -570,7 +570,8 @@ export const PAYMENT_METHODS = [
 
 // ---------- Assistente de IA ----------
 
-export type AiPreset = 'groq' | 'gemini' | 'openrouter' | 'mistral' | 'ollama' | 'claude' | 'local' | 'custom'
+export type AiPreset =
+  'groq' | 'gemini' | 'openrouter' | 'mistral' | 'nvidia' | 'deepseek' | 'ollama' | 'claude' | 'local' | 'custom'
 export type AiPrivacy = 'estrita' | 'anonimizar' | 'livre'
 
 export interface AiProvider {
@@ -582,6 +583,8 @@ export interface AiProvider {
   modelFast: string
   modelSmart: string
   trainsOnData: boolean
+  /** O dono pediu para não usar este provedor em conversas de clientes */
+  noCustomerData?: boolean
   rpm: number | null
   rpd: number | null
   paid: boolean

@@ -5,7 +5,38 @@ import { useAction, useLoad } from '../../lib/useAsync'
 import { Badge, Button, Drawer, Field, Input, Notice } from '../../components/ui'
 import { cn } from '../../lib/cn'
 
-const GROQ_KEYS = 'https://console.groq.com/keys'
+const CLOUD_OPTIONS = [
+  {
+    preset: 'groq' as const,
+    name: 'Groq',
+    keyUrl: 'https://console.groq.com/keys',
+    site: 'abrir o site do Groq',
+    steps: 'Crie a chave no site do Groq (pode entrar com a conta do Google):',
+    how: 'Clique em “Create API Key”, copie e cole aqui:',
+    hint: 'gsk_...',
+    note: 'Mais rápida e escreve melhor. Tem faixa gratuita com limites; confira no site do provedor. A Groq diz que não usa os textos para treinar.'
+  },
+  {
+    preset: 'nvidia' as const,
+    name: 'NVIDIA',
+    keyUrl: 'https://build.nvidia.com/settings/api-keys',
+    site: 'abrir build.nvidia.com',
+    steps: 'Entre em build.nvidia.com com a sua conta e abra a página de chaves:',
+    how: 'Clique em “Generate API Key”, copie e cole aqui. O modelo padrão pode ser trocado depois em Provedores.',
+    hint: 'nvapi-...',
+    note: 'Tem faixa gratuita com limites; confira no site do provedor. A chave é sua e fica guardada criptografada neste computador.'
+  },
+  {
+    preset: 'deepseek' as const,
+    name: 'DeepSeek',
+    keyUrl: 'https://platform.deepseek.com/api_keys',
+    site: 'abrir platform.deepseek.com',
+    steps: 'Entre em platform.deepseek.com e abra a página de chaves:',
+    how: 'Crie a chave, copie e cole aqui. O modelo pode ser trocado depois em Provedores.',
+    hint: 'sk-...',
+    note: 'Cobrado por uso (costuma ser barato); confira os preços no site do provedor. Os trechos anonimizados vão para os servidores da DeepSeek, que ficam fora do Brasil; confira a política de privacidade antes de usar com dados de clientes. Em Provedores você pode marcar “não usar em conversas de clientes”.'
+  }
+]
 
 const mb = (n: number): string =>
   n >= 1024 ? `${(n / 1024).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} GB` : `${Math.round(n)} MB`
@@ -87,12 +118,15 @@ function LocalCard({ st, onChange }: { st: LocalAiStatus; onChange: () => void }
       }
     >
       <p>
-        Privada e grátis: as conversas não saem deste computador e funciona sem internet. Fica para as tarefas rápidas
+        Grátis e sem chave: as conversas não saem deste computador e funciona sem internet. Fica para as tarefas rápidas
         (entender o que o cliente quer, etiquetar, tirar datas). As tarefas maiores vão para a nuvem.
       </p>
       {error && <Notice tone="bad">{error}</Notice>}
       {!rec.localSupported ? (
-        <Notice tone="warn">Este sistema ainda não tem a IA no computador. Use a IA gratuita na nuvem.</Notice>
+        <Notice tone="warn">
+          Este sistema ainda não tem a IA no computador. Use uma IA na nuvem (tem faixa gratuita com limites; confira no
+          site do provedor).
+        </Notice>
       ) : progress ? (
         <>
           <Progress p={progress} />
@@ -176,55 +210,66 @@ function LocalCard({ st, onChange }: { st: LocalAiStatus; onChange: () => void }
 }
 
 function CloudCard({
-  groqId,
-  hasGroq,
+  opt,
+  id,
+  hasKey,
   onChange
 }: {
-  groqId: number | null
-  hasGroq: boolean
+  opt: (typeof CLOUD_OPTIONS)[number]
+  id: number | null
+  hasKey: boolean
   onChange: () => void
 }): React.JSX.Element {
   const [key, setKey] = useState('')
   const [ok, setOk] = useState(false)
   const { busy, error, run } = useAction()
+  const fid = `${opt.preset}-key`
   return (
     <Card
       icon={<Cloud className="size-4 text-info" />}
-      title="IA gratuita na nuvem (Groq)"
-      badge={hasGroq || ok ? <Badge tone="ok">configurada</Badge> : <Badge tone="accent">recomendada</Badge>}
+      title={`IA na nuvem (${opt.name})`}
+      badge={
+        hasKey || ok ? (
+          <Badge tone="ok">configurada</Badge>
+        ) : opt.preset === 'groq' ? (
+          <Badge tone="accent">recomendada</Badge>
+        ) : (
+          <Badge>opcional</Badge>
+        )
+      }
     >
+      <p>{opt.note}</p>
       <p>
-        Mais rápida e escreve melhor. Grátis até cerca de 1.000 pedidos por dia, e a Groq não usa os textos para
-        treinar. As conversas saem do computador (com nomes e telefones trocados por marcadores, conforme a privacidade
-        escolhida).
+        As conversas saem do computador, com nomes e telefones trocados por marcadores, conforme a privacidade
+        escolhida.
       </p>
       {error && <Notice tone="bad">{error}</Notice>}
       {ok && <Notice tone="ok">Funcionando. A IA na nuvem já está pronta.</Notice>}
-      {!hasGroq && !ok && (
+      {!hasKey && !ok && (
         <>
           <ol className="flex list-decimal flex-col gap-2 pl-5">
             <li>
-              Crie a chave no site do Groq (pode entrar com a conta do Google):{' '}
+              {opt.steps}{' '}
               <a
                 className="inline-flex items-center gap-1 text-info underline"
-                href={GROQ_KEYS}
+                href={opt.keyUrl}
                 target="_blank"
                 rel="noreferrer"
               >
-                abrir o site do Groq <ExternalLink className="size-3.5" />
+                {opt.site} <ExternalLink className="size-3.5" />
               </a>
             </li>
-            <li>Clique em “Create API Key”, copie e cole aqui:</li>
+            <li>{opt.how}</li>
           </ol>
           <div className="flex items-end gap-2">
-            <Field label="Chave do Groq" htmlFor="groq-key">
+            <Field label={`Cole a sua chave do ${opt.name}`} htmlFor={fid}>
               <Input
-                id="groq-key"
+                id={fid}
                 type="password"
                 autoComplete="off"
                 value={key}
                 onChange={(e) => setKey(e.target.value)}
-                placeholder="gsk_..."
+                placeholder={opt.hint}
               />
             </Field>
             <Button
@@ -234,8 +279,8 @@ function CloudCard({
               onClick={async () => {
                 const r = await run('g', async () => {
                   const saved = await window.api.invoke('ai:provider-save', {
-                    id: groqId ?? undefined,
-                    preset: 'groq',
+                    id: id ?? undefined,
+                    preset: opt.preset,
                     apiKey: key.trim(),
                     enabled: true
                   })
@@ -266,8 +311,6 @@ export function ConfigurarIA({ onClose }: { onClose: () => void }): React.JSX.El
   const status = useLoad(() => window.api.invoke('ai:local-status'), [])
   const providers = useLoad(() => window.api.invoke('ai:providers'), [])
   const st = status.data
-  const groq = (providers.data ?? []).find((p) => p.preset === 'groq')
-  const hasGroq = !!groq?.hasKey
   const reload = (): void => {
     void status.reload()
     void providers.reload()
@@ -304,14 +347,19 @@ export function ConfigurarIA({ onClose }: { onClose: () => void }): React.JSX.El
           <Notice tone="info">
             <b>Recomendação:</b>{' '}
             {st.recommendation.primary === 'ambas'
-              ? 'use as duas juntas. A IA no computador é a principal para as tarefas rápidas, e a nuvem gratuita faz as maiores e serve de reserva. O app troca sozinho quando uma não responde.'
-              : 'use a IA gratuita na nuvem.'}
+              ? 'use as duas juntas. A IA no computador é a principal para as tarefas rápidas, e a nuvem faz as maiores e serve de reserva. O app troca sozinho quando uma não responde.'
+              : 'use uma IA na nuvem (tem faixa gratuita com limites; confira no site do provedor).'}
             {st.recommendation.reasons.length > 0 && (
               <span className="mt-1 block text-ink-2">{st.recommendation.reasons.join(' ')}</span>
             )}
           </Notice>
           <LocalCard st={st} onChange={reload} />
-          <CloudCard groqId={groq?.id ?? null} hasGroq={hasGroq} onChange={reload} />
+          {CLOUD_OPTIONS.map((opt) => {
+            const cur = (providers.data ?? []).find((p) => p.preset === opt.preset)
+            return (
+              <CloudCard key={opt.preset} opt={opt} id={cur?.id ?? null} hasKey={!!cur?.hasKey} onChange={reload} />
+            )
+          })}
         </div>
       )}
     </Drawer>

@@ -470,7 +470,10 @@ O botão **Configurar IA**, no alto da página **Assistente de IA**, abre uma te
    - pedido grande demais para a IA no computador vai direto para a nuvem;
    - computadores com 16 GB de memória ou mais podem ligar também o **modelo médio** (Qwen3 4B, cerca de 2,4 GB), que escreve melhor. Com ele ligado, as sugestões de resposta e os textos também são feitos no computador, e a nuvem fica de reserva;
    - **Remover IA local** apaga todos os arquivos dela.
-3. **IA gratuita na nuvem (Groq):** clique em **abrir o site do Groq**, crie a chave, cole e clique em **Salvar e testar**.
+3. **IA na nuvem (Groq, NVIDIA ou DeepSeek):** em cada cartão, clique no link do site do provedor, crie a **sua** chave, cole e clique em **Salvar e testar**. O app nunca traz chave embutida: a chave é sua e fica guardada criptografada neste computador. Se o teste falhar, a tela explica o motivo (chave recusada, limite, sem internet ou demora).
+   - **Groq e NVIDIA:** têm faixa gratuita com limites; confira no site do provedor.
+   - **DeepSeek:** cobrado por uso (costuma ser barato); confira os preços no site do provedor.
+   - Todo provedor de nuvem recebe trechos das conversas (anonimizados, conforme a privacidade escolhida), que saem do computador.
 
 O recomendado é usar as duas: a IA no computador como principal para as tarefas rápidas e a nuvem como reserva. Em computador mais fraco, a IA no computador responde devagar.
 
@@ -491,12 +494,16 @@ A IA usa esse contexto nas sugestões de resposta, nas versões de campanha e no
 
 ### Provedores (manual)
 Em **Assistente de IA → Provedores**, dá para adicionar outros provedores. Cada um tem o link para criar a chave:
-- **Groq:** rápido, cerca de 1.000 pedidos por dia, não treina com seus dados;
-- **Google Gemini:** no plano grátis pode usar os textos para melhorar produtos;
-- **OpenRouter**, **Mistral**, ou **Ollama** (roda no próprio computador);
+- **Groq:** rápido, tem faixa gratuita com limites (confira no site do provedor), não treina com seus dados;
+- **Google Gemini:** tem faixa gratuita com limites; no plano gratuito pode usar os textos para melhorar produtos;
+- **NVIDIA** (build.nvidia.com): tem faixa gratuita com limites; modelo padrão `nvidia/nemotron-3.5-lightning-30b-a3b`, que você pode trocar;
+- **DeepSeek** (platform.deepseek.com): cobrado por uso (costuma ser barato); confira os preços no site do provedor. Os trechos anonimizados vão para os servidores da DeepSeek, que ficam fora do Brasil; confira a política de privacidade antes de usar com dados de clientes. Modelos padrão `deepseek-flash` e `deepseek-v4-pro`, que você pode trocar;
+- **OpenRouter**, **Mistral** (também com faixa gratuita e limites), ou **Ollama** (grátis e sem chave, roda no próprio computador);
 - **Claude (pago, opcional):** usado só quando todos os gratuitos falham, com limite de chamadas por mês.
 
-O app usa primeiro os gratuitos e **troca sozinho de provedor** quando um atinge o limite do dia ou do minuto.
+O app usa primeiro os gratuitos e **troca sozinho de provedor** quando um atinge o limite do dia ou do minuto (isso vale também para NVIDIA e DeepSeek).
+
+**Não usar em conversas de clientes:** em cada provedor de nuvem há essa opção. Ligada, o provedor só faz tarefas sem dado de cliente, como variações de campanha. Só a IA no computador é "grátis e sem chave"; todo provedor de nuvem manda trechos para fora.
 
 ### Privacidade
 - **Anonimizar** (recomendado): nomes, telefones, e-mails, CPF e endereços viram marcadores antes de sair do computador.

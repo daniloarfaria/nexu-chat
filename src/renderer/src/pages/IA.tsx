@@ -22,39 +22,55 @@ import { cn } from '../lib/cn'
 import { MeuNegocio } from './ia/MeuNegocio'
 import { ConfigurarIA } from './ia/ConfigurarIA'
 
+const FAIXA = 'Tem faixa gratuita com limites; confira no site do provedor.'
+
 const PRESETS: Array<{ id: AiPreset; name: string; note: string; url: string; free: boolean }> = [
   {
     id: 'groq',
     name: 'Groq',
-    note: 'Gratuito, muito rápido, ~1.000 pedidos/dia. Não usa seus dados para treinar.',
+    note: `${FAIXA} Rápido. Não usa seus dados para treinar.`,
     url: 'https://console.groq.com/keys',
     free: true
   },
   {
     id: 'gemini',
     name: 'Google Gemini',
-    note: 'Gratuito. No plano grátis o Google pode usar os textos para melhorar produtos.',
+    note: `${FAIXA} No plano gratuito o Google pode usar os textos para melhorar produtos.`,
     url: 'https://aistudio.google.com/apikey',
     free: true
   },
   {
+    id: 'nvidia',
+    name: 'NVIDIA',
+    note: `${FAIXA} Você cola a sua chave, criada em build.nvidia.com. O modelo pode ser trocado.`,
+    url: 'https://build.nvidia.com/settings/api-keys',
+    free: true
+  },
+  {
+    id: 'deepseek',
+    name: 'DeepSeek',
+    note: 'Cobrado por uso (costuma ser barato); confira os preços no site do provedor. Você cola a sua chave.',
+    url: 'https://platform.deepseek.com/api_keys',
+    free: false
+  },
+  {
     id: 'openrouter',
     name: 'OpenRouter',
-    note: 'Vários modelos gratuitos (:free), 50 pedidos/dia. Rotas grátis podem registrar dados.',
+    note: `${FAIXA} Vários modelos com sufixo :free, com poucos pedidos por dia. Rotas gratuitas podem registrar dados.`,
     url: 'https://openrouter.ai/keys',
     free: true
   },
   {
     id: 'mistral',
     name: 'Mistral',
-    note: 'Gratuito. Treina com os dados, a menos que você desative na conta.',
+    note: `${FAIXA} Treina com os dados, a menos que você desative na conta.`,
     url: 'https://console.mistral.ai/api-keys',
     free: true
   },
   {
     id: 'ollama',
-    name: 'Ollama (local)',
-    note: 'Roda no próprio computador, nada sai daqui. Precisa instalar o Ollama.',
+    name: 'Ollama (no computador)',
+    note: 'Grátis e sem chave. Roda no próprio computador, nada sai daqui. Precisa instalar o Ollama.',
     url: 'https://ollama.com/download',
     free: true
   },
@@ -66,6 +82,12 @@ const PRESETS: Array<{ id: AiPreset; name: string; note: string; url: string; fr
     free: false
   }
 ]
+
+/** Provedores de nuvem: o texto sai do computador (anonimizado, conforme a privacidade escolhida). */
+const CLOUD_WARNING =
+  'Este provedor fica na nuvem: os trechos enviados (anonimizados, conforme a privacidade escolhida) saem do computador e vão para o provedor.'
+const DEEPSEEK_WARNING =
+  'Os trechos anonimizados vão para os servidores da DeepSeek, que ficam fora do Brasil. Confira a política de privacidade antes de usar com dados de clientes.'
 
 const PRIVACY: Record<AiPrivacy, { label: string; desc: string }> = {
   estrita: {
@@ -93,6 +115,7 @@ function ProviderForm({
   const [fast, setFast] = useState(p?.modelFast ?? '')
   const [smart, setSmart] = useState(p?.modelSmart ?? '')
   const [baseUrl, setBaseUrl] = useState(p?.baseUrl ?? '')
+  const [noCust, setNoCust] = useState(p?.noCustomerData ?? false)
   const [test, setTest] = useState<string | null>(null)
   const { busy, error, run } = useAction()
   return (
@@ -115,6 +138,7 @@ function ProviderForm({
                   apiKey: key ? key : undefined,
                   modelFast: fast || undefined,
                   modelSmart: smart || undefined,
+                  noCustomerData: noCust,
                   baseUrl: preset === 'custom' || p ? baseUrl || undefined : undefined
                 })
               )
@@ -131,6 +155,20 @@ function ProviderForm({
     >
       <div className="flex flex-col gap-4">
         {info && <Notice tone={info.free ? 'info' : 'warn'}>{info.note}</Notice>}
+        {preset !== 'ollama' && preset !== 'local' && (
+          <Notice tone="warn">{preset === 'deepseek' ? DEEPSEEK_WARNING : CLOUD_WARNING}</Notice>
+        )}
+        {preset !== 'ollama' && preset !== 'local' && (
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-line p-3">
+            <div className="text-[13px]">
+              <b>Não usar em conversas de clientes</b>
+              <div className="text-[12px] text-ink-2">
+                O provedor só faz tarefas sem dado de cliente, como variações de campanha.
+              </div>
+            </div>
+            <Switch label="Não usar este provedor em conversas de clientes" checked={noCust} onChange={setNoCust} />
+          </div>
+        )}
         {error && <Notice tone="bad">{error}</Notice>}
         {test && <Notice tone="ok">{test}</Notice>}
         {preset !== 'ollama' && (
@@ -197,7 +235,7 @@ function Providers(): React.JSX.Element {
     <div className="flex flex-col gap-4">
       <Section
         title="Provedores"
-        description="O app usa primeiro os gratuitos e troca sozinho de provedor quando um atinge o limite. Cadastre pelo menos dois."
+        description="O app usa primeiro os que têm faixa gratuita e troca sozinho de provedor quando um atinge o limite. Cadastre pelo menos dois. Provedores de nuvem recebem trechos anonimizados das conversas."
       >
         {providers.length > 0 && (
           <ul className="mb-4 divide-y divide-line rounded-lg border border-line">
@@ -206,7 +244,14 @@ function Providers(): React.JSX.Element {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{p.name}</span>
-                    {p.paid ? <Badge tone="warn">pago</Badge> : <Badge tone="ok">grátis</Badge>}
+                    {p.paid ? (
+                      <Badge tone="warn">{p.preset === 'claude' ? 'pago' : 'cobrado por uso'}</Badge>
+                    ) : p.preset === 'ollama' || p.preset === 'local' ? (
+                      <Badge tone="ok">grátis, sem chave</Badge>
+                    ) : (
+                      <Badge tone="info">faixa gratuita com limites</Badge>
+                    )}
+                    {p.noCustomerData && <Badge tone="warn">sem conversas de clientes</Badge>}
                     {p.trainsOnData ? <Badge>pode treinar com dados</Badge> : <Badge tone="info">não treina</Badge>}
                     {!p.hasKey && p.preset !== 'ollama' && p.preset !== 'local' && <Badge tone="bad">sem chave</Badge>}
                     {p.preset === 'local' && <Badge tone="info">no computador</Badge>}

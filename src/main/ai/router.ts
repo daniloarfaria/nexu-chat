@@ -70,6 +70,29 @@ export const PRESETS: Record<
     paid: false,
     keyUrl: 'https://console.mistral.ai/api-keys'
   },
+  // A chave é sempre a do próprio usuário; o app não embute nenhuma.
+  nvidia: {
+    name: 'NVIDIA',
+    baseUrl: 'https://integrate.api.nvidia.com/v1',
+    fast: 'nvidia/nemotron-3.5-lightning-30b-a3b',
+    smart: 'nvidia/nemotron-3.5-lightning-30b-a3b',
+    trains: true, // não há garantia pública de que não usa os textos: tratado como "pode treinar"
+    rpm: 40,
+    rpd: null,
+    paid: false,
+    keyUrl: 'https://build.nvidia.com/settings/api-keys'
+  },
+  deepseek: {
+    name: 'DeepSeek',
+    baseUrl: 'https://api.deepseek.com',
+    fast: 'deepseek-flash',
+    smart: 'deepseek-v4-pro',
+    trains: true, // servidores fora do Brasil: tratado como "pode treinar"
+    rpm: null,
+    rpd: null,
+    paid: true,
+    keyUrl: 'https://platform.deepseek.com/api_keys'
+  },
   ollama: {
     name: 'Ollama (no computador)',
     baseUrl: 'http://localhost:11434/v1',
@@ -127,6 +150,7 @@ interface Row {
   model_fast: string | null
   model_smart: string | null
   trains_on_data: number
+  no_customer_data: number
   rpm: number | null
   rpd: number | null
   paid: number
@@ -165,6 +189,7 @@ export function listProviders(): AiProvider[] {
         modelFast: r.model_fast ?? '',
         modelSmart: r.model_smart ?? '',
         trainsOnData: !!r.trains_on_data,
+        noCustomerData: !!r.no_customer_data,
         rpm: r.rpm,
         rpd: r.rpd,
         paid: !!r.paid,
@@ -187,6 +212,7 @@ export function saveProvider(p: {
   modelFast?: string
   modelSmart?: string
   trainsOnData?: boolean
+  noCustomerData?: boolean
   enabled?: boolean
   priority?: number
 }): AiProvider {
@@ -205,7 +231,7 @@ export function saveProvider(p: {
   if (cur && key === undefined && new URL(baseUrl).origin !== new URL(cur.base_url).origin) key = null
   if (p.id && cur) {
     db.prepare(
-      `UPDATE ai_providers SET name = ?, base_url = ?, api_key = ?, model_fast = ?, model_smart = ?, trains_on_data = ?, enabled = ?, priority = ?, cooldown_until = 0 WHERE id = ?`
+      `UPDATE ai_providers SET name = ?, base_url = ?, api_key = ?, model_fast = ?, model_smart = ?, trains_on_data = ?, no_customer_data = ?, enabled = ?, priority = ?, cooldown_until = 0 WHERE id = ?`
     ).run(
       p.name ?? cur.name,
       baseUrl,
@@ -213,6 +239,7 @@ export function saveProvider(p: {
       p.modelFast ?? cur.model_fast,
       p.modelSmart ?? cur.model_smart,
       p.trainsOnData === undefined ? cur.trains_on_data : p.trainsOnData ? 1 : 0,
+      p.noCustomerData === undefined ? cur.no_customer_data : p.noCustomerData ? 1 : 0,
       p.enabled === undefined ? cur.enabled : p.enabled ? 1 : 0,
       p.priority ?? cur.priority,
       p.id
@@ -221,8 +248,8 @@ export function saveProvider(p: {
   }
   const id = db
     .prepare(
-      `INSERT INTO ai_providers (preset, name, base_url, api_key, model_fast, model_smart, trains_on_data, rpm, rpd, paid, enabled, priority, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
+      `INSERT INTO ai_providers (preset, name, base_url, api_key, model_fast, model_smart, trains_on_data, no_customer_data, rpm, rpd, paid, enabled, priority, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
     )
     .run(
       p.preset,
@@ -232,6 +259,7 @@ export function saveProvider(p: {
       p.modelFast ?? preset?.fast ?? '',
       p.modelSmart ?? preset?.smart ?? p.modelFast ?? '',
       (p.trainsOnData ?? preset?.trains ?? true) ? 1 : 0,
+      p.noCustomerData ? 1 : 0,
       preset?.rpm ?? null,
       preset?.rpd ?? null,
       preset?.paid ? 1 : 0,
@@ -465,6 +493,7 @@ export function candidates(
       p.cooldownUntil <= now &&
       (!p.rpd || p.usedToday < p.rpd) &&
       // dados de clientes: no modo estrito, só provedores que não treinam com os dados
+      !(req.customerData && p.noCustomerData) &&
       !(req.customerData && s.privacy === 'estrita' && p.trainsOnData) &&
       !(p.paid && paidUsed >= s.paidMonthlyLimit)
   )
@@ -525,6 +554,23 @@ export async function complete(req: AiRequest): Promise<{ text: string; provider
   throw new Error('Todos os provedores falharam: ' + errors.join(' · '))
 }
 
+/** Mensagem clara, em português, para falha no teste de conexão. */
+function explainTestError(e: unknown): string {
+  const msg = (e as Error).message ?? ''
+  const name = (e as Error).name
+  if (name === 'TimeoutError' || name === 'AbortError' || /tempo esgotado/.test(msg))
+    return 'O provedor demorou demais para responder. Tente de novo em instantes.'
+  if (e instanceof ProviderError) {
+    if (e.fatal)
+      return 'A chave foi recusada. Confira se copiou a chave inteira, sem espaços, e se ela está ativa no site do provedor.'
+    if (/limite/.test(msg))
+      return 'Você atingiu o limite de uso do provedor. Espere um pouco ou confira o seu plano no site dele.'
+    if (/servidor/.test(msg)) return `O provedor está com problema agora (${msg}). Tente mais tarde.`
+    return `O provedor recusou o pedido (${msg}). Confira o nome do modelo e o endereço.`
+  }
+  return 'Não consegui conectar ao provedor. Confira a sua internet e o endereço da API.'
+}
+
 export async function testProvider(id: number): Promise<string> {
   const row = getDb().prepare('SELECT * FROM ai_providers WHERE id = ?').get(id) as unknown as Row | undefined
   if (!row) throw new Error('Provedor não encontrado')
@@ -536,12 +582,17 @@ export async function testProvider(id: number): Promise<string> {
     customerData: false,
     maxTokens: 50
   }
-  const r =
-    row.preset === 'claude'
-      ? await callClaude(row, row.model_fast ?? '', req)
-      : row.preset === 'local'
-        ? await callLocal(row, row.model_fast ?? '', req)
-        : await callOpenAiCompatible(row, row.model_fast ?? '', req)
+  let r: { text: string; tokens: number }
+  try {
+    r =
+      row.preset === 'claude'
+        ? await callClaude(row, row.model_fast ?? '', req)
+        : row.preset === 'local'
+          ? await callLocal(row, row.model_fast ?? '', req)
+          : await callOpenAiCompatible(row, row.model_fast ?? '', req, { timeoutMs: 25_000 })
+  } catch (e) {
+    throw new Error(explainTestError(e), { cause: e })
+  }
   track(id, true, r.tokens)
   getDb().prepare('UPDATE ai_providers SET cooldown_until = 0 WHERE id = ?').run(id)
   return r.text

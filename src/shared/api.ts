@@ -422,6 +422,7 @@ export interface ApiMap {
         modelFast?: string
         modelSmart?: string
         trainsOnData?: boolean
+        noCustomerData?: boolean
         enabled?: boolean
         priority?: number
       }

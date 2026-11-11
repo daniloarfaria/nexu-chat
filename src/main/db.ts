@@ -490,6 +490,10 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX ia_atendimento_log_acc ON ia_atendimento_log (account_id, at);
   CREATE INDEX ia_atendimento_log_chat ON ia_atendimento_log (account_id, chat_jid, at);
+  `,
+  `
+  -- provedores de IA (NVIDIA, DeepSeek)
+  ALTER TABLE ai_providers ADD COLUMN no_customer_data INTEGER NOT NULL DEFAULT 0;
   `
 ]
 
