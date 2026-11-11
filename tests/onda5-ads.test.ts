@@ -25,7 +25,10 @@ beforeEach(() => {
     .run(ACC, 'Ótica', '#000000', '{}', Date.now())
 })
 
-const ad = (id: string, clid: string | null = null) => ({
+const ad = (
+  id: string,
+  clid: string | null = null
+): { conversionSource: string; entryPoint: string; adId: string; adUrl: string; ctwaClid: string | null } => ({
   conversionSource: 'FB_Ads',
   entryPoint: 'ctwa_ad',
   adId: id,
