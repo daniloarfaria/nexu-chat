@@ -6,6 +6,7 @@ import { dayKey } from '@shared/rules'
 import { findPersonByJid } from './people'
 import { getAccount } from './accounts'
 import { getAttribution } from './ads'
+import { linkDeal, recoveryTouch } from './recoveryLink'
 
 /** Por quantos dias, depois do primeiro contato vindo de anúncio, a venda ainda conta como "Anúncio". */
 export const AD_ORIGIN_DAYS = 30
@@ -60,9 +61,13 @@ export function saveDeal(
   // depois do primeiro contato (módulo Anúncios da Meta)
   const adOrigin = !touch && getAccount(accountId)?.modules.metaConversoes ? getAttribution(accountId, d.chatJid) : null
   const fromAd = !!adOrigin && Date.now() / 1000 - adOrigin.firstTs <= AD_ORIGIN_DAYS * 86400
+  // Uma recuperação de vendas enviada há pouco vale mais que uma campanha antiga: foi ela que chamou o cliente de volta
+  const recovery = d.chatJid.endsWith('@g.us') ? null : recoveryTouch(accountId, d.chatJid)
   const sourceType: Deal['sourceType'] = d.chatJid.endsWith('@g.us')
     ? 'group'
-    : touch
+    : recovery
+      ? 'recovery'
+      : touch
       ? touch.kind === 'reminder'
         ? 'reminder'
         : 'campaign'
@@ -84,14 +89,29 @@ export function saveDeal(
       d.status === 'lost' ? d.reason || 'Outro' : null,
       d.note?.trim() || null,
       sourceType,
-      touch?.id ?? null,
-      touch?.name ?? (sourceType === 'ad' ? 'Anúncio' : null),
+      sourceType === 'recovery' ? null : (touch?.id ?? null),
+      sourceType === 'recovery' ? 'Recuperação' : (touch?.name ?? (sourceType === 'ad' ? 'Anúncio' : null)),
       Date.now()
     ).lastInsertRowid
+  // A venda ou perda marcada para o acompanhamento de recuperação; a venda ganha vira "recuperada"
+  if (!d.chatJid.endsWith('@g.us'))
+    linkDeal(
+      accountId,
+      d.chatJid,
+      { id: Number(id), status: d.status, amountCents: d.status === 'won' ? Math.max(0, Math.round(d.amountCents)) : 0 },
+      recovery
+    )
   return listDeals(accountId, { id: Number(id) })[0]
 }
 
 export function deleteDeal(accountId: string, id: number): void {
+  // Se era uma venda recuperada, ela deixa de contar como recuperada (e o desconto some do custo)
+  getDb()
+    .prepare(
+      `UPDATE followups SET status = 'parado', stop_reason = 'venda_removida', recovered_deal_id = NULL, recovered_cents = 0,
+         discount_cents = 0 WHERE account_id = ? AND recovered_deal_id = ?`
+    )
+    .run(accountId, id)
   getDb().prepare('DELETE FROM deals WHERE id = ? AND account_id = ?').run(id, accountId)
 }
 
@@ -152,7 +172,8 @@ export function salesSummary(accountId: string, from: number, to: number): Sales
     group: 'Grupos',
     campaign: 'Campanha',
     reminder: 'Lembrete',
-    ad: 'Anúncio'
+    ad: 'Anúncio',
+    recovery: 'Recuperação'
   }
   const days = db
     .prepare(

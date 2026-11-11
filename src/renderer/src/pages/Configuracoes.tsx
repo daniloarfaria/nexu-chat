@@ -282,6 +282,9 @@ function BackupTab(): React.JSX.Element {
   )
 }
 
+/** Módulos que só ligam com o Assistente de IA ligado. */
+const NEEDS_IA: ModuleKey[] = ['perfilIa', 'iaAtendimento', 'recuperacao']
+
 function ModulosTab(): React.JSX.Element {
   const active = useActiveAccount()
   const [license] = useLicense()
@@ -308,7 +311,7 @@ function ModulosTab(): React.JSX.Element {
                 <div className="flex-1">
                   <div className="text-[14px] font-medium">{MODULE_INFO[k].label}</div>
                   <div className="text-[13px] text-ink-2">{MODULE_INFO[k].description}</div>
-                  {(k === 'perfilIa' || k === 'iaAtendimento') && !active.modules.ia && (
+                  {NEEDS_IA.includes(k) && !active.modules.ia && (
                     <div className="mt-0.5 text-[12.5px] text-warn">Ligue antes o Assistente de IA.</div>
                   )}
                 </div>
@@ -318,7 +321,7 @@ function ModulosTab(): React.JSX.Element {
                   <Switch
                     label={MODULE_INFO[k].label}
                     checked={active.modules[k]}
-                    disabled={(k === 'perfilIa' || k === 'iaAtendimento') && !active.modules.ia}
+                    disabled={NEEDS_IA.includes(k) && !active.modules.ia}
                     onChange={(v) => void toggle(k, v)}
                   />
                 )}

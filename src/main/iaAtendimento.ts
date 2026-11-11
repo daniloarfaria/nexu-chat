@@ -317,9 +317,16 @@ function repliesSince(accountId: string, sinceMs: number, jid?: string): number 
 
 /** Envios já aceitos na fila e ainda não enviados (contam no limite diário). */
 const pendingSends = new Map<string, number>()
-const bumpPending = (accountId: string, by: number): void => {
+export const bumpPending = (accountId: string, by: number): void => {
   pendingSends.set(accountId, Math.max(0, (pendingSends.get(accountId) ?? 0) + by))
 }
+
+/** Envios reservados e ainda na fila (a recuperação de vendas soma com os do robô no limite diário). */
+export const pendingCount = (accountId: string): number => pendingSends.get(accountId) ?? 0
+
+/** O robô está pensando ou enviando algo para esta conversa agora? (a recuperação espera) */
+export const robotBusy = (accountId: string, jid: string): boolean =>
+  timers.has(key(accountId, jid)) || running.has(key(accountId, jid)) || inflight.has(key(accountId, jid))
 
 /**
  * Qual limite foi atingido, se algum. As vagas reservadas (linhas do registro, ainda na fila) já contam,
@@ -432,7 +439,7 @@ export function parseDecision(raw: string): RobotDecision | null {
 }
 
 /** Minúsculas, sem acento e com caracteres de largura total/compatibilidade normalizados. */
-const norm = (s: string): string => s.normalize('NFKC').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
+export const norm = (s: string): string => s.normalize('NFKC').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
 
 /** Número com separadores em forma canônica: "1.000" e "1000" são iguais, "10,00" e "1.000" não. */
 function canonNumber(raw: string): string {
@@ -464,7 +471,7 @@ const UNIT_KIND: Array<[RegExp, string]> = [
 ]
 
 /** Valores monetários, percentuais e prazos (já em texto normalizado). Cada um vira "tipo:valor". */
-function extractClaims(t: string): Set<string> {
+export function extractClaims(t: string): Set<string> {
   const out = new Set<string>()
   const add = (kind: string, raw: string): void => {
     out.add(`${kind}:${canonNumber(raw)}`)
@@ -508,7 +515,7 @@ const OFFER_WORDS = [
   'condicao especial|condicoes especiais',
   'cashback'
 ]
-const wordIn = (pattern: string, t: string): boolean =>
+export const wordIn = (pattern: string, t: string): boolean =>
   new RegExp(`(?:^|[^a-z0-9])(?:${pattern})(?:[^a-z0-9]|$)`).test(t)
 
 const LEAK = /\bplaybook\b|regras? internas?|\binstrucao\b|\binstrucoes\b|\bprompt\b|fui programad|minhas regras/

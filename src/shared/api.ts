@@ -8,6 +8,10 @@ import type {
   ChatAiState,
   ChatFilter,
   RobotSettings,
+  RecoverySettings,
+  RecoveryQueueItem,
+  RecoveryFollowupItem,
+  RecoveryStats,
   ChatItem,
   MediaInfo,
   MessageItem,
@@ -252,6 +256,19 @@ export interface ApiMap {
   'robot:chat-give-back': { args: [{ accountId: string; jid: string }]; ret: ChatAiState }
   'robot:chat-extra': { args: [{ accountId: string; jid: string; extra: string }]; ret: ChatAiState }
 
+  // Recuperação de vendas com desconto
+  'recovery:settings-get': { args: [{ accountId: string }]; ret: RecoverySettings }
+  'recovery:settings-save': {
+    args: [{ accountId: string; patch: Partial<RecoverySettings> }]
+    ret: RecoverySettings
+  }
+  'recovery:queue': { args: [{ accountId: string }]; ret: RecoveryQueueItem[] }
+  'recovery:approve': { args: [{ accountId: string; id: number; text?: string }]; ret: void }
+  'recovery:discard': { args: [{ accountId: string; id: number }]; ret: void }
+  'recovery:followups': { args: [{ accountId: string }]; ret: RecoveryFollowupItem[] }
+  'recovery:stop': { args: [{ accountId: string; id: number }]; ret: void }
+  'recovery:stats': { args: [{ accountId: string; days: number }]; ret: RecoveryStats }
+
   // Notas do cliente e datas (alvo: o contato ou a conversa dele)
   'notes:list': {
     args: [{ accountId: string; personId?: number; chatJid?: string }]
@@ -489,6 +506,7 @@ export interface EventMap {
   'avatars:changed': { accountId: string; avatars: Record<string, string | null> }
   'status:changed': { accountId: string }
   'robot:changed': { accountId: string; jid: string }
+  'recovery:changed': { accountId: string }
 }
 export type EventChannel = keyof EventMap
 
@@ -575,6 +593,14 @@ export const API_CHANNELS: ApiChannel[] = [
   'robot:chat-assume',
   'robot:chat-give-back',
   'robot:chat-extra',
+  'recovery:settings-get',
+  'recovery:settings-save',
+  'recovery:queue',
+  'recovery:approve',
+  'recovery:discard',
+  'recovery:followups',
+  'recovery:stop',
+  'recovery:stats',
   'notes:list',
   'notes:save',
   'notes:pin',
@@ -677,7 +703,8 @@ export const EVENT_CHANNELS: EventChannel[] = [
   'ai:local-progress',
   'avatars:changed',
   'status:changed',
-  'robot:changed'
+  'robot:changed',
+  'recovery:changed'
 ]
 
 export interface BridgeApi {

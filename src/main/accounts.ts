@@ -25,10 +25,11 @@ function toAccount(r: Row): Account {
   // Só fica ligado o que a licença libera
   const allowed = licenseStatus().modules
   for (const k of MODULE_KEYS) if (!allowed.includes(k)) modules[k] = false
-  // O perfil pela IA e o robô de atendimento dependem do Assistente de IA
+  // O perfil pela IA, o robô de atendimento e a recuperação de vendas dependem do Assistente de IA
   if (!modules.ia) {
     modules.perfilIa = false
     modules.iaAtendimento = false
+    modules.recuperacao = false
   }
   return {
     id: r.id,
@@ -71,6 +72,7 @@ export function updateAccount(
   if (!modules.ia) {
     modules.perfilIa = false
     modules.iaAtendimento = false
+    modules.recuperacao = false
   }
   getDb()
     .prepare('UPDATE accounts SET name = ?, color = ?, modules = ?, auto_connect = ? WHERE id = ?')

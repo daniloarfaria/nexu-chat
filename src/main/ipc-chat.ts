@@ -13,6 +13,7 @@ import { getAvatars } from './wa/avatars'
 import { setTranscribeSettings, transcribe, transcribeStatus } from './wa/transcribe'
 import type { Handle } from './ipc'
 import { noteHumanMessage } from './iaAtendimento'
+import { onHumanMessage } from './recuperacao'
 
 const accountId = z.string().uuid()
 // JIDs aceitos: usuário, LID ou grupo
@@ -98,6 +99,7 @@ export function registerChatIpc(handle: Handle, getWindow: () => BrowserWindow |
     async (a) => {
       await send.sendText(sock(a.accountId), a.accountId, a.jid, a.text, a.quotedId)
       noteHumanMessage(a.accountId, a.jid) // quem digita no app assume a conversa
+      onHumanMessage(a.accountId, a.jid)
     }
   )
   handle(
@@ -120,6 +122,7 @@ export function registerChatIpc(handle: Handle, getWindow: () => BrowserWindow |
     async (a) => {
       await send.sendFile(sock(a.accountId), a.accountId, a.jid, a.file, a)
       noteHumanMessage(a.accountId, a.jid)
+      onHumanMessage(a.accountId, a.jid)
     }
   )
   handle(
