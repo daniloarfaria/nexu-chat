@@ -131,7 +131,8 @@ export function panel(q: PanelQuery): PanelData {
       newChats: 0,
       newChatsSold: 0,
       recovered: 0,
-      recoveredCents: 0
+      recoveredCents: 0,
+      recoveredDiscountCents: 0
     },
     pipelines: [],
     funnel: null,
@@ -256,6 +257,15 @@ export function panel(q: PanelQuery): PanelData {
   const revenue = origins.reduce((s, o) => s + o.revenueCents, 0)
   const paid = [...origin.values()].reduce((s, o) => s + o.paid, 0)
   const rec = origin.get('recovery')
+  // Quanto as vendas recuperadas custaram em desconto (estimativa gravada na hora da venda)
+  const recoveryDiscount = (
+    db
+      .prepare(
+        `SELECT COALESCE(SUM(f.discount_cents), 0) AS c FROM followups f JOIN deals d ON d.id = f.recovered_deal_id
+           WHERE d.${inAcc} AND d.created_at >= ? AND d.created_at < ?`
+      )
+      .get(...ids, q.from, q.to) as { c: number }
+  ).c
 
   // 4) Funis dos números escolhidos e o funil pedido
   const pipelines = (
@@ -277,7 +287,8 @@ export function panel(q: PanelQuery): PanelData {
       newChats: people.n,
       newChatsSold: people.sold,
       recovered: rec?.won ?? 0,
-      recoveredCents: rec?.revenueCents ?? 0
+      recoveredCents: rec?.revenueCents ?? 0,
+      recoveredDiscountCents: recoveryDiscount
     },
     pipelines,
     funnel: chosen ? buildFunnel(chosen.id, chosen.name) : null,

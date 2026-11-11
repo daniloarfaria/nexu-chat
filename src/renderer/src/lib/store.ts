@@ -35,6 +35,8 @@ interface AppState {
   openPipelineId: number | null
   /** Aba das Configurações pedida por quem navegou (a página consome e limpa) */
   settingsTab: SettingsTab | null
+  /** Aba aberta em Automações */
+  automacoesTab: 'respostas' | 'recuperar'
   go: (p: PageId) => void
   goSettings: (tab: SettingsTab) => void
   draftCampaign: (d: { name: string; audience: CampaignAudience }) => void
@@ -71,6 +73,7 @@ export const useApp = create<AppState>((set, get) => ({
   campaignDraft: null,
   openPipelineId: null,
   settingsTab: null,
+  automacoesTab: 'respostas',
 
   go: (page) => set({ page, settingsTab: null }),
   goSettings: (settingsTab) => set({ settingsTab, page: 'configuracoes' }),

@@ -76,7 +76,12 @@ export default function App(): React.JSX.Element {
       await useChats.getState().setAccount(accountId)
       await useChats.getState().select(jid)
     })
+    const offRecovery = window.api.on('nav:open-recovery', ({ accountId }) => {
+      useApp.getState().setActive(accountId)
+      useApp.setState({ automacoesTab: 'recuperar', page: 'automacoes', settingsTab: null })
+    })
     return () => {
+      offRecovery()
       cleanup?.()
       offChats()
       offAvatars()

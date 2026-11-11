@@ -151,6 +151,7 @@ Em **Configurações → Módulos** você liga e desliga as funções de cada co
 | Assistente de IA | Sugestões de resposta, versões de campanha e playbook (seção 12) |
 | Planilha de leads (plano Marketing) | Traz os leads do formulário do site e mostra o resultado por origem do anúncio (seção 11, “Leads do site”) |
 | Robô de atendimento com IA | A IA responde as conversas novas e passa para uma pessoa quando precisa (seção "Robô de atendimento com IA", depois de Respostas automáticas). Vem desligado; é do plano Completo e só liga com o Assistente de IA ligado |
+| Recuperação de vendas | A IA chama de volta o cliente que sumiu depois do orçamento, com até 3 mensagens e um desconto que só você define (aba **Recuperar vendas** em Automações, seção "Recuperar vendas com desconto"). Vem desligado; é do plano Completo e só liga com o Assistente de IA ligado |
 | Perfil do cliente pela IA | Botão **Mapear perfil** e o mapeamento automático das notas do cliente (seção 5). Vem desligado; é do plano Completo e só liga com o Assistente de IA ligado. Ligar autoriza enviar trechos anonimizados das conversas à IA em segundo plano, sem clique. Dá para desligar a qualquer momento por causa da LGPD |
 
 ---
@@ -311,6 +312,53 @@ O app avisa com uma notificação e a conversa entra no filtro **Esperando atend
 
 ---
 
+## Recuperar vendas com desconto
+
+A IA escreve, para o cliente que pediu orçamento e sumiu, até 3 mensagens para retomar a conversa. É um módulo do plano **Completo** e só liga com o **Assistente de IA** ligado (**Configurações → Módulos**). Fica em **Automações → Recuperar vendas**, uma regra por número de WhatsApp. Vem desligado.
+
+### Quem entra
+A loja respondeu (uma pessoa ou o robô de atendimento) e o cliente ficou **24 horas** sem escrever (você muda isso). Respostas automáticas de boas-vindas, de fora do horário, campanhas e lembretes **não contam** como resposta da loja. E o cliente precisa estar em algo que **você escolheu** na aba **Regra**, em **Quem entra na recuperação**:
+- **colunas de funil** (você marca as colunas, de qualquer funil);
+- **etiquetas** (você marca as etiquetas);
+- ou, se você ligar, **interesse de compra** visto pela IA (ela lê trechos anonimizados de conversas paradas).
+
+O app **não adivinha pelo nome**: uma coluna ou etiqueta chamada "Orçamento" só conta se você marcou. Sem nenhuma coluna nem etiqueta marcada, ninguém entra por funil ou etiqueta (só por interesse, se ligado). Colunas **de ganho ou perdido** nunca entram, e isso vem do tipo da coluna, não do nome. Cliente cujos cartões estão só em colunas de ganho ou perdido também não entra pela etiqueta.
+
+Para não acordar conversas antigas, só entra quem ficou em silêncio de 24 horas até mais 3 dias, e que escreveu nos últimos 30 dias. Quem pediu para não receber nunca entra, e quem disse **SAIR** nunca mais é chamado por esta função. Grupos não entram. Cada cliente tem **no máximo um ciclo a cada 30 dias**; passado esse prazo, só volta se a última mensagem dele foi de verdade (não "ok", "hm" ou um emoji). Se o computador ficou desligado e um acompanhamento venceu há mais de 48 horas, ele **expira** em vez de mandar mensagem velha.
+
+### As tentativas
+Até **3 tentativas**. O padrão é no dia 1, no dia 3 e no dia 7 (24 horas de silêncio, depois 2 dias e mais 4 dias). A IA escreve cada uma com o contexto do negócio, as notas do cliente e a conversa **anonimizada** (sem telefone, CPF, e-mail, endereço nem nome). A 1ª é um lembrete leve, a 2ª traz um motivo útil e a 3ª é uma despedida gentil. Se a conversa mostra que o cliente recusou, a IA desiste.
+
+### O desconto
+Você define: o percentual (até 50%), a partir de qual tentativa ele entra (padrão: só na última), a validade em dias, um teto em reais (opcional) e a condição, como "na compra à vista". **O número do desconto vem só da regra**: a IA nem chega a ver o percentual. Ela escreve uma marca e o app troca pelo texto oficial, por exemplo "um desconto de 10% na compra à vista, válido por 7 dias". Antes de enviar, o app confere o texto: qualquer outro percentual, valor, brinde, "sem juros" ou promoção que não seja a sua regra (e preço ou prazo que não esteja no contexto da loja) **bloqueia a mensagem**. Se você mudar o desconto, as mensagens que já estavam escritas com o número antigo são descartadas e a IA escreve de novo.
+
+### Aprovar antes (padrão) ou automático
+- **Aprovar antes:** a mensagem fica na aba **Para aprovar**, com o texto, a tentativa e o desconto. Você aprova com um clique, **edita** antes (o texto editado passa pelo mesmo conferidor) ou escolhe **Não enviar esta** (o acompanhamento segue para a próxima tentativa). Você recebe uma notificação quando chega uma nova.
+- **Automático:** em **Regra**, mude "Como as mensagens saem". A IA envia sozinha, com o mesmo conferidor, só dentro do horário e dos limites.
+
+### Quando para sozinha
+- O cliente **responde** (qualquer mensagem). Se o robô de atendimento estiver ligado, ele atende a resposta como de costume.
+- A venda é marcada (**Virou venda** ou **Perdida**).
+- O cliente pede **SAIR** (por texto ou por áudio já transcrito): o pedido é gravado mesmo que Campanhas, Lembretes e o robô estejam desligados, e vale para sempre.
+- Um **atendente escreve** na conversa, pelo app ou pelo celular.
+- Você clica em **Parar de acompanhar** na aba Acompanhamentos.
+- Você **desliga a regra ou o módulo**: os acompanhamentos em andamento param (religar não os reanima).
+Nesses casos, a mensagem que estava na fila é descartada. A conferência é refeita na hora de enviar, então nada sai depois de uma dessas mudanças.
+
+### Junto com o robô de atendimento
+O **robô vence**. Ele responde quando o cliente escreve e a recuperação só age com o cliente em silêncio, então elas não se cruzam. A recuperação espera enquanto o robô tem uma resposta a caminho na conversa e não entra em conversa que o robô passou para um atendente (**Esperando atendente**).
+
+### Limites anti-bloqueio
+O horário de envio e a validade do desconto seguem o relógio e o fuso do computador onde o app está. Tudo sai pela mesma fila das respostas automáticas (intervalo de segundos, "digitando…"), conta no **limite diário** de envios do número, respeita o **horário de envio** da Proteção anti-bloqueio (fora dele, a mensagem aprovada espera) e tem um limite próprio de mensagens por dia (padrão 20). Mensagem aprovada que não conseguiu sair em 36 horas é descartada; mensagem que ninguém aprovou em 3 dias também.
+
+### Quanto voltou e quanto custou
+Uma venda **ganha** marcada até 14 dias depois de uma mensagem de recuperação (ou até o fim da validade do desconto, se for maior) entra em **Vendas** e no **Painel** com a origem **Recuperação**, desde que o cliente tenha respondido depois da mensagem. Venda perdida nunca vira recuperação, e valor acima de R$ 100.000 é tratado como erro de digitação e não entra. A recuperação tem precedência sobre campanha e anúncio. A aba mostra, nos últimos 30 dias, as mensagens enviadas, quem respondeu, **quanto voltou** e **quanto custou em desconto**. O custo é uma **estimativa** (aparece como "estimado"): o valor da venda é tratado como o que o cliente pagou, já com o desconto, e só conta se a última mensagem trazia desconto ainda dentro da validade. Nunca passa do percentual da regra sobre o valor e respeita o teto em reais. Apagar a venda tira a recuperação e o custo, e o cliente só pode entrar de novo depois dos 30 dias. Apagar a venda tira a recuperação e o custo.
+
+### Privacidade
+A cada mensagem, trechos **anonimizados** da conversa vão para o provedor de IA que você configurou. Notas com dado de saúde nunca vão.
+
+---
+
 ## 9. Grupos
 
 Clique em **Atualizar** para ler os grupos do número. Cada função liga separada em Módulos:
@@ -390,7 +438,7 @@ A página **Painel** (antes chamada Vendas) mostra, com filtro de **período** e
 - O **funil** é a foto de hoje: só a quantidade de cartões e a soma dos valores em cada coluna. O app não presume o que cada coluna quer dizer, não calcula passagem entre colunas nem tempo parado.
 - A venda conta para a campanha ou o lembrete enviado ao cliente nos 7 dias anteriores. Se não houve nenhum, e a conversa veio de anúncio (módulo Anúncios da Meta ligado), aparece como **Anúncio** (até 30 dias depois do primeiro contato). Se o telefone do cliente estava na planilha de leads do site até 30 dias antes da venda, aparece como **Site (UTM)**. Sem nada disso, é **Espontâneo**.
 - Sem o aviso do WhatsApp de que veio de anúncio, ou sem a planilha de leads, essas vendas caem em Espontâneo. O Painel avisa quando não há dado de anúncio ou de planilha.
-- **Recuperação** ainda não está disponível: mostra zero até essa função existir.
+- **Recuperação** conta as vendas marcadas até 14 dias depois de uma mensagem do módulo Recuperação de vendas e mostra, no cartão **Recuperadas**, quanto voltou e quanto custou em desconto (estimativa).
 
 ### Funis (kanban)
 

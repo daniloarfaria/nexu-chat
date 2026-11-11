@@ -490,6 +490,51 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX ia_atendimento_log_acc ON ia_atendimento_log (account_id, at);
   CREATE INDEX ia_atendimento_log_chat ON ia_atendimento_log (account_id, chat_jid, at);
+  `,
+  // recuperação de vendas com desconto
+  `
+  CREATE TABLE followups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    chat_jid TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ativo' CHECK (status IN ('ativo', 'recuperada', 'parado', 'concluido')),
+    stop_reason TEXT,
+    reason_in TEXT NOT NULL,
+    last_client_ts INTEGER NOT NULL DEFAULT 0,
+    attempts_done INTEGER NOT NULL DEFAULT 0,
+    next_due_at INTEGER,
+    fail_count INTEGER NOT NULL DEFAULT 0,
+    replied_at INTEGER,
+    recovered_deal_id INTEGER,
+    recovered_cents INTEGER NOT NULL DEFAULT 0,
+    discount_cents INTEGER NOT NULL DEFAULT 0,
+    started_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE UNIQUE INDEX followups_one_active ON followups (account_id, chat_jid) WHERE status = 'ativo';
+  CREATE INDEX followups_account ON followups (account_id, started_at);
+  CREATE TABLE followup_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    followup_id INTEGER NOT NULL REFERENCES followups(id) ON DELETE CASCADE,
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    chat_jid TEXT NOT NULL,
+    n INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pendente' CHECK (status IN ('pendente', 'aprovada', 'enviada', 'descartada', 'falhou')),
+    text TEXT NOT NULL,
+    discount_pct INTEGER,
+    discount_cap_cents INTEGER,
+    offer TEXT,
+    valid_days INTEGER,
+    valid_until INTEGER,
+    edited INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    approved_at INTEGER,
+    sent_at INTEGER,
+    error TEXT
+  );
+  CREATE INDEX followup_attempts_followup ON followup_attempts (followup_id, n);
+  CREATE INDEX followup_attempts_queue ON followup_attempts (account_id, status);
+  CREATE INDEX followup_attempts_sent ON followup_attempts (account_id, sent_at);
   `
 ]
 

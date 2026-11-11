@@ -54,7 +54,8 @@ const PLANS = {
     'metaConversoes',
     'leadsPlanilha',
     'perfilIa',
-    'iaAtendimento'
+    'iaAtendimento',
+    'recuperacao'
   ]
 }
 

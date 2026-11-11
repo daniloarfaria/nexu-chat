@@ -13,6 +13,7 @@ import { getAvatars } from './wa/avatars'
 import { setTranscribeSettings, transcribe, transcribeStatus } from './wa/transcribe'
 import type { Handle } from './ipc'
 import { noteHumanMessage } from './iaAtendimento'
+import { onHumanMessage } from './recuperacao'
 
 const accountId = z.string().uuid()
 // JIDs aceitos: usuário, LID ou grupo
@@ -43,6 +44,7 @@ function sock(id: string): WASocket {
  */
 async function asHuman<T>(accountIdValue: string, jidValue: string, run: () => Promise<T>): Promise<T> {
   noteHumanMessage(accountIdValue, jidValue)
+  onHumanMessage(accountIdValue, jidValue) // a recuperação também para antes do envio
   return run()
 }
 
