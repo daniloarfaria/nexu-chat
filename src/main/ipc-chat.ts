@@ -37,6 +37,15 @@ function sock(id: string): WASocket {
   return s
 }
 
+/**
+ * Quem escreve no app assume a conversa ANTES de enviar: durante um envio demorado (arquivo grande)
+ * o robô não pode responder por cima. Se o envio falhar, a conversa fica com a pessoa (lado seguro).
+ */
+async function asHuman<T>(accountIdValue: string, jidValue: string, run: () => Promise<T>): Promise<T> {
+  noteHumanMessage(accountIdValue, jidValue)
+  return run()
+}
+
 export function registerChatIpc(handle: Handle, getWindow: () => BrowserWindow | null): void {
   handle(
     'chats:list',
@@ -96,8 +105,7 @@ export function registerChatIpc(handle: Handle, getWindow: () => BrowserWindow |
     'messages:send-text',
     z.object({ accountId, jid, text: z.string().min(1).max(65_000), quotedId: msgId.nullable().optional() }).strict(),
     async (a) => {
-      await send.sendText(sock(a.accountId), a.accountId, a.jid, a.text, a.quotedId)
-      noteHumanMessage(a.accountId, a.jid) // quem digita no app assume a conversa
+      await asHuman(a.accountId, a.jid, () => send.sendText(sock(a.accountId), a.accountId, a.jid, a.text, a.quotedId))
     }
   )
   handle(
@@ -118,8 +126,7 @@ export function registerChatIpc(handle: Handle, getWindow: () => BrowserWindow |
       })
       .strict(),
     async (a) => {
-      await send.sendFile(sock(a.accountId), a.accountId, a.jid, a.file, a)
-      noteHumanMessage(a.accountId, a.jid)
+      await asHuman(a.accountId, a.jid, () => send.sendFile(sock(a.accountId), a.accountId, a.jid, a.file, a))
     }
   )
   handle(
@@ -135,16 +142,14 @@ export function registerChatIpc(handle: Handle, getWindow: () => BrowserWindow |
       })
       .strict(),
     async (a) => {
-      await send.sendLocation(sock(a.accountId), a.accountId, a.jid, a)
-      noteHumanMessage(a.accountId, a.jid)
+      await asHuman(a.accountId, a.jid, () => send.sendLocation(sock(a.accountId), a.accountId, a.jid, a))
     }
   )
   handle(
     'messages:send-contact',
     z.object({ accountId, jid, name: z.string().min(1).max(100), phone: z.string().min(8).max(25) }).strict(),
     async (a) => {
-      await send.sendContactCard(sock(a.accountId), a.accountId, a.jid, a)
-      noteHumanMessage(a.accountId, a.jid)
+      await asHuman(a.accountId, a.jid, () => send.sendContactCard(sock(a.accountId), a.accountId, a.jid, a))
     }
   )
   handle(
@@ -159,8 +164,7 @@ export function registerChatIpc(handle: Handle, getWindow: () => BrowserWindow |
       })
       .strict(),
     async (a) => {
-      await send.sendPoll(sock(a.accountId), a.accountId, a.jid, a)
-      noteHumanMessage(a.accountId, a.jid)
+      await asHuman(a.accountId, a.jid, () => send.sendPoll(sock(a.accountId), a.accountId, a.jid, a))
     }
   )
   handle('messages:react', z.object({ accountId, jid, id: msgId, emoji: z.string().max(16) }).strict(), (a) =>

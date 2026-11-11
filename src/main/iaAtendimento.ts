@@ -994,10 +994,19 @@ export function resumeIdleChats(now = Date.now()): number {
   return n
 }
 
+/** Fusão LID/número: as respostas pendentes das duas identidades perdem a validade (o modo foi reconciliado). */
+function onMerged({ accountId, from, to }: { accountId: string; from: string; to: string }): void {
+  const had = timers.has(key(accountId, from)) || timers.has(key(accountId, to))
+  cancelPending(accountId, from)
+  cancelPending(accountId, to)
+  if (had && rawState(accountId, to)?.mode === 'ia' && needsReply(accountId, to)) schedule(accountId, to)
+}
+
 let started = false
 export function startRobot(): void {
   if (started) return
   started = true
+  storeEvents.on('merged', onMerged)
   setInterval(() => {
     try {
       resumeIdleChats()

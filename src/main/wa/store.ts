@@ -123,6 +123,69 @@ function mergeAttribution(accountId: string, from: string, to: string): void {
   db.prepare('DELETE FROM chat_attribution WHERE account_id = ? AND chat_jid = ?').run(accountId, from)
 }
 
+const AI_MODE_RANK: Record<string, number> = { humano: 3, espera: 2, ia: 1 }
+
+/**
+ * Quem atende a conversa depois da fusão: a intervenção humana vence ('humano' > 'espera' > 'ia'),
+ * a instrução extra é preservada (a do destino tem prioridade) e o relógio mais antigo de espera continua valendo.
+ */
+function mergeAiMode(accountId: string, from: string, to: string): void {
+  const db = getDb()
+  type Row = {
+    mode: string
+    reason: string | null
+    topic: string | null
+    agent: string | null
+    extra: string | null
+    human_at: number | null
+    pending_since: number | null
+    updated_at: number
+  }
+  const get = (jid: string): Row | undefined =>
+    db.prepare('SELECT * FROM chat_ai_mode WHERE account_id = ? AND chat_jid = ?').get(accountId, jid) as
+      Row | undefined
+  const src = get(from)
+  if (!src) return
+  const dst = get(to)
+  db.prepare('DELETE FROM chat_ai_mode WHERE account_id = ? AND chat_jid = ?').run(accountId, from)
+  if (!dst) {
+    db.prepare(
+      `INSERT INTO chat_ai_mode (account_id, chat_jid, mode, reason, topic, agent, extra, human_at, pending_since, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      accountId,
+      to,
+      src.mode,
+      src.reason,
+      src.topic,
+      src.agent,
+      src.extra,
+      src.human_at,
+      src.pending_since,
+      src.updated_at
+    )
+    return
+  }
+  const rank = (r: Row): number => AI_MODE_RANK[r.mode] ?? 0
+  const win = rank(src) > rank(dst) || (rank(src) === rank(dst) && src.updated_at > dst.updated_at) ? src : dst
+  const pend = [src.pending_since, dst.pending_since].filter((x): x is number => x != null)
+  db.prepare(
+    `UPDATE chat_ai_mode SET mode = ?, reason = ?, topic = ?, agent = ?, extra = ?, human_at = ?, pending_since = ?, updated_at = ?
+     WHERE account_id = ? AND chat_jid = ?`
+  ).run(
+    win.mode,
+    win.reason,
+    win.topic,
+    win.agent,
+    dst.extra?.trim() ? dst.extra : src.extra,
+    Math.max(src.human_at ?? 0, dst.human_at ?? 0) || null,
+    win.mode === 'humano' && pend.length ? Math.min(...pend) : win.pending_since,
+    Date.now(),
+    accountId,
+    to
+  )
+}
+
 /** Junta a conversa guardada pelo LID na conversa do número. */
 function mergeChat(accountId: string, from: string, to: string): void {
   const db = getDb()
@@ -130,12 +193,7 @@ function mergeChat(accountId: string, from: string, to: string): void {
   db.prepare('UPDATE deals SET chat_jid = ? WHERE account_id = ? AND chat_jid = ?').run(to, accountId, from)
   db.prepare('UPDATE auto_log SET jid = ? WHERE account_id = ? AND jid = ?').run(to, accountId, from)
   mergeAttribution(accountId, from, to)
-  db.prepare('UPDATE OR IGNORE chat_ai_mode SET chat_jid = ? WHERE account_id = ? AND chat_jid = ?').run(
-    to,
-    accountId,
-    from
-  )
-  db.prepare('DELETE FROM chat_ai_mode WHERE account_id = ? AND chat_jid = ?').run(accountId, from)
+  mergeAiMode(accountId, from, to)
   db.prepare('UPDATE ia_atendimento_log SET chat_jid = ? WHERE account_id = ? AND chat_jid = ?').run(
     to,
     accountId,
