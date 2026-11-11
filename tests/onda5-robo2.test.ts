@@ -43,8 +43,6 @@ import { closeDb, getDb, openDb } from '../src/main/db'
 import { updateAccount } from '../src/main/accounts'
 import { saveBusinessContext } from '../src/main/ai/context'
 import { storeEvents } from '../src/main/wa/store'
-import { saveRule } from '../src/main/automation'
-import { optOutByJid } from '../src/main/people'
 import type { MessageItem } from '../src/shared/types'
 import * as R from '../src/main/iaAtendimento'
 import { markAutoMessage } from '../src/main/autoMessages'
@@ -55,9 +53,6 @@ const mockComplete = vi.mocked(complete)
 
 let seq = 0
 const nowSec = (): number => Math.floor(Date.now() / 1000)
-const DAY = 86_400
-// a resposta automática espera 1,5 s+ (digitando) de verdade
-const WAIT = { timeout: 12_000, interval: 25 }
 
 function addMsg(fromMe: boolean, text: string | null, jid = JID, type = 'text', id?: string, at?: number): MessageItem {
   const mid = id ?? `m${++seq}`
@@ -95,11 +90,6 @@ function addMsg(fromMe: boolean, text: string | null, jid = JID, type = 'text', 
 
 const reply = (texto: string): { text: string; provider: string; model: string } => ({
   text: JSON.stringify({ acao: 'responder', texto }),
-  provider: 'teste',
-  model: 'm'
-})
-const transfer = (assunto: string): { text: string; provider: string; model: string } => ({
-  text: JSON.stringify({ acao: 'transferir', assunto }),
   provider: 'teste',
   model: 'm'
 })

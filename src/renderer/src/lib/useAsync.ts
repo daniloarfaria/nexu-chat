@@ -47,11 +47,25 @@ export function useLoad<T>(
 }
 
 /** Executa uma ação com estado de carregamento e erro. */
+/**
+ * Executa e diz explicitamente se deu certo. Chamadas que não devolvem nada (IPC `void`) dão `undefined`
+ * tanto no sucesso quanto no erro; por isso quem precisa saber do sucesso usa isto, não `!== undefined`.
+ */
+export async function settle<T>(fn: () => Promise<T>): Promise<{ ok: true; value: T } | { ok: false; error: string }> {
+  try {
+    return { ok: true, value: await fn() }
+  } catch (e) {
+    return { ok: false, error: (e as Error).message }
+  }
+}
+
 export function useAction(): {
   busy: string | null
   error: string | null
   setError: (e: string | null) => void
   run: <T>(key: string, fn: () => Promise<T>) => Promise<T | undefined>
+  /** Como `run`, mas devolve true só se deu certo (serve para chamadas que não devolvem valor). */
+  attempt: (key: string, fn: () => Promise<unknown>) => Promise<boolean>
 } {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -67,7 +81,15 @@ export function useAction(): {
       setBusy(null)
     }
   }, [])
-  return { busy, error, setError, run }
+  const attempt = useCallback(async (key: string, fn: () => Promise<unknown>): Promise<boolean> => {
+    setBusy(key)
+    setError(null)
+    const r = await settle(fn)
+    if (!r.ok) setError(r.error)
+    setBusy(null)
+    return r.ok
+  }, [])
+  return { busy, error, setError, run, attempt }
 }
 
 export function money(cents: number): string {
