@@ -5,6 +5,7 @@ import { getDb, getSetting, setSetting } from './db'
 import { getAccount, listAccounts } from './accounts'
 import { getAntiBan, releaseDailySend, reserveDailySend, sentToday } from './campaigns'
 import { isOptedOut } from './people'
+import { isAutoMessage } from './autoMessages'
 import { enqueueSend, lockChat } from './outbox'
 import { listMessages, getChats, storeEvents } from './wa/store'
 import { sendAndStore } from './wa/send'
@@ -597,6 +598,16 @@ function awayOpen(accountId: string, now: Date): boolean {
 const nowSec = (): number => Math.floor(Date.now() / 1000)
 
 /**
+ * Modo "só fora do horário": conversa criada fora do expediente ('novo') só é atendida pela IA enquanto a loja
+ * está fechada, e isso vale a cada mensagem e na hora de enviar. Exceções manuais (devolvida, retomou) seguem valendo.
+ */
+function blockedByAwayHours(accountId: string, jid: string, s: RobotSettings, now = new Date()): boolean {
+  if (s.when !== 'away') return false
+  const st = rawState(accountId, jid)
+  return st?.mode === 'ia' && st.reason === 'novo' && awayOpen(accountId, now)
+}
+
+/**
  * Conversa nova: a primeira mensagem dela chegou há pouco (não importa quantas o cliente mandou em seguida)
  * e quem falou primeiro foi o cliente, não a loja.
  */
@@ -663,9 +674,22 @@ function schedule(accountId: string, jid: string, delayMs: number = tuning.debou
 const lastMessages = (accountId: string, jid: string, n: number): MessageItem[] =>
   listMessages(accountId, jid, null, n).filter((m) => m.type !== 'system' && !m.deleted)
 
+/**
+ * A última mensagem que importa: pula as que a loja enviou sozinha (boas-vindas, fora do horário),
+ * que não respondem a pergunta do cliente. Resposta de uma pessoa ou da IA continua valendo.
+ */
+function lastTurn(accountId: string, msgs: MessageItem[]): MessageItem | undefined {
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const m = msgs[i]
+    if (m.fromMe && isAutoMessage(accountId, m.id)) continue
+    return m
+  }
+  return undefined
+}
+
 /** A última mensagem da conversa é do cliente (ainda sem resposta)? */
 function needsReply(accountId: string, jid: string): boolean {
-  const m = lastMessages(accountId, jid, 3).at(-1)
+  const m = lastTurn(accountId, lastMessages(accountId, jid, 6))
   return !!m && !m.fromMe
 }
 
@@ -720,7 +744,8 @@ function canSend(
   const mode = rawState(accountId, jid)?.mode
   if (kind === 'reply' ? mode !== 'ia' : mode !== 'espera') return 'descartar'
   if (isOptedOut(accountId, jid)) return 'descartar'
-  const newest = lastMessages(accountId, jid, 3).at(-1)
+  if (kind === 'reply' && blockedByAwayHours(accountId, jid, s)) return 'descartar'
+  const newest = lastTurn(accountId, lastMessages(accountId, jid, 6))
   if (!newest || newest.fromMe) return 'descartar'
   if (newest.id !== originId) return 'nova'
   if (sentToday(accountId) >= effectiveDailyLimit(getAntiBan(accountId))) return 'descartar'
@@ -810,10 +835,11 @@ async function respondInner(accountId: string, jid: string): Promise<Outcome> {
   if (isOptedOut(accountId, jid)) return 'ignorou'
   const s = getRobotSettings(accountId)
   const msgs = lastMessages(accountId, jid, 20)
-  const last = msgs.at(-1)
+  const last = lastTurn(accountId, msgs)
   if (!last || last.fromMe) return 'ignorou'
   const lastText = last.text ?? last.transcript ?? null
   if (isOptOut(lastText)) return 'ignorou'
+  if (blockedByAwayHours(accountId, jid, s)) return 'ignorou'
 
   const agents = parseAgents(s.agentsText)
   const handoff = (reason: ChatAiReason, topic: string | null, silent = false): Outcome => {
@@ -900,7 +926,7 @@ async function respondInner(accountId: string, jid: string): Promise<Outcome> {
 
   // Durante a geração o cliente pode ter escrito de novo ou uma pessoa pode ter assumido
   if (!robotActive(accountId) || rawState(accountId, jid)?.mode !== 'ia') return 'ignorou'
-  const newest = lastMessages(accountId, jid, 3).at(-1)
+  const newest = lastTurn(accountId, lastMessages(accountId, jid, 6))
   if (!newest || newest.fromMe) return 'ignorou'
   if (newest.id !== last.id) {
     schedule(accountId, jid)
@@ -969,7 +995,8 @@ export function onClientMessage(accountId: string, m: MessageItem, mode: 'regist
         .run(Date.now(), accountId, m.chatJid)
     return
   }
-  if (st.mode === 'ia' && mode === 'answer') schedule(accountId, m.chatJid)
+  if (st.mode === 'ia' && mode === 'answer' && !blockedByAwayHours(accountId, m.chatJid, s))
+    schedule(accountId, m.chatJid)
 }
 
 /** Mensagem enviada por alguém da loja (pelo celular): assume. As do próprio app já vêm marcadas e são ignoradas. */
