@@ -91,6 +91,14 @@ export function useWindowChatStore(accountId: string, jid: string | null): ChatS
   return store
 }
 
+/**
+ * A conversa que a janela mostra de fato. Depois da fusão LID/número o store passa a apontar para o número;
+ * quem renderiza pelo JID guardado antes (ChatView, controles do robô) ficaria olhando o LID que não existe mais.
+ */
+export function useShownJid(store: ChatStoreApi, fallback: string | null): string | null {
+  return useStore(store, (s) => s.selected) ?? fallback
+}
+
 /** Liga os eventos do processo principal a todas as instâncias de conversa abertas. */
 export function subscribeChatEvents(): () => void {
   const offs = [

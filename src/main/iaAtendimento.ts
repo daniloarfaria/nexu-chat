@@ -3,14 +3,16 @@ import type { ChatAiMode, ChatAiReason, ChatAiState, MessageItem, RobotSettings 
 import { DEFAULT_ANTIBAN, effectiveDailyLimit, fold, isOptOut, sendWindow } from '@shared/rules'
 import { getDb, getSetting, setSetting } from './db'
 import { getAccount, listAccounts } from './accounts'
-import { countSend, getAntiBan, sentToday } from './campaigns'
+import { getAntiBan, releaseDailySend, reserveDailySend, sentToday } from './campaigns'
 import { isOptedOut } from './people'
-import { enqueueSend } from './outbox'
+import { isAutoMessage } from './autoMessages'
+import { enqueueSend, lockChat } from './outbox'
 import { listMessages, getChats, storeEvents } from './wa/store'
 import { sendAndStore } from './wa/send'
 import { wa } from './wa/manager'
 import { complete } from './ai/router'
 import { anonymize } from './ai/anonymize'
+import { dropSensitiveLines } from './ai/privacy'
 import { allowedContext, businessContext } from './ai/context'
 import { contextNotes } from './ai/profile'
 import { personIdOfChat } from './notes'
@@ -596,6 +598,16 @@ function awayOpen(accountId: string, now: Date): boolean {
 const nowSec = (): number => Math.floor(Date.now() / 1000)
 
 /**
+ * Modo "só fora do horário": conversa criada fora do expediente ('novo') só é atendida pela IA enquanto a loja
+ * está fechada, e isso vale a cada mensagem e na hora de enviar. Exceções manuais (devolvida, retomou) seguem valendo.
+ */
+function blockedByAwayHours(accountId: string, jid: string, s: RobotSettings, now = new Date()): boolean {
+  if (s.when !== 'away') return false
+  const st = rawState(accountId, jid)
+  return st?.mode === 'ia' && st.reason === 'novo' && awayOpen(accountId, now)
+}
+
+/**
  * Conversa nova: a primeira mensagem dela chegou há pouco (não importa quantas o cliente mandou em seguida)
  * e quem falou primeiro foi o cliente, não a loja.
  */
@@ -662,9 +674,22 @@ function schedule(accountId: string, jid: string, delayMs: number = tuning.debou
 const lastMessages = (accountId: string, jid: string, n: number): MessageItem[] =>
   listMessages(accountId, jid, null, n).filter((m) => m.type !== 'system' && !m.deleted)
 
+/**
+ * A última mensagem que importa: pula as que a loja enviou sozinha (boas-vindas, fora do horário),
+ * que não respondem a pergunta do cliente. Resposta de uma pessoa ou da IA continua valendo.
+ */
+function lastTurn(accountId: string, msgs: MessageItem[]): MessageItem | undefined {
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const m = msgs[i]
+    if (m.fromMe && isAutoMessage(accountId, m.id)) continue
+    return m
+  }
+  return undefined
+}
+
 /** A última mensagem da conversa é do cliente (ainda sem resposta)? */
 function needsReply(accountId: string, jid: string): boolean {
-  const m = lastMessages(accountId, jid, 3).at(-1)
+  const m = lastTurn(accountId, lastMessages(accountId, jid, 6))
   return !!m && !m.fromMe
 }
 
@@ -719,7 +744,8 @@ function canSend(
   const mode = rawState(accountId, jid)?.mode
   if (kind === 'reply' ? mode !== 'ia' : mode !== 'espera') return 'descartar'
   if (isOptedOut(accountId, jid)) return 'descartar'
-  const newest = lastMessages(accountId, jid, 3).at(-1)
+  if (kind === 'reply' && blockedByAwayHours(accountId, jid, s)) return 'descartar'
+  const newest = lastTurn(accountId, lastMessages(accountId, jid, 6))
   if (!newest || newest.fromMe) return 'descartar'
   if (newest.id !== originId) return 'nova'
   if (sentToday(accountId) >= effectiveDailyLimit(getAntiBan(accountId))) return 'descartar'
@@ -746,7 +772,14 @@ function deliver(
   }
   const queued = enqueueSend(accountId, async () => {
     let sent = false
+    let reserved = false
+    // Uma campanha pode estar enviando para esta pessoa agora: um envio por vez por conversa
+    const unlock = lockChat(accountId, jid)
     try {
+      if (!unlock) {
+        if (rawState(accountId, jid)?.mode === 'ia') schedule(accountId, jid, 5_000)
+        return
+      }
       const sock = wa.getSocket(accountId)
       if (!sock) return
       await sock.sendPresenceUpdate('composing', jid).catch(() => undefined)
@@ -758,10 +791,14 @@ function deliver(
         return
       }
       if (verdict !== 'ok') return
+      // Reserva a vaga do limite diário (as campanhas dividem o mesmo limite)
+      if (!reserveDailySend(accountId, effectiveDailyLimit(getAntiBan(accountId)))) return
+      reserved = true
       await sendAndStore(sock, accountId, jid, { text })
       sent = true
-      countSend(accountId)
     } finally {
+      if (reserved && !sent) releaseDailySend(accountId)
+      unlock?.()
       if (!sent) releaseSlot(o.slot)
       finish()
     }
@@ -798,10 +835,11 @@ async function respondInner(accountId: string, jid: string): Promise<Outcome> {
   if (isOptedOut(accountId, jid)) return 'ignorou'
   const s = getRobotSettings(accountId)
   const msgs = lastMessages(accountId, jid, 20)
-  const last = msgs.at(-1)
+  const last = lastTurn(accountId, msgs)
   if (!last || last.fromMe) return 'ignorou'
   const lastText = last.text ?? last.transcript ?? null
   if (isOptOut(lastText)) return 'ignorou'
+  if (blockedByAwayHours(accountId, jid, s)) return 'ignorou'
 
   const agents = parseAgents(s.agentsText)
   const handoff = (reason: ChatAiReason, topic: string | null, silent = false): Outcome => {
@@ -858,7 +896,7 @@ async function respondInner(accountId: string, jid: string): Promise<Outcome> {
   const history = msgs.slice(-15).map((m) => ({ fromMe: m.fromMe, text: anonymize(bodyOf(m), names) }))
   const { system, prompt } = buildPrompt({
     context,
-    playbook: pb?.content ?? null,
+    playbook: pb?.content ? anonymize(pb.content, names) : null,
     notes: contextNotes(accountId, personIdOfChat(accountId, jid), names),
     extra: anonymize(extra, names),
     history,
@@ -869,7 +907,15 @@ async function respondInner(accountId: string, jid: string): Promise<Outcome> {
   let raw: string
   try {
     raw = (
-      await complete({ task: 'robo_atendimento', tier: 'smart', customerData: true, system, prompt, maxTokens: 500 })
+      await complete({
+        task: 'robo_atendimento',
+        tier: 'smart',
+        customerData: true,
+        cloudSanitize: dropSensitiveLines,
+        system,
+        prompt,
+        maxTokens: 500
+      })
     ).text
   } catch (e) {
     log.warn('IA indisponível no robô de atendimento', { erro: String((e as Error).message).slice(0, 200) })
@@ -880,7 +926,7 @@ async function respondInner(accountId: string, jid: string): Promise<Outcome> {
 
   // Durante a geração o cliente pode ter escrito de novo ou uma pessoa pode ter assumido
   if (!robotActive(accountId) || rawState(accountId, jid)?.mode !== 'ia') return 'ignorou'
-  const newest = lastMessages(accountId, jid, 3).at(-1)
+  const newest = lastTurn(accountId, lastMessages(accountId, jid, 6))
   if (!newest || newest.fromMe) return 'ignorou'
   if (newest.id !== last.id) {
     schedule(accountId, jid)
@@ -949,7 +995,8 @@ export function onClientMessage(accountId: string, m: MessageItem, mode: 'regist
         .run(Date.now(), accountId, m.chatJid)
     return
   }
-  if (st.mode === 'ia' && mode === 'answer') schedule(accountId, m.chatJid)
+  if (st.mode === 'ia' && mode === 'answer' && !blockedByAwayHours(accountId, m.chatJid, s))
+    schedule(accountId, m.chatJid)
 }
 
 /** Mensagem enviada por alguém da loja (pelo celular): assume. As do próprio app já vêm marcadas e são ignoradas. */
@@ -985,10 +1032,19 @@ export function resumeIdleChats(now = Date.now()): number {
   return n
 }
 
+/** Fusão LID/número: as respostas pendentes das duas identidades perdem a validade (o modo foi reconciliado). */
+function onMerged({ accountId, from, to }: { accountId: string; from: string; to: string }): void {
+  const had = timers.has(key(accountId, from)) || timers.has(key(accountId, to))
+  cancelPending(accountId, from)
+  cancelPending(accountId, to)
+  if (had && rawState(accountId, to)?.mode === 'ia' && needsReply(accountId, to)) schedule(accountId, to)
+}
+
 let started = false
 export function startRobot(): void {
   if (started) return
   started = true
+  storeEvents.on('merged', onMerged)
   setInterval(() => {
     try {
       resumeIdleChats()

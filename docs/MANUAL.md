@@ -179,7 +179,7 @@ O menu **Contatos** é a base de clientes da loja, usada por campanhas e lembret
   - Na ficha do contato, digite para buscar uma etiqueta; **Enter** cria uma nova.
 - **Adicionar ao funil:** com contatos selecionados, coloque todos de uma vez numa coluna de funil.
 - **Não receber:** quem responde **SAIR** (ou "parar", "não quero mais"…) entra sozinho nessa lista e recebe uma confirmação. Você também pode marcar à mão.
-- **Excluir** atende pedidos de exclusão de dados (LGPD). Apaga o contato junto com as conversas, mensagens, fotos e arquivos recebidos e as vendas registradas. Se a pessoa tinha pedido para não receber, só o número fica guardado na lista de bloqueio, para ela nunca mais receber, mesmo se voltar numa planilha.
+- **Excluir** atende pedidos de exclusão de dados (LGPD). Apaga o contato junto com as conversas, mensagens, fotos e arquivos recebidos e as vendas registradas. A exclusão vale para todas as formas do número (com e sem o nono dígito e o identificador interno do WhatsApp) e também apaga os leads da planilha, a origem de anúncio, o modo do robô e o registro de respostas da IA dessa pessoa, além de tirá-la da fila de contatos a criar (para o contato não voltar sozinho). Se a pessoa tinha pedido para não receber, só o número fica guardado na lista de bloqueio, para ela nunca mais receber, mesmo se voltar numa planilha.
 - **Exportar** gera um CSV com todos os contatos.
 - **Aniversário e datas do contato:** na ficha, o campo **Aniversário** mostra a idade (quando há o ano) e quantos dias faltam. Nos campos de data que você criar (por exemplo `data_compra`), aparece ao lado quando a data volta.
   - A ficha lista os **Lembretes enviados**, uma linha por envio, como "Lembrete de aniversário enviado em 12/03/2027". Um lembrete que ainda não foi confirmado como enviado aparece como "programado" só nas primeiras 12 horas; depois, se não saiu, some.
@@ -278,7 +278,7 @@ A IA responde os clientes pelo WhatsApp, em conversas individuais, usando o que 
 1. Ligue o módulo **Robô de atendimento com IA** e confira se o Assistente de IA tem um provedor cadastrado e o contexto do negócio preenchido.
 2. Em **Configurações → Robô de atendimento**, ligue o robô e escolha **quando a IA atende**:
    - **Só conversas novas** (padrão): quem fala com a loja pela primeira vez é atendido pela IA. Conversas antigas, ou que a loja começou, continuam com você: a IA nunca entra nelas nem as retoma sozinha, mesmo que você escreva um contexto extra ou devolva o atendimento pelo botão (só o botão **Devolver para a IA** liga a IA numa conversa antiga, e por escolha sua).
-   - **Só fora do horário de atendimento**: usa o horário da resposta automática "fora do horário" (ou segunda a sábado, das 8h às 18h, se não houver). A mensagem de boas-vindas e a de fora do horário não calam a IA: ela ainda responde à pergunta do cliente.
+   - **Só fora do horário de atendimento**: usa o horário da resposta automática "fora do horário" (ou segunda a sábado, das 8h às 18h, se não houver). O horário é conferido a cada mensagem e de novo na hora de enviar: se a conversa começou à noite e a loja abriu antes de a IA responder, quem atende é a equipe. Conversas que você devolveu para a IA continuam com ela. A mensagem de boas-vindas e a de fora do horário não calam a IA: ela ainda responde à pergunta do cliente, mesmo que a mensagem automática já tenha saído na conversa.
    - **Sempre**: inclui conversas antigas.
 
 Mensagens com mais de 15 minutos (por exemplo, as que chegam quando o app volta a conectar) não recebem resposta tardia da IA.
@@ -286,7 +286,7 @@ Mensagens com mais de 15 minutos (por exemplo, as que chegam quando o app volta 
 
 ### Quem está atendendo
 No topo de cada conversa individual há uma etiqueta: **IA atendendo**, **Atendimento humano** ou **Esperando atendente**.
-- **Assumir atendimento**: a IA para na hora. Se você escrever na conversa (texto, arquivo, localização, contato ou enquete, pelo app ou pelo celular), ela também para sozinha. Mensagens que o próprio WhatsApp envia pela sua conta (como a saudação ou a mensagem de ausência do WhatsApp Business) também fazem a IA parar: é o lado seguro, e o botão **Devolver para a IA** fica sempre à mão no topo da conversa.
+- **Assumir atendimento**: a IA para na hora. Se você escrever na conversa (texto, arquivo, localização, contato ou enquete, pelo app ou pelo celular), ela também para sozinha. No app, ela para assim que você aperta enviar, antes de o envio terminar (um arquivo grande não é mais respondido por cima pela IA). Se o WhatsApp trocar o identificador da conversa pelo número e as duas já tinham um registro, vale o de quem atende: atendimento humano vence espera, que vence IA, e o contexto extra é mantido. Mensagens que o próprio WhatsApp envia pela sua conta (como a saudação ou a mensagem de ausência do WhatsApp Business) também fazem a IA parar: é o lado seguro, e o botão **Devolver para a IA** fica sempre à mão no topo da conversa.
 - **Devolver para a IA**: a IA volta a atender e, se o cliente ficou sem resposta, já responde.
 - **Retomada automática** (só em conversas que a IA já atendeu): se você assumiu e o cliente ficou esperando por 30 minutos (dá para mudar em **Minutos até a IA retomar**), a IA retoma e a conversa mostra **IA retomou o atendimento**.
 - **Contexto extra**: escreva uma instrução só para aquela conversa (por exemplo, "ofereça a armação X"). Ela vai junto de cada resposta da IA.
@@ -309,10 +309,11 @@ O app avisa com uma notificação e a conversa entra no filtro **Esperando atend
 - A IA **nunca responde em grupos**.
 - Antes de enviar, o app confere a resposta: preço (em R$, reais ou por extenso), percentual, parcelas, prazo, desconto, brinde, oferta, telefone, Pix, e-mail e links que **não estejam no contexto da loja** (Assistente de IA → Meu negócio) ou na sua instrução da conversa bloqueiam o envio, e a conversa passa para uma pessoa. O playbook e o campo "O que a IA não pode falar" não servem de fonte para liberar nada. Resposta que cite regras internas, o playbook ou deixe escapar marcas de anonimização como [cliente] também é bloqueada, sem aviso ao cliente.
 - O que o cliente escreve é tratado como texto, nunca como ordem: pedidos como "ignore as regras" não mudam o comportamento da IA.
+- Campanhas e o robô dividem o mesmo **limite diário** (a vaga é reservada na hora de enviar, então os dois juntos nunca passam do limite) e nunca enviam para a mesma pessoa ao mesmo tempo: se a campanha está falando com ela, a resposta da IA espera uns segundos e tenta de novo.
 - Toda resposta sai pela mesma fila das respostas automáticas (intervalo de segundos entre envios), mostra **digitando…** com um atraso parecido com o de uma pessoa e conta no **limite diário** de envios do número. Os limites por hora (até 60) e por conversa (até 30) são reservados ao enfileirar, e um último conferido vale na hora de enviar: se você assumir, desligar o robô, o cliente pedir SAIR ou chegar uma mensagem nova, a resposta que estava na fila é descartada.
 - Áudio do cliente: com a transcrição automática ligada (Configurações → Transcrição de áudio), a IA espera até 1 minuto pela transcrição; sem ela, passa para uma pessoa.
 - Se o provedor de IA ficar fora do ar, a IA **para**, a conversa vai para **Esperando atendente** e você recebe uma notificação. Nenhum texto genérico é enviado ao cliente.
-- A cada resposta, trechos **anonimizados** da conversa (sem telefone, CPF, e-mail nem endereço) vão para o provedor de IA que você configurou. Notas com dado de saúde nunca vão.
+- A cada resposta, trechos **anonimizados** da conversa (sem telefone, CPF, e-mail nem endereço) vão para o provedor de IA que você configurou. Notas com dado de saúde nunca vão, e, quando o pedido vai para um provedor na nuvem (inclusive como reserva da IA no computador), as linhas da conversa, das notas e da instrução que falam de saúde, religião, política etc. são trocadas por um aviso de trecho omitido. O playbook também sai anonimizado.
 
 ---
 
@@ -368,7 +369,7 @@ Ficam sempre de fora quem pediu para não receber mensagens e quem ainda não te
 
 **Limite por dia:** por padrão, até **10 postagens por dia** por conta (contando as já postadas e as agendadas para o mesmo dia). Mude o número no topo da página (de 1 a 50). Postar demais seguido pode fazer o WhatsApp tratar o número como robô.
 
-**Histórico:** a lista mostra cada postagem com a situação (**Agendado**, **Postando**, **Postado**, **Falhou** ou **Cancelado**), o público, quantas pessoas e a data. Postagens agendadas podem ser **canceladas** antes da hora. Se o WhatsApp não responder em 1 minuto, a postagem aparece como **Falhou** (confira no celular se o status saiu). O status some do WhatsApp em 24 horas, como qualquer status. Os arquivos de foto e vídeo ficam guardados no computador por 7 dias e depois são apagados.
+**Histórico:** a lista mostra cada postagem com a situação (**Agendado**, **Postando**, **Postado**, **Falhou** ou **Cancelado**), o público, quantas pessoas e a data. Postagens agendadas podem ser **canceladas** antes da hora. Se o WhatsApp não responder em 1 minuto, a postagem aparece como **Falhou** (confira no celular se o status saiu): como o resultado é incerto, ela continua contando no limite do dia e as próximas postagens esperam até 10 minutos (ou até o envio antigo terminar; se terminar, a postagem passa para **Postado**). Quem pediu para sair (SAIR) fica de fora do público mesmo que o pedido tenha chegado pelo identificador interno do WhatsApp. Os arquivos antigos são apagados de hora em hora. O status some do WhatsApp em 24 horas, como qualquer status. Os arquivos de foto e vídeo ficam guardados no computador por 7 dias e depois são apagados (a limpeza roda de hora em hora enquanto o app está aberto).
 
 **Quem viu:** por enquanto o app não mostra quem viu. Confira no celular.
 
@@ -383,7 +384,7 @@ No topo de cada conversa:
 A página **Painel** (antes chamada Vendas) mostra, com filtro de **período** e de **número** (um número, ou todos juntos):
 - **Números do topo:** faturado, vendas, ticket médio, conversas novas, quantas dessas conversas viraram venda e vendas recuperadas;
 - **Faturamento:** gráfico por dia, semana ou mês, com botão "Ver em tabela";
-- **Funil:** escolha um funil e veja quantos clientes chegaram a cada coluna, quantos passaram da anterior para a seguinte e há quantos dias estão parados;
+- **Funil:** escolha um funil e veja, por coluna, quantos cartões estão ali e a soma dos valores, mais o total do funil. As colunas aparecem na ordem que você definiu e o painel não interpreta o que cada uma significa;
 - **De onde vieram as vendas:** campanha, lembrete, recuperação, anúncio, site (UTM) e espontâneo, com vendas, faturado, ticket e **fechamento** (das vendas e perdas que você marcou naquela origem, quantas foram vendas; não é a conversão das conversas novas). "Site (UTM)" e "Anúncio" só aparecem com o módulo ligado;
 - os motivos de perda mais comuns;
 - a lista de registros (quando um só número está escolhido).
@@ -392,7 +393,7 @@ A página **Painel** (antes chamada Vendas) mostra, com filtro de **período** e
 - Só entra o que você marcou na conversa ("Virou venda" ou "Perdida"). Venda não marcada não aparece.
 - **Conversas novas** são pessoas cuja primeira mensagem recebida caiu no período (grupos não contam). O mesmo cliente com o número e com o identificador novo do WhatsApp conta uma vez só. **Viraram venda** conta, entre essas pessoas, quem tem venda ganha marcada **até hoje**, mesmo que tenha fechado depois do período.
 - O ticket médio não conta venda marcada com valor zero.
-- O **funil** é a foto de hoje: o app não guarda o histórico de passagens. "Passaram" soma os clientes que estão naquela coluna ou em uma mais adiante, e as colunas de perda ficam de fora.
+- O **funil** é a foto de hoje: só a quantidade de cartões e a soma dos valores em cada coluna. O app não presume o que cada coluna quer dizer, não calcula passagem entre colunas nem tempo parado.
 - A venda conta para a campanha ou o lembrete enviado ao cliente nos 7 dias anteriores. Se não houve nenhum, e a conversa veio de anúncio (módulo Anúncios da Meta ligado), aparece como **Anúncio** (até 30 dias depois do primeiro contato). Se o telefone do cliente estava na planilha de leads do site até 30 dias antes da venda, aparece como **Site (UTM)**. Sem nada disso, é **Espontâneo**.
 - Sem o aviso do WhatsApp de que veio de anúncio, ou sem a planilha de leads, essas vendas caem em Espontâneo. O Painel avisa quando não há dado de anúncio ou de planilha.
 - **Recuperação** ainda não está disponível: mostra zero até essa função existir.
@@ -432,7 +433,7 @@ Para lojas que têm o site da agência com formulário gravando numa Google Plan
 
 Use uma senha própria da integração, longa e aleatória, diferente da senha do formulário do site, na propriedade `SEGREDO_INTEGRACAO_LEADS`. O app envia a senha no corpo JSON de um POST. O `doGet` é mantido apenas por compatibilidade: a senha na URL pode aparecer em históricos e registros; prefira POST. Confira que o formulário do site tem o aviso de consentimento. Ainda não há rotina de retenção dos leads; defina e execute a exclusão conforme a política da loja.
 
-**Atualização:** o app busca leads novos a cada 30 minutos e também no botão **Atualizar agora**. Se a internet cair ou o Google demorar, o app avisa e tenta de novo depois, sem travar. A mesma linha da planilha nunca entra duas vezes.
+**Atualização:** o app busca leads novos a cada 30 minutos e também no botão **Atualizar agora**. Se a internet cair ou o Google demorar, o app avisa e tenta de novo depois, sem travar. A mesma linha da planilha nunca entra duas vezes. Se você trocar o link da planilha, o app recomeça do zero (a data de corte e as páginas pendentes são limpas) e ignora qualquer atualização que ainda estivesse em andamento com o link antigo. Os contatos dos leads novos são criados em lotes, sem travar o app.
 
 **Página Leads do site** (menu Marketing):
 - Os totais de **leads, conversaram, compraram e faturamento** no período escolhido.
@@ -449,7 +450,7 @@ Quando o cliente clica num anúncio de "Enviar mensagem" do Facebook ou do Insta
 
 - A conversa ganha a etiqueta **Veio de anúncio**, na lista e no topo da conversa.
 - A venda dessa conversa entra no **Painel** com a origem **Anúncio** se fechar em até **30 dias** depois do primeiro contato vindo do anúncio (e sem campanha ou lembrete enviado nos 7 dias anteriores). Passado esse prazo, a venda conta como espontânea.
-- Se o WhatsApp trocar o identificador da conversa pelo número do cliente, a etiqueta e a origem acompanham. Ao excluir a conversa ou apagar os dados da conta, a origem some junto.
+- Se o WhatsApp trocar o identificador da conversa pelo número do cliente, a etiqueta e a origem acompanham. Vale sempre a **primeira** origem da conversa: link, código e data do anúncio andam juntos (uma mensagem mais antiga de outro anúncio troca a origem inteira; uma mais nova só completa o que faltava se for o mesmo anúncio). Ao excluir a conversa ou apagar os dados da conta, a origem some junto.
 - O app olha também as conversas antigas, aos poucos e sem travar, logo depois de abrir.
 - Fica guardado só neste computador: a origem (Facebook ou Instagram), o número do anúncio, o endereço dele e, quando o WhatsApp entrega, o código de clique (`ctwa_clid`). Nada é enviado para a Meta nesta etapa.
 

@@ -93,7 +93,7 @@ function TagForm({
   const [name, setName] = useState(tag?.name ?? '')
   const [color, setColor] = useState<TagColor>(tag?.color ?? 'blue')
   const [description, setDescription] = useState(tag?.description ?? '')
-  const { busy, error, run } = useAction()
+  const { busy, error, run, attempt } = useAction()
 
   async function save(): Promise<void> {
     const ok = await run('s', () =>
@@ -116,8 +116,8 @@ function TagForm({
       )
     )
       return
-    const ok = await run('d', () => window.api.invoke('tags:delete', { accountId, name: tag.name }))
-    if (ok !== undefined) onDone(true)
+    const ok = await attempt('d', () => window.api.invoke('tags:delete', { accountId, name: tag.name }))
+    if (ok) onDone(true)
   }
 
   return (

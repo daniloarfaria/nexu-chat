@@ -190,7 +190,7 @@ test('P4: faturamento por dia, semana e mês', () => {
   expect(panel(q({ bucket: 'month' })).revenue[0].revenueCents).toBe(3000)
 })
 
-test('P5: funil mostra cartões por coluna, o que chegou até lá e o tempo parado', () => {
+test('P5: funil mostra só cartões e soma de valores por coluna, na ordem configurada', () => {
   const db = getDb()
   const pid = Number(
     db.prepare("INSERT INTO pipelines (account_id, name, created_at) VALUES (?, 'Vendas', ?)").run(A, NOW)
@@ -207,35 +207,34 @@ test('P5: funil mostra cartões por coluna, o que chegou até lá e o tempo para
   const s3 = st('Fechou', 'won', 2)
   const s4 = st('Perdido', 'lost', 3)
   let n = 0
-  const card = (stage: number, idle: number): void => {
+  const card = (stage: number, idle: number, value = 0): void => {
     const p = Number(
       db
         .prepare('INSERT INTO people (account_id, name, phone, created_at, updated_at) VALUES (?,?,?,?,?)')
         .run(A, 'P' + n, '5511900' + String(++n).padStart(6, '0'), NOW, NOW).lastInsertRowid
     )
     db.prepare(
-      'INSERT INTO pipeline_cards (pipeline_id, stage_id, person_id, position, created_at, moved_at) VALUES (?,?,?,?,?,?)'
-    ).run(pid, stage, p, n, NOW - 20 * DAY, NOW - idle * DAY)
+      'INSERT INTO pipeline_cards (pipeline_id, stage_id, person_id, position, value_cents, created_at, moved_at) VALUES (?,?,?,?,?,?,?)'
+    ).run(pid, stage, p, n, value, NOW - 20 * DAY, NOW - idle * DAY)
   }
-  card(s1, 10)
-  card(s1, 20)
+  card(s1, 10, 1000)
+  card(s1, 20, 500)
   card(s1, 30)
   card(s1, 40)
   card(s2, 4)
   card(s2, 6)
-  card(s3, 1)
+  card(s3, 1, 2500)
   card(s4, 3)
   const r = panel(q({ pipelineId: pid }))
   expect(r.pipelines.map((p) => p.id)).toContain(pid)
   const f = r.funnel!.stages
+  expect(f.map((s) => s.name)).toEqual(['Novo', 'Orçamento', 'Fechou', 'Perdido'])
   expect(f.map((s) => s.count)).toEqual([4, 2, 1, 1])
-  expect(f.map((s) => s.reached)).toEqual([7, 3, 1, 0])
-  expect(f[1].rateFromPrev).toBeCloseTo(3 / 7)
-  expect(f[2].rateFromPrev).toBeCloseTo(1 / 3)
-  expect(f[3].rateFromPrev).toBeNull()
-  expect(f[0].avgIdleDays).toBeCloseTo(25, 0)
-  expect(f[2].avgIdleDays).toBeNull()
-  expect(f[3].avgIdleDays).toBeNull()
+  expect(f.map((s) => s.valueCents)).toEqual([1500, 0, 2500, 0])
+  expect(r.funnel!.totalCount).toBe(8)
+  expect(r.funnel!.totalValueCents).toBe(4000)
+  // nada de cálculo que presuma ordem ou significado das colunas
+  expect(Object.keys(f[0]).sort()).toEqual(['count', 'id', 'name', 'valueCents'])
   // funil de outro número não aparece
   expect(panel(q({ accountIds: [B], pipelineId: pid })).funnel).toBeNull()
 })

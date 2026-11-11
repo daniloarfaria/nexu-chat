@@ -146,6 +146,14 @@ export interface AiRequest {
   customerData: boolean
   maxTokens?: number
   premium?: boolean // pode usar provedor pago mesmo com gratuitos disponíveis
+  /** Aplicada ao `prompt` só quando o provedor é da nuvem (inclusive no reserva depois da IA do computador). */
+  cloudSanitize?: (prompt: string) => string
+}
+
+/** O pedido como será enviado a este provedor: na nuvem, passa pelo filtro de dados sensíveis. */
+export function requestFor(p: Pick<AiProvider, 'preset'>, req: AiRequest): AiRequest {
+  if (p.preset === 'local' || p.preset === 'ollama' || !req.cloudSanitize) return req
+  return { ...req, prompt: req.cloudSanitize(req.prompt) }
 }
 
 interface Row {
@@ -341,8 +349,14 @@ export function removeLocalProvider(): void {
   getDb().prepare("DELETE FROM ai_providers WHERE preset = 'local'").run()
 }
 
+/** Para teste: tamanho da janela por minuto de um provedor. */
+export function minuteWindowSize(id: number): number {
+  return minuteWindow.get(id)?.length ?? 0
+}
+
 export function deleteProvider(id: number): void {
   getDb().prepare('DELETE FROM ai_providers WHERE id = ?').run(id)
+  minuteWindow.delete(id)
 }
 
 // ---------- Chamada ----------
@@ -558,20 +572,24 @@ export async function complete(req: AiRequest): Promise<{ text: string; provider
       errors.push(`${p.name}: pedido grande demais para a IA no computador`)
       continue
     }
-    const win = minuteWindow.get(p.id) ?? []
-    win.push(Date.now())
-    minuteWindow.set(p.id, win)
+    // Só provedor com limite por minuto precisa da janela; sem limite não se registra nada (não cresce sem fim)
+    if (p.rpm) {
+      const win = minuteWindow.get(p.id) ?? []
+      win.push(Date.now())
+      minuteWindow.set(p.id, win)
+    }
+    const sent = requestFor(p, req)
     try {
       const r =
         p.preset === 'claude'
-          ? await callClaude(row, model, req)
+          ? await callClaude(row, model, sent)
           : p.preset === 'local'
-            ? await callLocal(row, model, req)
-            : await callOpenAiCompatible(row, model, req)
+            ? await callLocal(row, model, sent)
+            : await callOpenAiCompatible(row, model, sent)
       track(p.id, true, r.tokens)
       getDb()
         .prepare('INSERT INTO ai_log (provider, model, task, customer_data, chars_sent, at) VALUES (?, ?, ?, ?, ?, ?)')
-        .run(p.name, model, req.task, req.customerData ? 1 : 0, req.system.length + req.prompt.length, Date.now())
+        .run(p.name, model, req.task, req.customerData ? 1 : 0, sent.system.length + sent.prompt.length, Date.now())
       return { text: r.text, provider: p.name, model }
     } catch (e) {
       // erro inesperado (rede, redirecionamento, tempo): mensagem genérica, sem o texto cru do erro

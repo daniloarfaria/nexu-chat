@@ -119,7 +119,7 @@ function Editor({
   const [media, setMedia] = useState<File | null>(null)
   const [keepMedia, setKeepMedia] = useState(!!initial?.media)
   const [brief, setBrief] = useState('')
-  const { busy, error, run, setError } = useAction()
+  const { busy, error, run, setError, attempt } = useAction()
   const tagDefs = useTagDefs(accountId)
   const pipelines = useLoad(
     () => (funilEnabled ? window.api.invoke('pipelines:list', { accountId }) : Promise.resolve([])),
@@ -535,14 +535,14 @@ function Editor({
             loading={busy === 'test'}
             disabled={!templates.some((t) => t.trim())}
             onClick={async () => {
-              const ok = await run('test', () =>
+              const ok = await attempt('test', () =>
                 window.api.invoke('campaigns:test', {
                   accountId,
                   templates: templates.filter((t) => t.trim()),
                   optOutFooter: footer && !isGroups
                 })
               )
-              if (ok !== undefined) setError(null)
+              if (ok) setError(null)
             }}
           >
             <Send className="size-4" /> Enviar teste para mim

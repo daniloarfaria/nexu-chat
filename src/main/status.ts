@@ -14,6 +14,7 @@ import type {
 } from '@shared/types'
 import { getDb, getSetting, setSetting } from './db'
 import { getAccount, listAccounts } from './accounts'
+import { optedOutChecker } from './people'
 import { wa } from './wa/manager'
 import { log } from './log'
 
@@ -39,6 +40,8 @@ export const STATUS_VIDEO_MAX_SECONDS = 90
 export const STATUS_MEDIA_MAX_BYTES = 16 * 1024 * 1024
 /** Envio sem resposta por tanto tempo vira falha (senão o agendador da conta ficaria preso). */
 export const STATUS_SEND_TIMEOUT_MS = 60_000
+/** Depois de um tempo esgotado o resultado é incerto: novos envios esperam este prazo (ou o fim do envio antigo). */
+export const STATUS_UNCERTAIN_HOLD_MS = 10 * 60_000
 export const STATUS_TEXT_MAX = 700
 export const STATUS_CAPTION_MAX = 1024
 /** Agendado que ficou mais de 24 h sem conseguir postar (app fechado, sem conexão) não sai mais. */
@@ -64,9 +67,6 @@ export function setStatusSettings(accountId: string, patch: Partial<StatusSettin
 
 // ---------- Quem vê ----------
 
-// Pediu para não receber: marcado no contato ou na lista de supressão (número ou JID)
-const OPTED_SQL = `(p.opt_out = 1 OR EXISTS (SELECT 1 FROM suppression s WHERE s.account_id = p.account_id AND (s.key = p.phone OR s.key = p.jid)))`
-
 function audienceWhere(accountId: string, a: StatusAudience): { sql: string; args: string[] } {
   const where = ['p.account_id = ?']
   const args = [accountId]
@@ -85,16 +85,32 @@ function audienceWhere(accountId: string, a: StatusAudience): { sql: string; arg
   return { sql: where.join(' AND '), args }
 }
 
-/** Lista de JIDs que vão ver o status: contatos com WhatsApp confirmado, sem quem pediu para não receber. */
-export function statusAudienceJids(accountId: string, a: StatusAudience): string[] {
+interface AudienceRow {
+  id: number
+  phone: string
+  jid: string | null
+  has_wa: number | null
+  opt_out: number
+}
+
+/** Pediu para não receber: marcado no contato ou na lista de supressão (número, JID ou LID mapeado). */
+function audienceRows(accountId: string, a: StatusAudience): Array<AudienceRow & { out: boolean }> {
   const { sql, args } = audienceWhere(accountId, a)
   const rows = getDb()
-    .prepare(
-      `SELECT DISTINCT p.jid FROM people p WHERE ${sql} AND p.has_wa = 1 AND p.jid IS NOT NULL AND p.jid != ''
-       AND NOT ${OPTED_SQL} ORDER BY p.id`
-    )
-    .all(...args) as Array<{ jid: string }>
-  return rows.map((r) => r.jid).filter((j) => /@(s\.whatsapp\.net|lid)$/.test(j))
+    .prepare(`SELECT p.id, p.phone, p.jid, p.has_wa, p.opt_out FROM people p WHERE ${sql} ORDER BY p.id`)
+    .all(...args) as unknown as AudienceRow[]
+  const optedOut = optedOutChecker(accountId)
+  return rows.map((r) => ({ ...r, out: r.opt_out === 1 || optedOut(r.phone) || optedOut(r.jid) }))
+}
+
+const reachable = (r: AudienceRow): boolean => r.has_wa === 1 && !!r.jid
+
+/** Lista de JIDs que vão ver o status: contatos com WhatsApp confirmado, sem quem pediu para não receber. */
+export function statusAudienceJids(accountId: string, a: StatusAudience): string[] {
+  const jids = audienceRows(accountId, a)
+    .filter((r) => !r.out && reachable(r))
+    .map((r) => r.jid as string)
+  return [...new Set(jids)].filter((j) => /@(s\.whatsapp\.net|lid)$/.test(j))
 }
 
 /** Números para mostrar antes de postar. */
@@ -102,19 +118,12 @@ export function countStatusAudience(
   accountId: string,
   a: StatusAudience
 ): { total: number; semWhatsapp: number; optedOut: number; large: boolean; limit: number } {
-  const { sql, args } = audienceWhere(accountId, a)
-  const r = getDb()
-    .prepare(
-      `SELECT SUM(${OPTED_SQL}) AS optedOut,
-        SUM(NOT ${OPTED_SQL} AND NOT (p.has_wa = 1 AND p.jid IS NOT NULL AND p.jid != '')) AS semWhatsapp
-       FROM people p WHERE ${sql}`
-    )
-    .get(...args) as { optedOut: number | null; semWhatsapp: number | null }
+  const rows = audienceRows(accountId, a)
   const total = statusAudienceJids(accountId, a).length
   return {
     total,
-    semWhatsapp: r.semWhatsapp ?? 0,
-    optedOut: r.optedOut ?? 0,
+    semWhatsapp: rows.filter((r) => !r.out && !reachable(r)).length,
+    optedOut: rows.filter((r) => r.out).length,
     large: total > STATUS_LARGE_AUDIENCE,
     limit: STATUS_LARGE_AUDIENCE
   }
@@ -232,7 +241,7 @@ export function postsOnDay(accountId: string, ts = Date.now(), withScheduled = t
   const r = getDb()
     .prepare(
       `SELECT COUNT(*) AS n FROM status_posts WHERE account_id = ? AND (
-        (status IN ('enviado','enviando') AND sent_at >= ? AND sent_at < ?)
+        (status IN ('enviado','enviando','falhou') AND sent_at >= ? AND sent_at < ?)
         OR (? AND status = 'agendado' AND scheduled_at >= ? AND scheduled_at < ?))`
     )
     .get(accountId, a, b, withScheduled ? 1 : 0, a, b) as { n: number }
@@ -350,7 +359,7 @@ export function cancelStatusPost(accountId: string, id: number): StatusPost {
 function finish(
   id: number,
   status: StatusPostState,
-  extra: { error?: string; recipients?: number; messageId?: string } = {}
+  extra: { error?: string; recipients?: number; messageId?: string; keepAttempt?: boolean } = {}
 ): void {
   getDb()
     .prepare(
@@ -360,7 +369,8 @@ function finish(
     .run(
       status,
       extra.error ?? null,
-      status === 'enviado' ? Date.now() : null,
+      // Resultado incerto (tempo esgotado): a hora da tentativa fica gravada e a postagem conta no limite do dia
+      status === 'enviado' ? Date.now() : extra.keepAttempt ? Date.now() : null,
       extra.recipients ?? null,
       extra.messageId ?? null,
       id
@@ -373,6 +383,31 @@ function contentOf(p: StatusPost): AnyMessageContent {
   const caption = p.text ?? undefined
   if (p.kind === 'imagem') return { image: data, caption, mimetype: p.media!.mime }
   return { video: data, caption, mimetype: 'video/mp4' }
+}
+
+class TimeoutError extends Error {
+  constructor() {
+    super('O envio demorou demais e foi cancelado. Confira no celular se o status saiu.')
+  }
+}
+
+/** Contas com um envio de resultado incerto: até quando os próximos esperam. */
+const uncertainUntil = new Map<string, number>()
+
+/** Para os testes: esquece os envios de resultado incerto. */
+export function resetStatusRuntime(): void {
+  uncertainUntil.clear()
+}
+
+/** O envio que parecia travado terminou depois: a postagem passa a "enviada" e a conta é liberada. */
+function reconcileLate(p: StatusPost, recipients: number, messageId?: string): void {
+  uncertainUntil.delete(p.accountId)
+  const r = getDb()
+    .prepare(
+      "UPDATE status_posts SET status = 'enviado', error = NULL, sent_at = ?, recipients_count = ?, message_id = COALESCE(?, message_id) WHERE id = ? AND status = 'falhou'"
+    )
+    .run(Date.now(), recipients, messageId ?? null, p.id)
+  if (Number(r.changes)) statusEvents.emit('changed', { accountId: p.accountId })
 }
 
 /** Posta uma postagem agendada já vencida. Devolve o estado final, ou 'agendado' se ficou para depois. */
@@ -397,6 +432,7 @@ export async function postStatus(p: StatusPost, sock: WASocket): Promise<StatusP
   // O próprio número entra na lista para o status aparecer também no celular da loja
   const me = sock.user?.id ? jidNormalizedUser(sock.user.id) : null
   const statusJidList = me && !jids.includes(me) ? [...jids, me] : jids
+  let lateResult: Promise<{ key: { id?: string | null } } | undefined> | undefined
   try {
     const opts: { statusJidList: string[]; backgroundColor?: string; font?: number } = { statusJidList }
     if (p.kind === 'texto') {
@@ -404,13 +440,12 @@ export async function postStatus(p: StatusPost, sock: WASocket): Promise<StatusP
       if (p.font) opts.font = p.font
     }
     let timer: ReturnType<typeof setTimeout> | undefined
+    const sending = sock.sendMessage(STATUS_JID, contentOf(p), opts)
+    lateResult = sending
     const sent = await Promise.race([
-      sock.sendMessage(STATUS_JID, contentOf(p), opts),
+      sending,
       new Promise<never>((_, reject) => {
-        timer = setTimeout(
-          () => reject(new Error('O envio demorou demais e foi cancelado. Confira no celular se o status saiu.')),
-          STATUS_SEND_TIMEOUT_MS
-        )
+        timer = setTimeout(() => reject(new TimeoutError()), STATUS_SEND_TIMEOUT_MS)
       })
     ]).finally(() => clearTimeout(timer))
     finish(p.id, 'enviado', { recipients: jids.length, messageId: sent?.key.id ?? undefined })
@@ -418,6 +453,16 @@ export async function postStatus(p: StatusPost, sock: WASocket): Promise<StatusP
     return 'enviado'
   } catch (e) {
     const msg = ((e as Error).message ?? String(e)).slice(0, 300)
+    if (e instanceof TimeoutError) {
+      // O envio pode ainda estar em andamento ou ter saído: conta no limite e segura os próximos até saber
+      finish(p.id, 'falhou', { error: msg, recipients: jids.length, keepAttempt: true })
+      uncertainUntil.set(p.accountId, Date.now() + STATUS_UNCERTAIN_HOLD_MS)
+      lateResult?.then(
+        (r) => reconcileLate(p, jids.length, r?.key.id ?? undefined),
+        () => uncertainUntil.delete(p.accountId) // falhou de vez: sem dúvida, libera
+      )
+      return 'falhou'
+    }
     finish(p.id, 'falhou', { error: msg, recipients: jids.length })
     log.warn('Falha ao postar status', { postagem: p.id, erro: msg })
     return 'falhou'
@@ -431,6 +476,9 @@ const busy = new Set<string>()
 /** Verifica as postagens vencidas de uma conta e posta as que puder. */
 export async function runDueStatus(accountId: string, now = Date.now()): Promise<void> {
   if (busy.has(accountId)) return
+  // Resultado incerto do envio anterior: espera o fim dele (ou o prazo) antes de liberar novos envios
+  if ((uncertainUntil.get(accountId) ?? 0) > now) return
+  uncertainUntil.delete(accountId)
   busy.add(accountId)
   let changed = false
   try {
@@ -473,16 +521,29 @@ export function recoverInterrupted(): number {
 }
 
 /** Apaga arquivos de mídia de postagens antigas (o status some do WhatsApp em 24 h). */
+let cleaning = false
+
 export function cleanupStatusMedia(now = Date.now()): void {
-  const rows = getDb()
-    .prepare(
-      `SELECT id, media FROM status_posts WHERE media IS NOT NULL AND json_extract(media, '$.file') != ''
-       AND status IN ('enviado','falhou','cancelado') AND COALESCE(sent_at, scheduled_at) < ?`
-    )
-    .all(now - MEDIA_KEEP_MS) as Array<{ id: number; media: string }>
-  for (const r of rows) {
-    removeMedia(JSON.parse(r.media) as StatusMedia)
-    getDb().prepare(`UPDATE status_posts SET media = json_set(media, '$.file', '') WHERE id = ?`).run(r.id)
+  if (cleaning) return
+  cleaning = true
+  try {
+    const rows = getDb()
+      .prepare(
+        `SELECT id, media FROM status_posts WHERE media IS NOT NULL AND json_valid(media) AND json_extract(media, '$.file') != ''
+         AND status IN ('enviado','falhou','cancelado') AND COALESCE(sent_at, scheduled_at) < ?`
+      )
+      .all(now - MEDIA_KEEP_MS) as Array<{ id: number; media: string }>
+    for (const r of rows) {
+      // Um arquivo com problema não impede a limpeza dos outros; tenta de novo na próxima rodada
+      try {
+        removeMedia(JSON.parse(r.media) as StatusMedia)
+        getDb().prepare(`UPDATE status_posts SET media = json_set(media, '$.file', '') WHERE id = ?`).run(r.id)
+      } catch (e) {
+        log.warn('Não foi possível apagar uma mídia de status', { postagem: r.id, erro: (e as Error).message })
+      }
+    }
+  } finally {
+    cleaning = false
   }
 }
 
@@ -502,6 +563,14 @@ export function startStatus(): void {
   }
   setTimeout(all, 5_000)
   setInterval(all, 30_000)
+  // A limpeza de mídias antigas roda de hora em hora, não só ao abrir o app
+  setInterval(() => {
+    try {
+      cleanupStatusMedia()
+    } catch (e) {
+      log.error('Falha na limpeza de mídias de status', e)
+    }
+  }, 3600_000).unref?.()
   // Ao conectar, posta o que ficou esperando a conexão
   wa.on('state', (s: { accountId: string; status: string }) => s.status === 'connected' && kickStatus(s.accountId))
 }

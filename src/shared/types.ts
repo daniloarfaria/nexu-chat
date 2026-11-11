@@ -502,15 +502,10 @@ export interface PanelQuery {
 export interface PanelFunnelStage {
   id: number
   name: string
-  kind: StageKind
+  /** Cartões que estão nesta coluna */
   count: number
+  /** Soma dos valores dos cartões desta coluna */
   valueCents: number
-  /** Cartões que estão nesta coluna ou em alguma coluna mais adiante (sem contar as de perda) */
-  reached: number
-  /** reached desta coluna dividido pelo da anterior; null na primeira, nas de perda ou sem base */
-  rateFromPrev: number | null
-  /** Média de dias que os cartões desta coluna estão parados */
-  avgIdleDays: number | null
 }
 
 export interface PanelData {
@@ -526,7 +521,14 @@ export interface PanelData {
     recoveredCents: number
   }
   pipelines: Array<{ id: number; name: string; accountId: string; accountName: string }>
-  funnel: { pipelineId: number; name: string; stages: PanelFunnelStage[] } | null
+  funnel: {
+    pipelineId: number
+    name: string
+    /** Na ordem de exibição configurada no funil */
+    stages: PanelFunnelStage[]
+    totalCount: number
+    totalValueCents: number
+  } | null
   revenue: Array<{ key: string; label: string; revenueCents: number; won: number }>
   origins: Array<{
     kind: PanelOriginKind
