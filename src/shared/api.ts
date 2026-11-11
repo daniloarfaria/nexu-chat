@@ -491,6 +491,7 @@ export interface EventMap {
   'chats:merged': { accountId: string; from: string; to: string }
   'sync:changed': SyncState
   'nav:open-chat': { accountId: string; jid: string }
+  'nav:open-recovery': { accountId: string }
   'engine:changed': EngineState
   'campaign:changed': Campaign
   'groups:progress': {
@@ -696,6 +697,7 @@ export const EVENT_CHANNELS: EventChannel[] = [
   'chats:merged',
   'sync:changed',
   'nav:open-chat',
+  'nav:open-recovery',
   'engine:changed',
   'campaign:changed',
   'groups:progress',

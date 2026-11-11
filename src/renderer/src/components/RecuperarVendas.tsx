@@ -3,11 +3,11 @@ import { Check, Pencil, Save, X } from 'lucide-react'
 import type { Account, RecoveryFollowupItem, RecoveryQueueItem, RecoverySettings } from '@shared/types'
 import { useActiveAccount } from '../lib/store'
 import { useAction, useLoad } from '../lib/useAsync'
-import { Badge, Button, Empty, Field, Input, Notice, Section, Select, Switch, Tabs, Textarea } from './ui'
+import { Badge, Button, Checkbox, Empty, Field, Input, Notice, Section, Select, Switch, Tabs, Textarea } from './ui'
 
 const money = (cents: number): string => (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
-const REASON = { orcamento: 'Orçamento', funil: 'Cartão no funil', interesse: 'Interesse de compra' } as const
+const REASON = { etiqueta: 'Etiqueta escolhida', funil: 'Coluna escolhida', interesse: 'Interesse de compra' } as const
 const STOP: Record<string, string> = {
   respondeu: 'O cliente respondeu',
   venda: 'Venda marcada',
@@ -15,11 +15,14 @@ const STOP: Record<string, string> = {
   sair: 'Pediu para não receber',
   atendente: 'Um atendente assumiu',
   manual: 'Parado por você',
-  nao_se_aplica: 'Deixou de ter orçamento ou funil',
+  nao_se_aplica: 'Deixou de estar nas colunas ou etiquetas da regra',
+  desistiu: 'A IA viu que o cliente já recusou',
+  expirado: 'Passou do prazo, a conversa esfriou',
+  fusao: 'Conversa unida com outra',
   esperando_atendente: 'Esperando atendente (robô)',
   ia_fora: 'A IA ficou fora do ar',
   sem_interesse: 'A IA viu que não faz sentido insistir',
-  desligado: 'Regra desligada'
+  desligado: 'Regra ou módulo desligado'
 }
 const STATUS: Record<RecoveryFollowupItem['status'], string> = {
   ativo: 'Em andamento',
@@ -29,6 +32,30 @@ const STATUS: Record<RecoveryFollowupItem['status'], string> = {
 }
 
 type Tab = 'aprovar' | 'regra' | 'andamento'
+
+/** Carregando e erro de cada lista: nunca mostra "vazio" enquanto carrega e sempre dá como tentar de novo. */
+function Loadable<T>({
+  state,
+  children
+}: {
+  state: { data: T | null; error: string | null; loading: boolean; reload: () => Promise<void> }
+  children: (data: T) => React.ReactNode
+}): React.JSX.Element {
+  if (state.error)
+    return (
+      <div role="alert" className="flex flex-col items-start gap-2">
+        <Notice tone="bad">{state.error}</Notice>
+        <Button onClick={() => void state.reload()}>Tentar de novo</Button>
+      </div>
+    )
+  if (state.data == null)
+    return (
+      <p aria-busy="true" className="text-[14px] text-ink-2">
+        Carregando…
+      </p>
+    )
+  return <div aria-busy={state.loading}>{children(state.data)}</div>
+}
 
 /** Automações → Recuperar vendas. Cada número de WhatsApp tem a sua regra (a chave zera o rascunho). */
 export function RecuperarVendas(): React.JSX.Element {
@@ -89,7 +116,7 @@ function Inner({ account }: { account: Account }): React.JSX.Element {
               ['Mensagens enviadas', String(st.sent), 'nos últimos 30 dias'],
               ['Clientes que responderam', String(st.replied), 'depois de uma mensagem'],
               ['Quanto voltou', money(st.recoveredCents), `${st.recovered} venda(s) recuperada(s)`],
-              ['Custou em desconto', money(st.discountCents), 'estimativa, veja o manual']
+              ['Custou em desconto (estimado)', money(st.discountCents), 'estimativa, veja o manual']
             ] as Array<[string, string, string]>
           ).map(([l, v, sub]) => (
             <div key={l} className="bg-panel px-4 py-3.5">
@@ -109,17 +136,27 @@ function Inner({ account }: { account: Account }): React.JSX.Element {
           { id: 'regra', label: 'Regra' }
         ]}
       />
-      {tab === 'aprovar' && <Queue accountId={accountId} items={queue.data ?? []} reload={() => void queue.reload()} />}
-      {tab === 'andamento' && (
-        <Followups accountId={accountId} items={follow.data ?? []} reload={() => void follow.reload()} />
+      {tab === 'aprovar' && (
+        <Loadable state={queue}>
+          {(items) => <Queue accountId={accountId} items={items} reload={() => void queue.reload()} />}
+        </Loadable>
       )}
-      {tab === 'regra' && cfg.data && (
-        <RuleForm
-          key={JSON.stringify(cfg.data)}
-          accountId={accountId}
-          saved={cfg.data}
-          onSaved={() => void cfg.reload()}
-        />
+      {tab === 'andamento' && (
+        <Loadable state={follow}>
+          {(items) => <Followups accountId={accountId} items={items} reload={() => void follow.reload()} />}
+        </Loadable>
+      )}
+      {tab === 'regra' && (
+        <Loadable state={cfg}>
+          {(saved) => (
+            <RuleForm
+              key={JSON.stringify(saved)}
+              accountId={accountId}
+              saved={saved}
+              onSaved={() => void cfg.reload()}
+            />
+          )}
+        </Loadable>
       )}
     </div>
   )
@@ -140,7 +177,7 @@ function Queue({
   if (!items.length)
     return (
       <Empty icon={<Check className="size-9" strokeWidth={1.5} />} title="Nada para aprovar">
-        Quando um cliente sumir depois de um orçamento, a IA escreve a mensagem e ela aparece aqui.
+        Quando um cliente das colunas ou etiquetas da regra sumir, a IA escreve a mensagem e ela aparece aqui.
       </Empty>
     )
   return (
@@ -238,7 +275,7 @@ function Followups({
   items: RecoveryFollowupItem[]
   reload: () => void
 }): React.JSX.Element {
-  const { run } = useAction()
+  const { run, error } = useAction()
   if (!items.length)
     return (
       <Empty icon={<Check className="size-9" strokeWidth={1.5} />} title="Nenhum acompanhamento ainda">
@@ -246,43 +283,115 @@ function Followups({
       </Empty>
     )
   return (
-    <ul className="flex flex-col gap-2">
-      {items.map((f) => (
-        <li
-          key={f.id}
-          className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-panel px-4 py-3 shadow-card"
-        >
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-semibold">{f.chatName}</span>
-              <Badge tone={f.status === 'recuperada' ? 'ok' : f.status === 'ativo' ? 'accent' : 'neutral'}>
-                {STATUS[f.status]}
-              </Badge>
-              <Badge>{REASON[f.reasonIn]}</Badge>
+    <div className="flex flex-col gap-2">
+      {error && <Notice tone="bad">{error}</Notice>}
+      <ul className="flex flex-col gap-2">
+        {items.map((f) => (
+          <li
+            key={f.id}
+            className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-panel px-4 py-3 shadow-card"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-semibold">{f.chatName}</span>
+                <Badge tone={f.status === 'recuperada' ? 'ok' : f.status === 'ativo' ? 'accent' : 'neutral'}>
+                  {STATUS[f.status]}
+                </Badge>
+                <Badge>{REASON[f.reasonIn]}</Badge>
+              </div>
+              <p className="mt-0.5 text-[13px] text-ink-2">
+                {f.attemptsSent} mensagem(ns) enviada(s)
+                {f.stopReason && f.status !== 'recuperada' ? `. ${STOP[f.stopReason] ?? f.stopReason}` : ''}
+                {f.status === 'recuperada'
+                  ? `. Voltou ${money(f.recoveredCents)}, desconto estimado ${money(f.discountCents)}`
+                  : ''}
+              </p>
             </div>
-            <p className="mt-0.5 text-[13px] text-ink-2">
-              {f.attemptsSent} mensagem(ns) enviada(s)
-              {f.stopReason && f.status !== 'recuperada' ? `. ${STOP[f.stopReason] ?? f.stopReason}` : ''}
-              {f.status === 'recuperada'
-                ? `. Voltou ${money(f.recoveredCents)}, desconto estimado ${money(f.discountCents)}`
-                : ''}
-            </p>
-          </div>
-          {f.status === 'ativo' && (
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={async () => {
-                await run(`s${f.id}`, () => window.api.invoke('recovery:stop', { accountId, id: f.id }))
-                reload()
-              }}
-            >
-              Parar de acompanhar
-            </Button>
-          )}
-        </li>
-      ))}
-    </ul>
+            {f.status === 'ativo' && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={async () => {
+                  await run(`s${f.id}`, () => window.api.invoke('recovery:stop', { accountId, id: f.id }))
+                  reload()
+                }}
+              >
+                Parar de acompanhar
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+/** Escolha de quem entra: colunas de funil (por id) e etiquetas. O app não adivinha pelo nome. */
+function EntryPicker({
+  accountId,
+  stageIds,
+  tags,
+  onChange
+}: {
+  accountId: string
+  stageIds: number[]
+  tags: string[]
+  onChange: (p: { stageIds?: number[]; tags?: string[] }) => void
+}): React.JSX.Element {
+  const pipes = useLoad(() => window.api.invoke('pipelines:list', { accountId }), [accountId])
+  const defs = useLoad(() => window.api.invoke('tags:list', { accountId }), [accountId])
+  const toggle = <T,>(list: T[], v: T, on: boolean): T[] =>
+    on ? [...new Set([...list, v])] : list.filter((x) => x !== v)
+  return (
+    <div className="flex flex-col gap-4">
+      <Loadable state={pipes}>
+        {(list) =>
+          list.length === 0 ? (
+            <p className="text-[13px] text-ink-3">Você ainda não tem funis. Crie em Funis para escolher colunas.</p>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {list.map((p) => (
+                <fieldset key={p.id} className="flex flex-col gap-1.5">
+                  <legend className="mb-1 text-[13px] font-medium">Funil: {p.name}</legend>
+                  {p.stages.map((st) => {
+                    const closed = st.kind === 'won' || st.kind === 'lost'
+                    return (
+                      <label key={st.id} className="flex items-center gap-2 text-[14px]">
+                        <Checkbox
+                          label={`Coluna ${st.name}`}
+                          checked={!closed && stageIds.includes(st.id)}
+                          onChange={(v) => !closed && onChange({ stageIds: toggle(stageIds, st.id, v) })}
+                        />
+                        <span className={closed ? 'text-ink-3' : ''}>{st.name}</span>
+                        {closed && <Badge>{st.kind === 'won' ? 'ganho' : 'perdido'}: nunca entra</Badge>}
+                      </label>
+                    )
+                  })}
+                </fieldset>
+              ))}
+            </div>
+          )
+        }
+      </Loadable>
+      <Loadable state={defs}>
+        {(list) => (
+          <fieldset className="flex flex-col gap-1.5">
+            <legend className="mb-1 text-[13px] font-medium">Etiquetas</legend>
+            {list.length === 0 && <p className="text-[13px] text-ink-3">Você ainda não tem etiquetas.</p>}
+            {list.map((t) => (
+              <label key={t.name} className="flex items-center gap-2 text-[14px]">
+                <Checkbox
+                  label={`Etiqueta ${t.name}`}
+                  checked={tags.includes(t.name)}
+                  onChange={(v) => onChange({ tags: toggle(tags, t.name, v) })}
+                />
+                {t.name}
+              </label>
+            ))}
+          </fieldset>
+        )}
+      </Loadable>
+    </div>
   )
 }
 
@@ -356,8 +465,8 @@ function RuleForm({
           idleHours: idle!,
           attempts: d.attempts,
           gapDays: [g1!, g2!],
-          byQuote: d.byQuote,
-          byFunnel: d.byFunnel,
+          stageIds: d.stageIds,
+          tags: d.tags,
           byInterest: d.byInterest,
           discountPct: pct!,
           discountFrom: Math.min(d.discountFrom, d.attempts),
@@ -430,8 +539,12 @@ function RuleForm({
           )}
           <fieldset className="flex flex-col gap-2.5">
             <legend className="mb-1 text-[13px] font-medium">Quem entra na recuperação</legend>
-            {check('Conversa de cliente com a etiqueta ou a etapa "Orçamento"', d.byQuote, (v) => set({ byQuote: v }))}
-            {check('Cartão em um funil que não está em ganho nem em perdido', d.byFunnel, (v) => set({ byFunnel: v }))}
+            <p className="text-[13px] text-ink-2">
+              Escolha as colunas de funil e as etiquetas que fazem o cliente entrar. O app não adivinha pelo nome: só
+              vale o que você marcar. Colunas de ganho ou perdido nunca entram. Sem nenhuma escolha, ninguém entra por
+              funil ou etiqueta.
+            </p>
+            <EntryPicker accountId={accountId} stageIds={d.stageIds} tags={d.tags} onChange={(p) => set(p)} />
             {check(
               'Conversa em que a IA percebe interesse de compra (usa a IA para ler a conversa)',
               d.byInterest,

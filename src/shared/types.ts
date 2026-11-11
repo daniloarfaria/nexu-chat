@@ -81,7 +81,7 @@ export const MODULE_INFO: Record<ModuleKey, { label: string; description: string
   recuperacao: {
     label: 'Recuperação de vendas',
     description:
-      'A IA chama de volta o cliente que sumiu depois do orçamento, com até 3 mensagens e um desconto que só você define. Por padrão, você aprova cada mensagem antes de sair. Só liga com o Assistente de IA ligado. Trechos anonimizados da conversa vão para a IA',
+      'A IA chama de volta o cliente que sumiu (nas colunas e etiquetas que você escolher), com até 3 mensagens e um desconto que só você define. Por padrão, você aprova cada mensagem antes de sair. Só liga com o Assistente de IA ligado. Trechos anonimizados da conversa vão para a IA',
     group: 'Vendas'
   }
 }
@@ -1141,10 +1141,10 @@ export interface RecoverySettings {
   attempts: number
   /** Dias entre a 1ª e a 2ª tentativa e entre a 2ª e a 3ª. */
   gapDays: [number, number]
-  /** Entra: conversa de quem tem a etiqueta "orçamento". */
-  byQuote: boolean
-  /** Entra: cartão em funil que não é ganho nem perdido. */
-  byFunnel: boolean
+  /** Entra: o cliente tem um cartão em uma destas colunas (ids). Coluna de ganho ou perda nunca entra (vale o tipo, não o nome). */
+  stageIds: number[]
+  /** Entra: o cliente tem uma destas etiquetas (o nome é a identidade da etiqueta). */
+  tags: string[]
   /** Entra: a IA percebeu interesse de compra na conversa. */
   byInterest: boolean
   /** Percentual de desconto (0 = sem desconto). O número vem só daqui, a IA nunca escolhe. */
@@ -1175,7 +1175,7 @@ export interface RecoveryQueueItem {
   discountPct: number | null
   /** Texto do desconto, como vai na mensagem. */
   offer: string | null
-  reasonIn: 'orcamento' | 'funil' | 'interesse'
+  reasonIn: 'etiqueta' | 'funil' | 'interesse'
   /** Por que ainda não saiu (fora do horário, limite do dia...). */
   waiting: string | null
   createdAt: number
@@ -1187,7 +1187,7 @@ export interface RecoveryFollowupItem {
   chatName: string
   status: 'ativo' | 'recuperada' | 'parado' | 'concluido'
   stopReason: string | null
-  reasonIn: 'orcamento' | 'funil' | 'interesse'
+  reasonIn: 'etiqueta' | 'funil' | 'interesse'
   attemptsSent: number
   nextDueAt: number | null
   startedAt: number

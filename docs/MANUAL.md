@@ -316,12 +316,14 @@ O app avisa com uma notificação e a conversa entra no filtro **Esperando atend
 A IA escreve, para o cliente que pediu orçamento e sumiu, até 3 mensagens para retomar a conversa. É um módulo do plano **Completo** e só liga com o **Assistente de IA** ligado (**Configurações → Módulos**). Fica em **Automações → Recuperar vendas**, uma regra por número de WhatsApp. Vem desligado.
 
 ### Quem entra
-A loja respondeu e o cliente ficou **24 horas** sem escrever (você muda isso). E uma destas coisas é verdade:
-- o cliente tem a etiqueta ou o cartão em uma etapa chamada **Orçamento**;
-- o cliente tem um cartão em um funil que **não está em ganho nem em perdido**;
-- a IA percebeu **interesse de compra** na conversa (vem desligado; ao ligar, a IA lê trechos anonimizados de conversas paradas).
+A loja respondeu (uma pessoa ou o robô de atendimento) e o cliente ficou **24 horas** sem escrever (você muda isso). Respostas automáticas de boas-vindas, de fora do horário, campanhas e lembretes **não contam** como resposta da loja. E o cliente precisa estar em algo que **você escolheu** na aba **Regra**, em **Quem entra na recuperação**:
+- **colunas de funil** (você marca as colunas, de qualquer funil);
+- **etiquetas** (você marca as etiquetas);
+- ou, se você ligar, **interesse de compra** visto pela IA (ela lê trechos anonimizados de conversas paradas).
 
-Para não acordar conversas antigas, só entra quem ficou em silêncio de 24 horas até mais 3 dias, e que escreveu nos últimos 30 dias. Quem pediu para não receber nunca entra. Grupos não entram. Depois que um acompanhamento termina, o mesmo cliente só entra de novo depois de 30 dias (ou, se ele respondeu, quando escrever outra vez e sumir de novo).
+O app **não adivinha pelo nome**: uma coluna ou etiqueta chamada "Orçamento" só conta se você marcou. Sem nenhuma coluna nem etiqueta marcada, ninguém entra por funil ou etiqueta (só por interesse, se ligado). Colunas **de ganho ou perdido** nunca entram, e isso vem do tipo da coluna, não do nome. Cliente cujos cartões estão só em colunas de ganho ou perdido também não entra pela etiqueta.
+
+Para não acordar conversas antigas, só entra quem ficou em silêncio de 24 horas até mais 3 dias, e que escreveu nos últimos 30 dias. Quem pediu para não receber nunca entra, e quem disse **SAIR** nunca mais é chamado por esta função. Grupos não entram. Cada cliente tem **no máximo um ciclo a cada 30 dias**; passado esse prazo, só volta se a última mensagem dele foi de verdade (não "ok", "hm" ou um emoji). Se o computador ficou desligado e um acompanhamento venceu há mais de 48 horas, ele **expira** em vez de mandar mensagem velha.
 
 ### As tentativas
 Até **3 tentativas**. O padrão é no dia 1, no dia 3 e no dia 7 (24 horas de silêncio, depois 2 dias e mais 4 dias). A IA escreve cada uma com o contexto do negócio, as notas do cliente e a conversa **anonimizada** (sem telefone, CPF, e-mail, endereço nem nome). A 1ª é um lembrete leve, a 2ª traz um motivo útil e a 3ª é uma despedida gentil. Se a conversa mostra que o cliente recusou, a IA desiste.
@@ -336,19 +338,20 @@ Você define: o percentual (até 50%), a partir de qual tentativa ele entra (pad
 ### Quando para sozinha
 - O cliente **responde** (qualquer mensagem). Se o robô de atendimento estiver ligado, ele atende a resposta como de costume.
 - A venda é marcada (**Virou venda** ou **Perdida**).
-- O cliente pede **SAIR** ou já estava na lista de quem não recebe.
+- O cliente pede **SAIR** (por texto ou por áudio já transcrito): o pedido é gravado mesmo que Campanhas, Lembretes e o robô estejam desligados, e vale para sempre.
 - Um **atendente escreve** na conversa, pelo app ou pelo celular.
 - Você clica em **Parar de acompanhar** na aba Acompanhamentos.
+- Você **desliga a regra ou o módulo**: os acompanhamentos em andamento param (religar não os reanima).
 Nesses casos, a mensagem que estava na fila é descartada. A conferência é refeita na hora de enviar, então nada sai depois de uma dessas mudanças.
 
 ### Junto com o robô de atendimento
 O **robô vence**. Ele responde quando o cliente escreve e a recuperação só age com o cliente em silêncio, então elas não se cruzam. A recuperação espera enquanto o robô tem uma resposta a caminho na conversa e não entra em conversa que o robô passou para um atendente (**Esperando atendente**).
 
 ### Limites anti-bloqueio
-Tudo sai pela mesma fila das respostas automáticas (intervalo de segundos, "digitando…"), conta no **limite diário** de envios do número, respeita o **horário de envio** da Proteção anti-bloqueio (fora dele, a mensagem aprovada espera) e tem um limite próprio de mensagens por dia (padrão 20). Mensagem aprovada que não conseguiu sair em 36 horas é descartada; mensagem que ninguém aprovou em 3 dias também.
+O horário de envio e a validade do desconto seguem o relógio e o fuso do computador onde o app está. Tudo sai pela mesma fila das respostas automáticas (intervalo de segundos, "digitando…"), conta no **limite diário** de envios do número, respeita o **horário de envio** da Proteção anti-bloqueio (fora dele, a mensagem aprovada espera) e tem um limite próprio de mensagens por dia (padrão 20). Mensagem aprovada que não conseguiu sair em 36 horas é descartada; mensagem que ninguém aprovou em 3 dias também.
 
 ### Quanto voltou e quanto custou
-Uma venda marcada até 14 dias depois de uma mensagem de recuperação entra em **Vendas** e no **Painel** com a origem **Recuperação**. A aba mostra, nos últimos 30 dias, as mensagens enviadas, quem respondeu, **quanto voltou** e **quanto custou em desconto**. O custo é uma **estimativa**: o valor da venda é tratado como o que o cliente pagou, já com o desconto, e só conta se a última mensagem trazia desconto ainda dentro da validade (respeitando o teto). Apagar a venda tira a recuperação e o custo.
+Uma venda **ganha** marcada até 14 dias depois de uma mensagem de recuperação (ou até o fim da validade do desconto, se for maior) entra em **Vendas** e no **Painel** com a origem **Recuperação**, desde que o cliente tenha respondido depois da mensagem. Venda perdida nunca vira recuperação, e valor acima de R$ 100.000 é tratado como erro de digitação e não entra. A recuperação tem precedência sobre campanha e anúncio. A aba mostra, nos últimos 30 dias, as mensagens enviadas, quem respondeu, **quanto voltou** e **quanto custou em desconto**. O custo é uma **estimativa** (aparece como "estimado"): o valor da venda é tratado como o que o cliente pagou, já com o desconto, e só conta se a última mensagem trazia desconto ainda dentro da validade. Nunca passa do percentual da regra sobre o valor e respeita o teto em reais. Apagar a venda tira a recuperação e o custo, e o cliente só pode entrar de novo depois dos 30 dias. Apagar a venda tira a recuperação e o custo.
 
 ### Privacidade
 A cada mensagem, trechos **anonimizados** da conversa vão para o provedor de IA que você configurou. Notas com dado de saúde nunca vão.

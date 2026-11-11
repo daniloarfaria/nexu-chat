@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Clock, MessageSquareReply, Plus, Sparkle, Trash2, Zap } from 'lucide-react'
 import type { AutoRule } from '@shared/types'
-import { useActiveAccount } from '../lib/store'
+import { useActiveAccount, useApp } from '../lib/store'
 import { useAction, useLoad } from '../lib/useAsync'
 import {
   Badge,
@@ -214,7 +214,7 @@ function RespostasAuto(): React.JSX.Element {
     () => (accountId ? window.api.invoke('rules:list', { accountId }) : Promise.resolve([])),
     [accountId]
   )
-  const { run } = useAction()
+  const { run, error: actionError } = useAction()
   if (!account) return <Empty icon={<Zap className="size-9" />} title="Crie uma conta primeiro" />
   const blank: Draft = {
     name: 'Palavra-chave',
@@ -241,8 +241,16 @@ function RespostasAuto(): React.JSX.Element {
         Para evitar bloqueio e conversas em círculo, o app responde no máximo 30 vezes por hora e nunca repete a mesma
         resposta para a mesma pessoa dentro do intervalo escolhido.
       </Notice>
-      <div className="mt-4">
-        {(list.data ?? []).length === 0 && !list.loading ? (
+      <div className="mt-4" aria-busy={list.loading}>
+        {actionError && <Notice tone="bad">{actionError}</Notice>}
+        {list.error ? (
+          <div role="alert" className="flex flex-col items-start gap-2">
+            <Notice tone="bad">{list.error}</Notice>
+            <Button onClick={() => void list.reload()}>Tentar de novo</Button>
+          </div>
+        ) : list.data == null ? (
+          <p className="text-[14px] text-ink-2">Carregando…</p>
+        ) : (list.data ?? []).length === 0 && !list.loading ? (
           <Empty
             icon={<Zap className="size-9" strokeWidth={1.5} />}
             title="Nenhuma resposta automática"
@@ -311,7 +319,9 @@ function RespostasAuto(): React.JSX.Element {
 
 export function Automacoes(): React.JSX.Element {
   const account = useActiveAccount()
-  const [tab, setTab] = useState<'respostas' | 'recuperar'>('respostas')
+  // A aba vive na loja do app para a notificação "Para aprovar" poder abrir direto em Recuperar vendas
+  const tab = useApp((st) => st.automacoesTab)
+  const setTab = (t: 'respostas' | 'recuperar'): void => useApp.setState({ automacoesTab: t })
   // Sem o módulo de recuperação, a tela é a de sempre
   if (!account?.modules.recuperacao) return <RespostasAuto />
   return (
