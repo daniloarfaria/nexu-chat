@@ -22,6 +22,7 @@ vi.mock('../src/main/ai/router', () => ({
   getAiSettings: () => ({ privacy: 'anonimizar', paidMonthlyLimit: 300 })
 }))
 vi.mock('../src/main/outbox', () => ({
+  lockChat: () => () => undefined,
   enqueueSend: (_acc: string, job: () => Promise<unknown>): boolean => {
     if (h.hold) h.held.push(job)
     else h.jobs.push(job().catch(() => undefined))

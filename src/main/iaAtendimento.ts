@@ -3,9 +3,9 @@ import type { ChatAiMode, ChatAiReason, ChatAiState, MessageItem, RobotSettings 
 import { DEFAULT_ANTIBAN, effectiveDailyLimit, fold, isOptOut, sendWindow } from '@shared/rules'
 import { getDb, getSetting, setSetting } from './db'
 import { getAccount, listAccounts } from './accounts'
-import { countSend, getAntiBan, sentToday } from './campaigns'
+import { getAntiBan, releaseDailySend, reserveDailySend, sentToday } from './campaigns'
 import { isOptedOut } from './people'
-import { enqueueSend } from './outbox'
+import { enqueueSend, lockChat } from './outbox'
 import { listMessages, getChats, storeEvents } from './wa/store'
 import { sendAndStore } from './wa/send'
 import { wa } from './wa/manager'
@@ -747,7 +747,14 @@ function deliver(
   }
   const queued = enqueueSend(accountId, async () => {
     let sent = false
+    let reserved = false
+    // Uma campanha pode estar enviando para esta pessoa agora: um envio por vez por conversa
+    const unlock = lockChat(accountId, jid)
     try {
+      if (!unlock) {
+        if (rawState(accountId, jid)?.mode === 'ia') schedule(accountId, jid, 5_000)
+        return
+      }
       const sock = wa.getSocket(accountId)
       if (!sock) return
       await sock.sendPresenceUpdate('composing', jid).catch(() => undefined)
@@ -759,10 +766,14 @@ function deliver(
         return
       }
       if (verdict !== 'ok') return
+      // Reserva a vaga do limite diário (as campanhas dividem o mesmo limite)
+      if (!reserveDailySend(accountId, effectiveDailyLimit(getAntiBan(accountId)))) return
+      reserved = true
       await sendAndStore(sock, accountId, jid, { text })
       sent = true
-      countSend(accountId)
     } finally {
+      if (reserved && !sent) releaseDailySend(accountId)
+      unlock?.()
       if (!sent) releaseSlot(o.slot)
       finish()
     }

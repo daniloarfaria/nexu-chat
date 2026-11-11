@@ -19,7 +19,7 @@ vi.mock('../src/main/ai/router', () => ({
   complete: vi.fn(),
   getAiSettings: () => ({ privacy: 'anonimizar', paidMonthlyLimit: 300 })
 }))
-vi.mock('../src/main/outbox', () => ({ enqueueSend: () => true }))
+vi.mock('../src/main/outbox', () => ({ enqueueSend: () => true, lockChat: () => () => undefined }))
 vi.mock('../src/main/wa/manager', () => ({
   wa: { getSocket: () => ({}), on: () => undefined }
 }))
