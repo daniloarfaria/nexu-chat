@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import * as XLSX from 'xlsx'
 import type { ImportMapping, ImportPreview, ImportResult, Person, PersonQuery } from '@shared/types'
-import { getDb, transaction } from './db'
+import { getDb, getSetting, setSetting, transaction } from './db'
 import { ensureTag, listTagDefs } from './tags'
-import { fold, normalizeDate, normalizePhone } from '@shared/rules'
+import { fold, normalizeDate, normalizePhone, phoneVariants } from '@shared/rules'
 
 // Planilhas lidas ficam em memória por alguns minutos entre a prévia e a importação
 const pendingImports = new Map<string, { rows: unknown[][]; at: number }>()
@@ -170,29 +170,29 @@ export function bulkTag(accountId: string, ids: number[], tag: string, add: bool
   })
 }
 
-/** Chaves que identificam a pessoa: número e JIDs conhecidos (inclusive LID mapeado). */
+/** Chaves que identificam a pessoa: número (com e sem o nono dígito), JIDs conhecidos e LIDs mapeados. */
 function identityKeys(accountId: string, jidOrPhone: string): string[] {
   const keys = new Set<string>([jidOrPhone])
+  const addPhone = (phone: string): void => {
+    for (const v of phoneVariants(phone)) {
+      keys.add(v)
+      keys.add(`${v}@s.whatsapp.net`)
+      const lids = getDb()
+        .prepare('SELECT lid FROM lid_map WHERE account_id = ? AND pn = ?')
+        .all(accountId, `${v}@s.whatsapp.net`) as Array<{ lid: string }>
+      for (const l of lids) keys.add(l.lid)
+    }
+  }
   const phone = jidOrPhone.endsWith('@s.whatsapp.net')
     ? jidOrPhone.split('@')[0]
     : /^\d+$/.test(jidOrPhone)
       ? jidOrPhone
       : null
-  if (phone) {
-    keys.add(phone)
-    keys.add(`${phone}@s.whatsapp.net`)
-    const lids = getDb()
-      .prepare('SELECT lid FROM lid_map WHERE account_id = ? AND pn = ?')
-      .all(accountId, `${phone}@s.whatsapp.net`) as Array<{ lid: string }>
-    for (const l of lids) keys.add(l.lid)
-  }
+  if (phone) addPhone(phone)
   if (jidOrPhone.endsWith('@lid')) {
     const pn = getDb().prepare('SELECT pn FROM lid_map WHERE account_id = ? AND lid = ?').get(accountId, jidOrPhone) as
       { pn: string } | undefined
-    if (pn) {
-      keys.add(pn.pn)
-      keys.add(pn.pn.split('@')[0])
-    }
+    if (pn) addPhone(pn.pn.split('@')[0])
   }
   return [...keys]
 }
@@ -239,6 +239,22 @@ export function deletePeople(accountId: string, ids: number[]): { mediaFiles: st
         db.prepare('DELETE FROM auto_log WHERE account_id = ? AND jid = ?').run(accountId, jid)
         db.prepare('DELETE FROM group_warnings WHERE account_id = ? AND participant = ?').run(accountId, jid)
         db.prepare('DELETE FROM lid_map WHERE account_id = ? AND (lid = ? OR pn = ?)').run(accountId, jid, jid)
+        db.prepare('DELETE FROM chat_attribution WHERE account_id = ? AND chat_jid = ?').run(accountId, jid)
+        db.prepare('DELETE FROM chat_ai_mode WHERE account_id = ? AND chat_jid = ?').run(accountId, jid)
+        db.prepare('DELETE FROM ia_atendimento_log WHERE account_id = ? AND chat_jid = ?').run(accountId, jid)
+      }
+      // Leads da planilha e fila de contatos a criar (senão o contato voltaria sozinho)
+      const phones = new Set<string>()
+      for (const k of keys) {
+        const d = k.split('@')[0]
+        if (/^\d{8,}$/.test(d) && !k.endsWith('@lid')) phones.add(d)
+      }
+      for (const ph of phones) db.prepare('DELETE FROM leads WHERE account_id = ? AND phone = ?').run(accountId, ph)
+      const pendingKey = `leadsContactsPending:${accountId}`
+      const pend = getSetting<Array<{ phone: string | null }>>(pendingKey, [])
+      if (pend.length) {
+        const rest = pend.filter((x) => !x.phone || !phones.has(x.phone))
+        if (rest.length !== pend.length) setSetting(pendingKey, rest)
       }
       db.prepare("UPDATE campaign_targets SET status = 'skipped' WHERE person_id = ? AND status = 'pending'").run(id)
       db.prepare(
