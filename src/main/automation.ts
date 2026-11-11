@@ -11,6 +11,7 @@ import { wa } from './wa/manager'
 import { moderateGroupMessage, welcomeParticipants } from './groups'
 import { log } from './log'
 import { enqueueSend } from './outbox'
+import { markAutoMessage } from './autoMessages'
 import { onClientMessage, onOwnMessage, robotActive, startRobot } from './iaAtendimento'
 
 /**
@@ -159,7 +160,9 @@ async function reply(_sock: WASocket, accountId: string, jid: string, text: stri
     if (!sock) return
     await sock.sendPresenceUpdate('composing', jid).catch(() => undefined)
     await sleep(1500 + Math.min(4000, text.length * 25))
-    await sendAndStore(sock, accountId, jid, { text })
+    const sent = await sendAndStore(sock, accountId, jid, { text })
+    // Mensagem automática: o robô de atendimento não a toma como resposta à pergunta do cliente
+    if (sent?.key.id) markAutoMessage(accountId, sent.key.id)
   })
 }
 

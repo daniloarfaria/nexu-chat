@@ -53,6 +53,7 @@ beforeEach(() => {
   getDb()
     .prepare('INSERT INTO accounts (id, name, color, modules, created_at) VALUES (?, ?, ?, ?, ?)')
     .run(ACC, 'Ótica Centro', '#000000', JSON.stringify({ status: true }), Date.now())
+  S.resetStatusRuntime()
   calls.length = 0
   connected = true
   failWith = null
@@ -396,7 +397,7 @@ describe('envio travado e cancelamento', () => {
     scheduledAt: null
   })
 
-  test('sendMessage sem resposta: expira, marca falhou e libera o agendador', async () => {
+  test('sendMessage sem resposta: expira, marca falhou (conta no limite) e segura os próximos até saber', async () => {
     vi.useFakeTimers()
     hang = true
     const p = S.createStatusPost(agora())
@@ -405,9 +406,12 @@ describe('envio travado e cancelamento', () => {
     await run
     expect(S.getStatusPost(p.id)).toMatchObject({ status: 'falhou' })
     expect(S.getStatusPost(p.id)!.error).toMatch(/demorou/)
-    // o agendador não ficou preso: a próxima postagem sai
+    // resultado incerto: os próximos esperam o prazo; depois dele o agendador volta a postar
     hang = false
     const q = S.createStatusPost(agora())
+    await S.runDueStatus(ACC)
+    expect(S.getStatusPost(q.id)!.status).toBe('agendado')
+    await vi.advanceTimersByTimeAsync(S.STATUS_UNCERTAIN_HOLD_MS + 1000)
     await S.runDueStatus(ACC)
     expect(S.getStatusPost(q.id)!.status).toBe('enviado')
   })

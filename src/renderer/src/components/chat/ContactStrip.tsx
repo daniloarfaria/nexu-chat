@@ -33,7 +33,7 @@ export function ContactStrip({
   const tagDefs = useTagDefs(accountId)
   const [open, setOpen] = useState<Open>(null)
   const [stage, setStage] = useState<number | null>(null)
-  const { busy, error, run } = useAction()
+  const { busy, error, run, attempt } = useAction()
   const box = useRef<HTMLDivElement>(null)
   const openPipeline = useApp((s) => s.openPipeline)
 
@@ -57,10 +57,10 @@ export function ContactStrip({
   }
 
   async function moveTo(p: CardPlacement, stageId: number): Promise<void> {
-    const ok = await run('move', () =>
+    const ok = await attempt('move', () =>
       window.api.invoke('pipelines:move-card', { accountId, cardId: p.cardId, stageId, index: 100_000 })
     )
-    if (ok !== undefined) {
+    if (ok) {
       await profile.reload()
       setOpen(null)
     }

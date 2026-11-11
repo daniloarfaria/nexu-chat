@@ -243,3 +243,15 @@ describe('foco da conversa na janela', () => {
     expect(deps.focus.at(-1)).toEqual({ accountId: ACC, jid: B })
   })
 })
+
+describe('janela do cartão depois da fusão LID/número (item 14)', () => {
+  it('a janela passa a apontar para o número, que é o que a tela deve renderizar', async () => {
+    const LID = '999@lid'
+    const deps = fakeDeps({ [LID]: [msg('l1', 1)], [A]: [] }, [chat(LID), chat(A)])
+    const win = createChatStoreCore(deps, { list: false })
+    await win.getState().setAccount(ACC)
+    await win.getState().select(LID)
+    win.getState().applyMerged(ACC, LID, A)
+    await vi.waitFor(() => expect(win.getState().selected).toBe(A))
+  })
+})

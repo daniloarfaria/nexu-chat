@@ -56,8 +56,27 @@ export function extractAdAttribution(msg: WAMessage): AdAttribution | null {
 }
 
 /**
- * Guarda a origem da conversa. A primeira origem fica; campos que faltavam (ex.: ctwaClid
- * que chegou numa mensagem seguinte) são completados. Devolve true se algo foi gravado.
+ * Junta duas origens da mesma conversa. Política: vale a primeira atribuição, e a origem é uma unidade
+ * (anúncio, link, código e data andam juntos).
+ * - A mais antiga de outro anúncio troca tudo (campos e data); do mesmo anúncio, só completa o que faltava.
+ * - A mais nova de outro anúncio é ignorada; do mesmo anúncio, só completa o que faltava (ex.: o ctwaClid).
+ */
+export function mergeOrigin(cur: ChatAttribution, inc: ChatAttribution): ChatAttribution {
+  const sameAd = !cur.adId || !inc.adId || cur.adId === inc.adId
+  const older = inc.firstTs < cur.firstTs
+  const pick = <T>(a: T | null, b: T | null): T | null => (older ? (sameAd ? (b ?? a) : b) : sameAd ? (a ?? b) : a)
+  return {
+    conversionSource: pick(cur.conversionSource, inc.conversionSource),
+    entryPoint: pick(cur.entryPoint, inc.entryPoint),
+    adId: pick(cur.adId, inc.adId),
+    adUrl: pick(cur.adUrl, inc.adUrl),
+    ctwaClid: pick(cur.ctwaClid, inc.ctwaClid),
+    firstTs: older ? inc.firstTs : cur.firstTs
+  }
+}
+
+/**
+ * Guarda a origem da conversa (veja mergeOrigin). Devolve true se algo foi gravado.
  */
 export function recordAttribution(
   accountId: string,
@@ -67,28 +86,33 @@ export function recordAttribution(
   quiet = false
 ): boolean {
   const db = getDb()
-  const cur = db
-    .prepare('SELECT ctwa_clid FROM chat_attribution WHERE account_id = ? AND chat_jid = ?')
-    .get(accountId, chatJid) as { ctwa_clid: string | null } | undefined
+  const cur = getAttribution(accountId, chatJid)
+  const merged = cur ? mergeOrigin(cur, { ...a, firstTs: ts }) : { ...a, firstTs: ts }
   db.prepare(
     `INSERT INTO chat_attribution (account_id, chat_jid, conversion_source, entry_point, ad_id, ad_url, ctwa_clid, first_ts, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(account_id, chat_jid) DO UPDATE SET
-       conversion_source = COALESCE(chat_attribution.conversion_source, excluded.conversion_source),
-       entry_point = COALESCE(chat_attribution.entry_point, excluded.entry_point),
-       ad_id = COALESCE(chat_attribution.ad_id, excluded.ad_id),
-       ad_url = COALESCE(chat_attribution.ad_url, excluded.ad_url),
-       ctwa_clid = COALESCE(chat_attribution.ctwa_clid, excluded.ctwa_clid),
-       first_ts = MIN(chat_attribution.first_ts, excluded.first_ts),
+       conversion_source = excluded.conversion_source, entry_point = excluded.entry_point, ad_id = excluded.ad_id,
+       ad_url = excluded.ad_url, ctwa_clid = excluded.ctwa_clid, first_ts = excluded.first_ts,
        updated_at = excluded.updated_at`
-  ).run(accountId, chatJid, a.conversionSource, a.entryPoint, a.adId, a.adUrl, a.ctwaClid, ts, Date.now())
+  ).run(
+    accountId,
+    chatJid,
+    merged.conversionSource,
+    merged.entryPoint,
+    merged.adId,
+    merged.adUrl,
+    merged.ctwaClid,
+    merged.firstTs,
+    Date.now()
+  )
   const isNew = !cur
-  const gotClid = !!a.ctwaClid && !cur?.ctwa_clid
+  const gotClid = !!merged.ctwaClid && !cur?.ctwaClid
   // Registro só local e sem dado do cliente: serve para conferir se o ctwaClid chega pelo WhatsApp Web.
   if (!quiet && (isNew || gotClid))
     log.info('Anúncio: conversa que veio de anúncio', {
       novaConversa: isNew,
-      ctwaClid: gotClid ? 'chegou' : cur?.ctwa_clid ? 'já tinha' : 'não veio',
+      ctwaClid: gotClid ? 'chegou' : cur?.ctwaClid ? 'já tinha' : 'não veio',
       origem: a.conversionSource ?? a.entryPoint ?? 'desconhecida'
     })
   return isNew || gotClid
@@ -136,6 +160,22 @@ export function adStats(): { anuncios: number; comCtwaClid: number } {
 const CURSOR = 'ads.reprocess.cursor'
 
 /**
+ * Consulta de cada lote. `ts >= ?` busca pelo índice parcial (que já vem na ordem ts, rowid) e o filtro
+ * `ts > ? OR rowid > ?` continua exatamente depois do cursor (ts, rowid), sem ordenar nada.
+ */
+export const ADS_SCAN_SQL = `SELECT rowid AS rid, account_id, chat_jid, ts, raw FROM messages
+  WHERE ts >= ?1 AND (ts > ?1 OR rowid > ?2) AND from_me = 0 AND raw IS NOT NULL AND chat_jid NOT LIKE '%@g.us'
+  ORDER BY ts, rowid LIMIT ?3`
+
+/**
+ * Índice parcial do reprocessamento, criado na primeira vez que ele roda (e não na migração, que é
+ * síncrona na abertura do app e deixaria bancos grandes demorando para abrir).
+ */
+export function ensureAdsScanIndex(): void {
+  getDb().exec('CREATE INDEX IF NOT EXISTS messages_ads_scan ON messages (ts) WHERE from_me = 0 AND raw IS NOT NULL')
+}
+
+/**
  * Reprocessa o histórico (messages.raw) em lotes, no mesmo padrão de reparseUnsupported.
  * Guarda até onde foi, então cada lote só olha mensagens ainda não vistas.
  */
@@ -143,13 +183,8 @@ export function reprocessAdAttribution(limit = 500): { scanned: number; found: n
   const db = getDb()
   // Do mais antigo para o mais novo: a primeira origem da conversa vem da mensagem mais antiga
   const cursor = getSetting<{ ts: number; rid: number }>(CURSOR, { ts: -1, rid: 0 })
-  const rows = db
-    .prepare(
-      `SELECT rowid AS rid, account_id, chat_jid, ts, raw FROM messages
-       WHERE (ts > ? OR (ts = ? AND rowid > ?)) AND from_me = 0 AND raw IS NOT NULL AND chat_jid NOT LIKE '%@g.us'
-       ORDER BY ts, rowid LIMIT ?`
-    )
-    .all(cursor.ts, cursor.ts, cursor.rid, limit) as Array<{
+  ensureAdsScanIndex()
+  const rows = db.prepare(ADS_SCAN_SQL).all(cursor.ts, cursor.rid, limit) as Array<{
     rid: number
     account_id: string
     chat_jid: string
