@@ -233,17 +233,19 @@ if (!app.requestSingleInstanceLock()) {
     startAutomation()
     robotEvents.on('changed', (p: unknown) => send('robot:changed', p))
     recoveryEvents.on('changed', (p: unknown) => send('recovery:changed', p))
-    recoveryEvents.on('approval', () => {
+    recoveryEvents.on('approval', (p: { accountId: string | null; count: number }) => {
       if (!Notification.isSupported()) return
       const n = new Notification({
-        title: 'Mensagem de recuperação para aprovar',
-        body: 'A IA escreveu uma mensagem para um cliente que sumiu. Abra Automações, Recuperar vendas, para aprovar.',
+        title:
+          p.count === 1 ? 'Mensagem de recuperação para aprovar' : `${p.count} mensagens de recuperação para aprovar`,
+        body: 'A IA escreveu para clientes que sumiram. Abra Automações, Recuperar vendas, para aprovar.',
         silent: false
       })
       n.on('click', () => {
         if (!mainWindow) createWindow()
         mainWindow?.show()
         mainWindow?.focus()
+        if (p.accountId) send('nav:open-recovery', { accountId: p.accountId })
       })
       n.show()
     })

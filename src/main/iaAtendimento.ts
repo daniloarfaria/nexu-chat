@@ -439,7 +439,13 @@ export function parseDecision(raw: string): RobotDecision | null {
 }
 
 /** Minúsculas, sem acento e com caracteres de largura total/compatibilidade normalizados. */
-export const norm = (s: string): string => s.normalize('NFKC').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
+export const norm = (s: string): string =>
+  s
+    .normalize('NFKC')
+    .replace(/\p{Cf}/gu, '')
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
 
 /** Número com separadores em forma canônica: "1.000" e "1000" são iguais, "10,00" e "1.000" não. */
 function canonNumber(raw: string): string {

@@ -6,11 +6,11 @@ import type {
   RecoverySettings,
   RecoveryStats
 } from '@shared/types'
-import { effectiveDailyLimit, isOptOut, sendWindow } from '@shared/rules'
+import { effectiveDailyLimit, fold, isOptOut, sendWindow } from '@shared/rules'
 import { getDb, getSetting, setSetting } from './db'
 import { getAccount, listAccounts } from './accounts'
 import { countSend, getAntiBan, sentToday } from './campaigns'
-import { isOptedOut } from './people'
+import { isOptedOut, optOutByJid } from './people'
 import { enqueueSend } from './outbox'
 import { getChats, listMessages } from './wa/store'
 import { sendAndStore } from './wa/send'
@@ -30,7 +30,7 @@ import {
   robotBusy,
   wordIn
 } from './iaAtendimento'
-import { relatedJids, stopFollowups, type StopReason } from './recoveryLink'
+import { relatedJids, stopAllFollowups, stopFollowups, type StopReason } from './recoveryLink'
 import { log } from './log'
 
 /**
@@ -60,6 +60,8 @@ export const tuning = {
   entryWindowHours: 72,
   /** Cliente que não escreve há mais que isso não é recuperação, é conversa antiga. */
   maxClientAgeDays: 30,
+  /** Acompanhamento vencido há mais que isso expira em vez de gerar ou enviar. */
+  expireMs: 48 * 3600_000,
   maxScan: 300,
   maxInterestPerTick: 8,
   maxGeneratePerTick: 5,
@@ -87,8 +89,8 @@ export const DEFAULT_RECOVERY: RecoverySettings = {
   idleHours: 24,
   attempts: 3,
   gapDays: [2, 4],
-  byQuote: true,
-  byFunnel: true,
+  stageIds: [],
+  tags: [],
   byInterest: false,
   discountPct: 0,
   discountFrom: 3,
@@ -105,6 +107,22 @@ const clamp = (n: unknown, min: number, max: number, fallback: number): number =
 
 const settingsKey = (accountId: string): string => `recuperacao:${accountId}`
 
+const cleanIds = (v: unknown): number[] =>
+  Array.isArray(v) ? [...new Set(v.filter((x): x is number => Number.isInteger(x) && x > 0))].slice(0, 60) : []
+
+/** O nome da etiqueta é a identidade dela. Nome vazio ou comprido demais (maior que o limite do app) é descartado. */
+const cleanTags = (v: unknown): string[] =>
+  Array.isArray(v)
+    ? [
+        ...new Set(
+          v
+            .filter((x): x is string => typeof x === 'string')
+            .map((x) => x.replace(/\s+/g, ' ').trim())
+            .filter((x) => x.length > 0 && x.length <= 40)
+        )
+      ].slice(0, 60)
+    : []
+
 function normalize(s: RecoverySettings): RecoverySettings {
   const attempts = clamp(s.attempts, 1, 3, DEFAULT_RECOVERY.attempts)
   const cap = typeof s.discountCapReais === 'number' && Number.isFinite(s.discountCapReais) ? s.discountCapReais : null
@@ -117,8 +135,8 @@ function normalize(s: RecoverySettings): RecoverySettings {
       clamp(Array.isArray(s.gapDays) ? s.gapDays[0] : undefined, 1, 30, DEFAULT_RECOVERY.gapDays[0]),
       clamp(Array.isArray(s.gapDays) ? s.gapDays[1] : undefined, 1, 30, DEFAULT_RECOVERY.gapDays[1])
     ],
-    byQuote: !!s.byQuote,
-    byFunnel: !!s.byFunnel,
+    stageIds: cleanIds(s.stageIds),
+    tags: cleanTags(s.tags),
     byInterest: !!s.byInterest,
     // Desconto máximo de 50%: acima disso quase sempre é erro de digitação
     discountPct: clamp(s.discountPct, 0, 50, 0),
@@ -144,8 +162,23 @@ export function getRecoverySettings(accountId: string): RecoverySettings {
 
 export function saveRecoverySettings(accountId: string, patch: Partial<RecoverySettings>): RecoverySettings {
   const next = normalize({ ...getRecoverySettings(accountId), ...patch })
+  // Só colunas que existem neste número (o app nunca adivinha: vale o que a pessoa escolheu)
+  if (next.stageIds.length) {
+    const ok = new Set(
+      (
+        getDb()
+          .prepare(
+            `SELECT st.id FROM pipeline_stages st JOIN pipelines p ON p.id = st.pipeline_id
+             WHERE p.account_id = ? AND st.id IN (${next.stageIds.map(() => '?').join(',')})`
+          )
+          .all(accountId, ...next.stageIds) as Array<{ id: number }>
+      ).map((r) => r.id)
+    )
+    next.stageIds = next.stageIds.filter((id) => ok.has(id))
+  }
   setSetting(settingsKey(accountId), next)
   // Desligou a regra: o que estava esperando para sair é descartado
+  if (!next.enabled) stopAllFollowups(accountId, 'desligado')
   if (!next.enabled)
     getDb()
       .prepare(
@@ -288,27 +321,56 @@ const STRICT_OFFER_WORDS = [
   'parcelo',
   'parcelamos',
   'parcelar',
-  'parcelamento'
+  'parcelamento',
+  'parcelas?',
+  'parcelado',
+  'parcele',
+  'descontao',
+  'preco promocional',
+  'preco especial',
+  'abatimento',
+  'metade do valor',
+  'pela metade',
+  'porcento',
+  'entrada'
 ]
 const DISCOUNT_WORDS = ['descontos?', 'off', 'ofertas?']
+/** Em tentativa sem desconto, nada que sugira vantagem especial. */
+const NO_OFFER_WORDS = [
+  'especial|especiais',
+  'exclusiv[a-z]*',
+  'valor melhor',
+  'preco melhor',
+  'melhor valor',
+  'melhor preco'
+]
 
 /**
  * Troca a marca {DESCONTO} pelo texto oficial do desconto. Sem a marca, o texto oficial é acrescentado.
  * Sem desconto na tentativa, a marca é recusada (a IA não seguiu as regras).
  */
-export function composeText(raw: string, offer: Offer | null): { ok: true; text: string } | { ok: false; why: string } {
-  const marks = raw.match(/\{\s*desconto\s*\}/gi) ?? []
-  let text = raw
+export function composeText(
+  raw: string,
+  offer: Offer | null,
+  o: { append?: boolean } = {}
+): { ok: true; text: string } | { ok: false; why: string } {
+  // Chaves de largura total e caracteres invisíveis não escondem a marca nem o desconto
+  let text = raw.normalize('NFKC').replace(/\p{Cf}/gu, '')
+  const mark = /\{\s*desconto\s*\}/gi
+  const marks = text.match(mark) ?? []
   if (!offer) {
     if (marks.length) return { ok: false, why: 'marca de desconto em tentativa sem desconto' }
   } else {
-    let used = false
-    text = text.replace(/\{\s*desconto\s*\}/gi, () => {
+    // A frase oficial aparece uma vez só: se o texto já a tem (edição), a marca sobra e sai
+    let used = text.includes(offer.phrase)
+    text = text.replace(mark, () => {
       if (used) return ''
       used = true
       return offer.phrase
     })
-    if (!used) text = `${text.trim()} Preparei ${offer.phrase} para você.`
+    // Só a IA recebe a frase acrescentada. Quem editou e apagou a oferta de propósito é respeitado
+    if (!used && o.append !== false) text = `${text.trim()} Preparei ${offer.phrase} para você.`
+    text = text.replace(/\s{2,}/g, ' ').trim()
   }
   if (/[{}]/.test(text)) return { ok: false, why: 'chaves soltas no texto' }
   return { ok: true, text }
@@ -322,21 +384,22 @@ export function checkRecoveryReply(
   text: string,
   o: { source: string; offer: Offer | null }
 ): { ok: true; text: string } | { ok: false; why: string } {
-  const offerText = o.offer?.phrase ?? ''
+  // A oferta só vale se o texto traz a frase oficial. Sem ela, o texto é uma tentativa sem oferta
+  const offer = o.offer && norm(text).includes(norm(o.offer.phrase)) ? o.offer : null
+  const offerText = offer?.phrase ?? ''
   const checked = checkReply(text, `${o.source}\n${offerText}`)
   if (!checked.ok) return checked
   const t = norm(checked.text)
-  const allowedPct = o.offer ? `p:${o.offer.pct}` : null
+  const allowedPct = offer ? `p:${offer.pct}` : null
   for (const c of extractClaims(t))
     if (c.startsWith('p:') && c !== allowedPct) return { ok: false, why: `percentual fora da regra: ${c.slice(2)}%` }
   const phrase = norm(offerText)
   for (const w of STRICT_OFFER_WORDS)
     if (wordIn(w, t) && !wordIn(w, phrase)) return { ok: false, why: `oferta fora da regra: ${w}` }
-  if (!o.offer) {
+  if (!offer) {
     for (const w of DISCOUNT_WORDS) if (wordIn(w, t)) return { ok: false, why: 'desconto em tentativa sem desconto' }
-  } else if (!t.includes(phrase) && DISCOUNT_WORDS.some((w) => wordIn(w, t))) {
-    // Texto editado que fala de desconto sem usar o texto oficial
-    return { ok: false, why: 'desconto fora do texto oficial da regra' }
+    for (const w of NO_OFFER_WORDS)
+      if (wordIn(w, t)) return { ok: false, why: `vantagem em tentativa sem desconto: ${w}` }
   }
   return checked
 }
@@ -349,7 +412,7 @@ interface FollowupRow {
   chat_jid: string
   status: 'ativo' | 'recuperada' | 'parado' | 'concluido'
   stop_reason: string | null
-  reason_in: 'orcamento' | 'funil' | 'interesse'
+  reason_in: 'etiqueta' | 'funil' | 'interesse'
   last_client_ts: number
   attempts_done: number
   next_due_at: number | null
@@ -399,37 +462,90 @@ function touch(accountId: string): void {
 
 // ---------- Quem entra ----------
 
-/** Etiqueta ou etapa de funil "orçamento" no contato, ou cartão em andamento em algum funil. */
-export function qualifyReason(accountId: string, jid: string, s: RecoverySettings): 'orcamento' | 'funil' | null {
+/**
+ * Por que o cliente entra, só pelo que a pessoa escolheu na regra: colunas (por id) ou etiquetas.
+ * O app não interpreta nomes. Coluna de ganho ou perda vem do tipo (kind) da coluna: cliente cujos cartões estão
+ * só em colunas de ganho ou perda nunca entra, mesmo com a etiqueta escolhida.
+ */
+export function qualifyReason(accountId: string, jid: string, s: RecoverySettings): 'etiqueta' | 'funil' | null {
+  if (!s.stageIds.length && !s.tags.length) return null
   const pid = personIdOfChat(accountId, jid)
   if (pid == null) return null
   const db = getDb()
-  if (s.byQuote) {
-    const tag = db
-      .prepare("SELECT 1 FROM person_tags WHERE person_id = ? AND unaccent(tag) LIKE '%orcamento%' LIMIT 1")
-      .get(pid)
-    const stage = db
-      .prepare(
-        `SELECT 1 FROM pipeline_cards c JOIN pipeline_stages st ON st.id = c.stage_id
-         WHERE c.person_id = ? AND st.kind = 'open' AND unaccent(st.name) LIKE '%orcamento%' LIMIT 1`
-      )
-      .get(pid)
-    if (tag || stage) return 'orcamento'
-  }
-  if (s.byFunnel) {
-    const card = db
-      .prepare(
-        `SELECT 1 FROM pipeline_cards c JOIN pipeline_stages st ON st.id = c.stage_id
-         WHERE c.person_id = ? AND st.kind = 'open' LIMIT 1`
-      )
-      .get(pid)
-    if (card) return 'funil'
+  const cards = db
+    .prepare(
+      `SELECT c.stage_id AS stage, st.kind AS kind FROM pipeline_cards c
+       JOIN pipeline_stages st ON st.id = c.stage_id JOIN pipelines p ON p.id = c.pipeline_id
+       WHERE c.person_id = ? AND p.account_id = ?`
+    )
+    .all(pid, accountId) as Array<{ stage: number; kind: string }>
+  const hasOpen = cards.some((c) => c.kind !== 'won' && c.kind !== 'lost')
+  if (cards.length && !hasOpen) return null
+  if (cards.some((c) => c.kind !== 'won' && c.kind !== 'lost' && s.stageIds.includes(c.stage))) return 'funil'
+  if (s.tags.length) {
+    const mine = (db.prepare('SELECT tag FROM person_tags WHERE person_id = ?').all(pid) as Array<{ tag: string }>).map(
+      (r) => r.tag
+    )
+    if (mine.some((t) => s.tags.includes(t))) return 'etiqueta'
   }
   return null
 }
 
-/** Pode abrir um acompanhamento novo para esta conversa? */
-function reentryAllowed(accountId: string, jids: string[], lastClientTs: number, now: number): boolean {
+/** O texto de um cliente serve para reabrir uma conversa? ("ok", "hm", emoji e risada não servem) */
+const TRIVIAL = new Set([
+  'ok',
+  'okay',
+  'hm',
+  'hmm',
+  'sim',
+  'nao',
+  'blz',
+  'beleza',
+  'valeu',
+  'obrigado',
+  'obrigada',
+  'certo',
+  'entendi',
+  'show',
+  'top'
+])
+export function substantive(text: string | null | undefined): boolean {
+  const t = fold(text ?? '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const letters = t.replace(/[^a-z]/g, '')
+  return letters.length >= 4 && !TRIVIAL.has(t) && !/^k+$/.test(letters)
+}
+
+/** A "última mensagem da loja" foi uma resposta automática (boas-vindas, ausência) ou uma campanha/lembrete? */
+function automatedStoreMessage(accountId: string, jids: string[], tsSec: number): boolean {
+  const db = getDb()
+  const lo = (tsSec - 120) * 1000
+  const hi = (tsSec + 120) * 1000
+  const auto = db
+    .prepare(
+      `SELECT 1 FROM auto_log a JOIN auto_rules r ON r.id = a.rule_id
+       WHERE a.account_id = ? AND a.jid IN (${marksOf(jids.length)}) AND a.at BETWEEN ? AND ? AND r.kind IN ('welcome', 'away') LIMIT 1`
+    )
+    .get(accountId, ...jids, lo, hi)
+  if (auto) return true
+  const phones = jids.filter((j) => j.endsWith('@s.whatsapp.net')).map((j) => j.split('@')[0])
+  const sent = db
+    .prepare(
+      `SELECT 1 FROM campaign_targets t JOIN campaigns c ON c.id = t.campaign_id
+       WHERE c.account_id = ? AND t.sent_at BETWEEN ? AND ?
+         AND (t.jid IN (${marksOf(jids.length)})${phones.length ? ` OR t.phone IN (${marksOf(phones.length)})` : ''}) LIMIT 1`
+    )
+    .get(accountId, lo, hi, ...jids, ...phones)
+  return !!sent
+}
+
+/**
+ * Pode abrir um acompanhamento novo? No máximo um ciclo por cliente a cada 30 dias, e nunca para quem disse SAIR.
+ * Depois dos 30 dias, só se a última fala do cliente foi substantiva (não "ok", "hm" ou emoji).
+ */
+function reentryAllowed(accountId: string, jids: string[], lastClientText: string | null, now: number): boolean {
   const prev = getDb()
     .prepare(
       `SELECT * FROM followups WHERE account_id = ? AND chat_jid IN (${marksOf(jids.length)}) AND stop_reason IS NOT 'sem_interesse'
@@ -437,11 +553,9 @@ function reentryAllowed(accountId: string, jids: string[], lastClientTs: number,
     )
     .get(accountId, ...jids) as FollowupRow | undefined
   if (!prev) return true
-  if (prev.status === 'ativo') return false
-  // O cliente respondeu e voltou a sumir: pode tentar de novo, mas só se ele escreveu depois da outra tentativa
-  if (prev.stop_reason === 'respondeu') return lastClientTs > prev.last_client_ts
-  // Qualquer outro fim (concluído, venda, SAIR, atendente): espera 30 dias
-  return prev.started_at < now - 30 * DAY_MS
+  if (prev.status === 'ativo' || prev.stop_reason === 'sair') return false
+  if (prev.started_at >= now - 30 * DAY_MS) return false
+  return substantive(lastClientText)
 }
 
 const interestFailUntil = new Map<string, number>()
@@ -536,15 +650,18 @@ export async function scanCandidates(accountId: string, now = Date.now()): Promi
     const last = lastMessages(accountId, jid, 1).at(-1)
     // "A loja respondeu e o cliente sumiu": a última mensagem é da loja e já passou o prazo
     if (!last || !last.fromMe || last.ts > nowS - idleS) continue
+    const jids = relatedJids(accountId, jid)
     const lc = db
       .prepare(
-        "SELECT MAX(ts) AS t FROM messages WHERE account_id = ? AND chat_jid = ? AND from_me = 0 AND type <> 'system'"
+        `SELECT ts, COALESCE(text, transcript) AS txt FROM messages WHERE account_id = ? AND chat_jid IN (${marksOf(jids.length)})
+         AND from_me = 0 AND type <> 'system' ORDER BY ts DESC LIMIT 1`
       )
-      .get(accountId, jid) as { t: number | null }
-    const lastClientTs = lc.t ?? 0
+      .get(accountId, ...jids) as { ts: number; txt: string | null } | undefined
+    const lastClientTs = lc?.ts ?? 0
     // O cliente precisa ter falado, e há pouco tempo
     if (!lastClientTs || lastClientTs < nowS - tuning.maxClientAgeDays * 86400) continue
-    const jids = relatedJids(accountId, jid)
+    // Só conta a resposta de uma pessoa ou do robô de atendimento: boas-vindas, ausência, campanha e lembrete não
+    if (automatedStoreMessage(accountId, jids, last.ts)) continue
     if (isOptedOut(accountId, jid)) continue
     // Conversa que o robô passou para um atendente, ou resposta do robô a caminho: não é a hora
     const mode = db
@@ -558,7 +675,7 @@ export async function scanCandidates(accountId: string, now = Date.now()): Promi
       )
       .get(accountId, ...jids, lastClientTs * 1000)
     if (deal) continue
-    if (!reentryAllowed(accountId, jids, lastClientTs, now)) continue
+    if (!reentryAllowed(accountId, jids, lc?.txt ?? null, now)) continue
 
     let reason: FollowupRow['reason_in'] | null = qualifyReason(accountId, jid, s)
     if (!reason && s.byInterest) {
@@ -641,6 +758,14 @@ function failGeneration(f: FollowupRow, now: number): void {
 }
 
 /** O cliente escreveu depois da última mensagem que o acompanhamento conhece? */
+/** O cliente pediu para sair (texto ou áudio já transcrito) depois do início do acompanhamento? Grava o opt-out. */
+function clientAskedToLeave(f: FollowupRow): boolean {
+  const newer = lastMessages(f.account_id, f.chat_jid, 10).filter((m) => !m.fromMe && m.ts > f.last_client_ts)
+  const yes = newer.some((m) => isOptOut(m.text) || isOptOut(m.transcript))
+  if (yes) optOutByJid(f.account_id, f.chat_jid)
+  return yes
+}
+
 function clientWroteSince(f: FollowupRow): boolean {
   const jids = relatedJids(f.account_id, f.chat_jid)
   return !!getDb()
@@ -663,7 +788,19 @@ async function generateAttempt(
     concludeFollowup(f, now)
     return 'parou'
   }
+  // Vencido há muito (computador desligado, regra parada) ou cliente antigo demais: não acorda conversa velha
+  if (
+    (f.next_due_at != null && now - f.next_due_at > tuning.expireMs) ||
+    nowSec() - f.last_client_ts > tuning.maxClientAgeDays * 86400
+  ) {
+    stopFollowups(accountId, jid, 'expirado', { now })
+    return 'parou'
+  }
   if (isOptedOut(accountId, jid)) {
+    stopFollowups(accountId, jid, 'sair', { now })
+    return 'parou'
+  }
+  if (clientAskedToLeave(f)) {
     stopFollowups(accountId, jid, 'sair', { now })
     return 'parou'
   }
@@ -682,6 +819,10 @@ async function generateAttempt(
   if (!last || !last.fromMe) {
     // Última mensagem não é mais da loja: o cliente voltou (ou algo mudou)
     stopFollowups(accountId, jid, 'respondeu', { now })
+    return 'parou'
+  }
+  if (automatedStoreMessage(accountId, relatedJids(accountId, jid), last.ts)) {
+    stopFollowups(accountId, jid, 'nao_se_aplica', { now })
     return 'parou'
   }
   const offer = offerFor(s, n)
@@ -732,7 +873,7 @@ async function generateAttempt(
     return 'falhou'
   }
   if (decision.acao === 'desistir') {
-    stopFollowups(accountId, jid, 'sem_interesse', { now: Date.now() })
+    stopFollowups(accountId, jid, 'desistiu', { now: Date.now() })
     return 'parou'
   }
   const composed = composeText(decision.texto, offer)
@@ -768,7 +909,6 @@ async function generateAttempt(
     .prepare('UPDATE followups SET next_due_at = NULL, fail_count = 0, updated_at = ? WHERE id = ?')
     .run(Date.now(), f.id)
   touch(accountId)
-  if (!auto) recoveryEvents.emit('approval', { accountId, jid, n })
   return 'escrita'
 }
 
@@ -822,7 +962,10 @@ function verdict(a: AttemptRow, now: number): Verdict {
   const jid = a.chat_jid
   if (!isRobotJid(jid)) return { v: 'descartar', why: 'conversa inválida' }
   if (isOptedOut(accountId, jid)) return { v: 'descartar', why: 'pediu para não receber', stop: 'sair' }
+  if (clientAskedToLeave(f)) return { v: 'descartar', why: 'pediu para não receber', stop: 'sair' }
   if (clientWroteSince(f)) return { v: 'descartar', why: 'o cliente respondeu', stop: 'respondeu' }
+  if (Math.floor(now / 1000) - f.last_client_ts > tuning.maxClientAgeDays * 86400)
+    return { v: 'descartar', why: 'conversa antiga demais', stop: 'expirado' }
   const s = getRecoverySettings(accountId)
   // O desconto é sempre o da regra de agora: se ela mudou, o texto antigo não sai
   const offer = offerFor(s, a.n)
@@ -911,6 +1054,16 @@ function queueSend(a: AttemptRow): boolean {
     try {
       const sock = wa.getSocket(accountId)
       if (!sock) return
+      // Primeiro a conferência: "digitando…" nunca aparece para uma mensagem que já não pode sair
+      const pre = attempt(a.id)
+      if (!pre || pre.status !== 'aprovada') return
+      const v0 = verdict(pre, Date.now())
+      if (v0.v === 'descartar') {
+        discardAttempt(pre, v0.why, v0.stop, Date.now())
+        touch(accountId)
+        return
+      }
+      if (v0.v === 'esperar') return
       await sock.sendPresenceUpdate('composing', a.chat_jid).catch(() => undefined)
       await tuning.sleep(Math.min(tuning.typingMaxMs, tuning.typingBaseMs + a.text.length * tuning.typingPerCharMs))
       // Durante a espera pode ter mudado tudo (cliente respondeu, SAIR, venda, uma pessoa assumiu)
@@ -981,7 +1134,7 @@ export function listQueue(accountId: string, now = Date.now()): RecoveryQueueIte
     status: a.status,
     discountPct: a.discount_pct,
     offer: a.offer,
-    reasonIn: (followup(a.followup_id)?.reason_in ?? 'orcamento') as RecoveryQueueItem['reasonIn'],
+    reasonIn: (followup(a.followup_id)?.reason_in ?? 'etiqueta') as RecoveryQueueItem['reasonIn'],
     waiting: reasonOf(now, a),
     createdAt: a.created_at
   }))
@@ -1000,7 +1153,7 @@ export function approveAttempt(accountId: string, id: number, editedText?: strin
     const offer = offerFor(s, a.n)
     if ((offer?.phrase ?? null) !== a.offer)
       throw new Error('A regra de desconto mudou. Descarte esta mensagem e espere a próxima.')
-    const composed = composeText(editedText.trim().slice(0, 1500), offer)
+    const composed = composeText(editedText.trim().slice(0, 1500), offer, { append: false })
     const checked = composed.ok
       ? checkRecoveryReply(composed.text, { source: allowedContext(accountId), offer })
       : composed
@@ -1104,7 +1257,10 @@ export function recoveryStats(accountId: string, sinceMs = 0): RecoveryStats {
 /** O cliente escreveu: a recuperação para (o robô, se estiver ligado, atende como sempre). "SAIR" também cai aqui. */
 export function onClientReply(accountId: string, m: MessageItem): void {
   if (m.fromMe || m.chatJid.endsWith('@g.us')) return
-  const stopped = stopFollowups(accountId, m.chatJid, isOptOut(m.text) ? 'sair' : 'respondeu', { afterTs: m.ts })
+  // SAIR vale sempre, mesmo sem campanhas, lembretes ou robô ligados: grava o opt-out (texto ou áudio transcrito)
+  const leave = isOptOut(m.text) || isOptOut(m.transcript)
+  if (leave && getAccount(accountId)?.modules.recuperacao) optOutByJid(accountId, m.chatJid)
+  const stopped = stopFollowups(accountId, m.chatJid, leave ? 'sair' : 'respondeu', { afterTs: m.ts })
   if (stopped) touch(accountId)
 }
 
@@ -1124,6 +1280,9 @@ export async function tick(now = Date.now()): Promise<void> {
   running = true
   try {
     const db = getDb()
+    // Uma única notificação por rodada, mesmo com várias mensagens novas para aprovar
+    let waiting = 0
+    let waitingAccount: string | null = null
     for (const a of listAccounts()) {
       const on = !!a.modules.recuperacao && !!a.modules.ia
       if (!on) {
@@ -1131,9 +1290,13 @@ export async function tick(now = Date.now()): Promise<void> {
         db.prepare(
           "UPDATE followup_attempts SET status = 'descartada', error = 'módulo desligado' WHERE account_id = ? AND status IN ('pendente', 'aprovada')"
         ).run(a.id)
+        stopAllFollowups(a.id, 'desligado', now)
         continue
       }
-      if (!getRecoverySettings(a.id).enabled) continue
+      if (!getRecoverySettings(a.id).enabled) {
+        stopAllFollowups(a.id, 'desligado', now)
+        continue
+      }
       try {
         // Mensagem que ninguém aprovou a tempo
         const old = db
@@ -1149,12 +1312,17 @@ export async function tick(now = Date.now()): Promise<void> {
           .all(a.id, now, getRecoverySettings(a.id).attempts) as unknown as FollowupRow[]
         for (const f of end) concludeFollowup(f, now)
         await scanCandidates(a.id, now)
-        await processDue(a.id, now)
+        const written = await processDue(a.id, now)
+        if (written && getRecoverySettings(a.id).mode === 'approve') {
+          waiting += written
+          waitingAccount ??= a.id
+        }
         deliverApproved(a.id, now)
       } catch (e) {
         log.warn('Falha na recuperação de vendas', { erro: String((e as Error).message).slice(0, 200) })
       }
     }
+    if (waiting) recoveryEvents.emit('approval', { accountId: waitingAccount, count: waiting })
   } finally {
     running = false
   }

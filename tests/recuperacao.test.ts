@@ -112,7 +112,7 @@ beforeEach(() => {
     .prepare('INSERT INTO accounts (id, name, color, modules, created_at) VALUES (?, ?, ?, ?, ?)')
     .run(ACC, 'Ótica Centro', '#000000', '{}', Date.now())
   updateAccount(ACC, { modules: { ia: true, recuperacao: true } })
-  R.saveRecoverySettings(ACC, { enabled: true })
+  R.saveRecoverySettings(ACC, { enabled: true, tags: ['Orçamento'] })
   setAntiBan(ACC, { hourStart: 0, hourEnd: 24, days: [0, 1, 2, 3, 4, 5, 6] })
   saveBusinessContext(ACC, {
     products: 'Armação a partir de R$ 199. Lente pronta em 7 dias.',
@@ -242,7 +242,7 @@ describe('desconto: o número vem só da regra', () => {
   })
 
   test('estimativa do desconto: o valor pago já tem o desconto, e o teto vale', () => {
-    expect(estimateDiscountCents(9000, { pct: 10, capCents: null })).toBe(1000)
+    expect(estimateDiscountCents(9000, { pct: 10, capCents: null })).toBe(900)
     expect(estimateDiscountCents(9000, { pct: 10, capCents: 500 })).toBe(500)
     expect(estimateDiscountCents(0, { pct: 10, capCents: null })).toBe(0)
     expect(estimateDiscountCents(9000, null)).toBe(0)
@@ -256,7 +256,7 @@ describe('fluxo: aprovar antes', () => {
     await runUntilQueued()
     const q = R.listQueue(ACC)
     expect(q).toHaveLength(1)
-    expect(q[0]).toMatchObject({ n: 1, of: 3, status: 'pendente', reasonIn: 'orcamento', offer: null })
+    expect(q[0]).toMatchObject({ n: 1, of: 3, status: 'pendente', reasonIn: 'etiqueta', offer: null })
     expect(q[0].chatName).toBe('Ana Souza')
     // sem clique nada sai, nem depois de várias rodadas
     await R.tick()
@@ -367,7 +367,7 @@ describe('fluxo: aprovar antes', () => {
     mockComplete.mockResolvedValueOnce({ text: '{"acao":"desistir"}', provider: 't', model: 'm' })
     await R.scanCandidates(ACC)
     await R.processDue(ACC)
-    expect(fup()).toMatchObject({ status: 'parado', stop_reason: 'sem_interesse' })
+    expect(fup()).toMatchObject({ status: 'parado', stop_reason: 'desistiu' })
   })
 })
 
@@ -540,7 +540,10 @@ describe('quem entra', () => {
     )
     const c = Number(card.run(pl, won, pid, Date.now(), Date.now()).lastInsertRowid)
     expect(await R.scanCandidates(ACC)).toBe(0)
-    db.prepare('UPDATE pipeline_cards SET stage_id = ? WHERE id = ?').run(stage('Conversa', 'open', 0), c)
+    const open = stage('Conversa', 'open', 0)
+    db.prepare('UPDATE pipeline_cards SET stage_id = ? WHERE id = ?').run(open, c)
+    expect(await R.scanCandidates(ACC)).toBe(0) // coluna não escolhida na regra
+    R.saveRecoverySettings(ACC, { stageIds: [open] })
     expect(await R.scanCandidates(ACC)).toBe(1)
     expect(fup()).toBeDefined()
     expect((getDb().prepare('SELECT reason_in FROM followups').get() as { reason_in: string }).reason_in).toBe('funil')
@@ -555,7 +558,7 @@ describe('quem entra', () => {
         .prepare('INSERT INTO people (account_id, phone, jid, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
         .run(ACC, phone, JID, 1, 1).lastInsertRowid
     )
-    getDb().prepare('INSERT INTO person_tags (person_id, tag) VALUES (?, ?)').run(pid, 'orçamento')
+    getDb().prepare('INSERT INTO person_tags (person_id, tag) VALUES (?, ?)').run(pid, 'Orçamento')
     expect(await R.scanCandidates(ACC)).toBe(0)
     // regra de 1 hora: entra
     R.saveRecoverySettings(ACC, { idleHours: 1 })
@@ -606,7 +609,7 @@ describe('quem entra', () => {
   })
 
   test('interesse pela IA: só trechos anonimizados vão, e "sem interesse" não é perguntado de novo', async () => {
-    R.saveRecoverySettings(ACC, { byInterest: true, byQuote: false, byFunnel: false })
+    R.saveRecoverySettings(ACC, { byInterest: true, tags: [] })
     addMsg(false, 'Oi sou a Ana Souza, quanto custa a armação? meu email ana@x.com', nowSec() - 2 * DAY - 60)
     addMsg(true, 'A partir de R$ 199.', nowSec() - 2 * DAY)
     mockComplete.mockResolvedValueOnce({ text: '{"interesse":false}', provider: 't', model: 'm' })
@@ -620,7 +623,7 @@ describe('quem entra', () => {
   })
 
   test('interesse pela IA: com interesse, abre; se a IA cai, não abre', async () => {
-    R.saveRecoverySettings(ACC, { byInterest: true, byQuote: false, byFunnel: false })
+    R.saveRecoverySettings(ACC, { byInterest: true, tags: [] })
     addMsg(false, 'Quanto custa?', nowSec() - 2 * DAY - 60)
     addMsg(true, 'A partir de R$ 199.', nowSec() - 2 * DAY)
     mockComplete.mockRejectedValueOnce(new Error('fora'))
@@ -664,10 +667,10 @@ describe('venda recuperada em Vendas e no Painel', () => {
     expect(d.sourceName).toBe('Recuperação')
     expect(fup().status).toBe('recuperada')
     const st = R.recoveryStats(ACC)
-    expect(st).toMatchObject({ sent: 1, replied: 1, recovered: 1, recoveredCents: 9000, discountCents: 1000 })
+    expect(st).toMatchObject({ sent: 1, replied: 1, recovered: 1, recoveredCents: 9000, discountCents: 900 })
 
     const p = panel({ accountIds: [ACC], from: Date.now() - 86_400_000, to: Date.now() + 1000, bucket: 'day' })
-    expect(p.totals).toMatchObject({ recovered: 1, recoveredCents: 9000, recoveredDiscountCents: 1000 })
+    expect(p.totals).toMatchObject({ recovered: 1, recoveredCents: 9000, recoveredDiscountCents: 900 })
 
     // apagar a venda tira a recuperação e o custo
     deleteDeal(ACC, d.id)
@@ -689,6 +692,7 @@ describe('venda recuperada em Vendas e no Painel', () => {
     getDb()
       .prepare('UPDATE followup_attempts SET valid_until = ?')
       .run(Date.now() - 1000)
+    R.onClientReply(ACC, addMsg(false, 'Fechado, vou levar', nowSec()))
     saveDeal(ACC, { chatJid: JID, status: 'won', amountCents: 9000 })
     expect(R.recoveryStats(ACC)).toMatchObject({ recovered: 1, discountCents: 0 })
   })
