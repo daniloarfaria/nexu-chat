@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { AiPreset, AiProvider, AiSettings } from '@shared/types'
 import { getDb, getSetting, setSetting } from '../db'
 import { sealString, unsealString } from '../secure'
-import { dayKey } from '@shared/rules'
+import { dayKey, isLoopbackUrl } from '@shared/rules'
 import { log } from '../log'
 
 /**
@@ -129,6 +129,13 @@ export const PRESETS: Record<
   }
 }
 
+/** Entram com "usar em conversas de clientes" desligado: o dono liga de propósito, depois de ler o aviso. */
+const ASK_BEFORE_CUSTOMERS: ReadonlySet<AiPreset> = new Set(['nvidia', 'deepseek'])
+/** Sem garantia pública sobre o uso dos textos: ficam sempre como "pode treinar". */
+const ALWAYS_TRAINS: ReadonlySet<AiPreset> = new Set(['nvidia', 'deepseek'])
+/** Só valem apontando para este computador. */
+const LOOPBACK_ONLY: ReadonlySet<AiPreset> = new Set(['ollama', 'local'])
+
 export type Tier = 'fast' | 'smart'
 
 export interface AiRequest {
@@ -153,6 +160,7 @@ interface Row {
   no_customer_data: number
   rpm: number | null
   rpd: number | null
+  monthly_limit: number | null
   paid: number
   enabled: number
   priority: number
@@ -176,7 +184,19 @@ function usage(id: number): { requests: number; errors: number } {
   return r ?? { requests: 0, errors: 0 }
 }
 
+/** Pedidos de cada provedor no mês corrente. */
+function usageThisMonth(): Map<number, number> {
+  const rows = getDb()
+    .prepare(
+      'SELECT provider_id AS id, COALESCE(SUM(requests), 0) AS n FROM ai_usage WHERE day LIKE ? GROUP BY provider_id'
+    )
+    .all(`${dayKey().slice(0, 7)}-%`) as Array<{ id: number; n: number }>
+  return new Map(rows.map((r) => [r.id, r.n]))
+}
+
 export function listProviders(): AiProvider[] {
+  const month = usageThisMonth()
+  const defaultLimit = getAiSettings().paidMonthlyLimit
   return (getDb().prepare('SELECT * FROM ai_providers ORDER BY paid, priority, id').all() as unknown as Row[]).map(
     (r) => {
       const u = usage(r.id)
@@ -197,7 +217,9 @@ export function listProviders(): AiProvider[] {
         priority: r.priority,
         usedToday: u.requests,
         errorsToday: u.errors,
-        cooldownUntil: r.cooldown_until
+        cooldownUntil: r.cooldown_until,
+        usedMonth: month.get(r.id) ?? 0,
+        monthlyLimit: r.paid ? (r.monthly_limit ?? defaultLimit) : null
       }
     }
   )
@@ -213,11 +235,12 @@ export function saveProvider(p: {
   modelSmart?: string
   trainsOnData?: boolean
   noCustomerData?: boolean
+  rpm?: number | null
+  monthlyLimit?: number | null
   enabled?: boolean
   priority?: number
 }): AiProvider {
   const db = getDb()
-  const preset = p.preset !== 'custom' ? PRESETS[p.preset] : null
   const cur = p.id
     ? (db.prepare('SELECT * FROM ai_providers WHERE id = ?').get(p.id) as unknown as Row | undefined)
     : undefined
@@ -225,21 +248,31 @@ export function saveProvider(p: {
   // A IA no computador só é criada pelo assistente "Configurar IA" (que baixa e confere o motor)
   if ((p.preset === 'local' || cur?.preset === 'local') && (!cur || cur.preset !== p.preset))
     throw new Error('Use o botão Configurar IA para instalar a IA no computador')
+  // O preset gravado é o que vale: o pedido não troca o tipo de um provedor que já existe
+  const kind: AiPreset = cur?.preset ?? p.preset
+  const preset = kind !== 'custom' ? PRESETS[kind] : null
   const baseUrl = validateBaseUrl(p.baseUrl ?? cur?.base_url ?? preset?.baseUrl ?? '')
+  if (LOOPBACK_ONLY.has(kind) && !isLoopbackUrl(baseUrl))
+    throw new Error(
+      'Este provedor roda no próprio computador: o endereço precisa ser localhost ou 127.0.0.1. Para um servidor de fora, cadastre um provedor personalizado.'
+    )
   let key = p.apiKey === undefined ? undefined : p.apiKey ? sealString(p.apiKey.trim()) : null
   // Endereço mudou de servidor: a chave antiga não vai junto (precisa ser informada de novo)
   if (cur && key === undefined && new URL(baseUrl).origin !== new URL(cur.base_url).origin) key = null
+  const trains = (v: boolean): number => (ALWAYS_TRAINS.has(kind) || v ? 1 : 0)
   if (p.id && cur) {
     db.prepare(
-      `UPDATE ai_providers SET name = ?, base_url = ?, api_key = ?, model_fast = ?, model_smart = ?, trains_on_data = ?, no_customer_data = ?, enabled = ?, priority = ?, cooldown_until = 0 WHERE id = ?`
+      `UPDATE ai_providers SET name = ?, base_url = ?, api_key = ?, model_fast = ?, model_smart = ?, trains_on_data = ?, no_customer_data = ?, rpm = ?, monthly_limit = ?, enabled = ?, priority = ?, cooldown_until = 0 WHERE id = ?`
     ).run(
       p.name ?? cur.name,
       baseUrl,
       key === undefined ? cur.api_key : key,
       p.modelFast ?? cur.model_fast,
       p.modelSmart ?? cur.model_smart,
-      p.trainsOnData === undefined ? cur.trains_on_data : p.trainsOnData ? 1 : 0,
+      trains(p.trainsOnData ?? !!cur.trains_on_data),
       p.noCustomerData === undefined ? cur.no_customer_data : p.noCustomerData ? 1 : 0,
+      p.rpm === undefined ? cur.rpm : p.rpm,
+      p.monthlyLimit === undefined ? cur.monthly_limit : p.monthlyLimit,
       p.enabled === undefined ? cur.enabled : p.enabled ? 1 : 0,
       p.priority ?? cur.priority,
       p.id
@@ -248,20 +281,21 @@ export function saveProvider(p: {
   }
   const id = db
     .prepare(
-      `INSERT INTO ai_providers (preset, name, base_url, api_key, model_fast, model_smart, trains_on_data, no_customer_data, rpm, rpd, paid, enabled, priority, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
+      `INSERT INTO ai_providers (preset, name, base_url, api_key, model_fast, model_smart, trains_on_data, no_customer_data, rpm, rpd, monthly_limit, paid, enabled, priority, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
     )
     .run(
-      p.preset,
+      kind,
       p.name ?? preset?.name ?? 'Provedor',
       baseUrl,
       key ?? null,
       p.modelFast ?? preset?.fast ?? '',
       p.modelSmart ?? preset?.smart ?? p.modelFast ?? '',
-      (p.trainsOnData ?? preset?.trains ?? true) ? 1 : 0,
-      p.noCustomerData ? 1 : 0,
-      preset?.rpm ?? null,
+      trains(p.trainsOnData ?? preset?.trains ?? true),
+      (p.noCustomerData ?? ASK_BEFORE_CUSTOMERS.has(kind)) ? 1 : 0,
+      p.rpm === undefined ? (preset?.rpm ?? null) : p.rpm,
       preset?.rpd ?? null,
+      p.monthlyLimit ?? null,
       preset?.paid ? 1 : 0,
       p.priority ?? 100,
       Date.now()
@@ -321,16 +355,6 @@ function underRpm(p: AiProvider): boolean {
   const list = (minuteWindow.get(p.id) ?? []).filter((t) => now - t < 60_000)
   minuteWindow.set(p.id, list)
   return list.length < p.rpm
-}
-
-function paidThisMonth(): number {
-  const month = dayKey().slice(0, 7)
-  const r = getDb()
-    .prepare(
-      `SELECT COALESCE(SUM(u.requests), 0) AS n FROM ai_usage u JOIN ai_providers p ON p.id = u.provider_id WHERE p.paid = 1 AND u.day LIKE ?`
-    )
-    .get(`${month}%`) as { n: number }
-  return r.n
 }
 
 function track(id: number, ok: boolean, tokens = 0): void {
@@ -415,6 +439,8 @@ async function callOpenAiCompatible(
         { role: 'user', content: req.prompt }
       ]
     }),
+    // nunca segue redirecionamento: a chave e o texto só vão para o endereço cadastrado
+    redirect: 'error',
     signal: AbortSignal.timeout(opts.timeoutMs ?? 90_000)
   })
   if (!res.ok) {
@@ -431,6 +457,7 @@ async function callOpenAiCompatible(
     if (res.status === 401 || res.status === 403)
       throw new ProviderError('chave inválida ou sem permissão', 6 * 3600_000, true)
     if (res.status >= 500) throw new ProviderError(`erro do servidor ${res.status}`, 30_000)
+    if (res.status === 404) throw new ProviderError('modelo ou endereço não encontrado (erro 404)', 5 * 60_000)
     throw new ProviderError(`erro ${res.status}`, 5 * 60_000)
   }
   const json = (await res.json()) as {
@@ -483,19 +510,22 @@ export function candidates(
   providers: AiProvider[],
   req: Pick<AiRequest, 'customerData' | 'premium'> & { tier?: Tier },
   s: AiSettings,
-  paidUsed: number,
   now = Date.now()
 ): AiProvider[] {
   const usable = providers.filter(
     (p) =>
       p.enabled &&
-      (p.hasKey || p.preset === 'ollama' || p.preset === 'local') &&
+      (p.hasKey || LOOPBACK_ONLY.has(p.preset)) &&
+      // Ollama só vale se o endereço for mesmo deste computador (cadastro antigo pode apontar para fora).
+      // A IA instalada pelo app ('local') não entra aqui: o endereço dela é dado pelo motor a cada pedido.
+      !(p.preset === 'ollama' && !isLoopbackUrl(p.baseUrl)) &&
       p.cooldownUntil <= now &&
       (!p.rpd || p.usedToday < p.rpd) &&
       // dados de clientes: no modo estrito, só provedores que não treinam com os dados
       !(req.customerData && p.noCustomerData) &&
       !(req.customerData && s.privacy === 'estrita' && p.trainsOnData) &&
-      !(p.paid && paidUsed >= s.paidMonthlyLimit)
+      // cada provedor pago tem o seu contador e o seu limite do mês: esgotar um não tira o outro
+      !(p.paid && (p.usedMonth ?? 0) >= (p.monthlyLimit ?? s.paidMonthlyLimit))
   )
   const free = usable
     .filter((p) => !p.paid && p.preset !== 'local')
@@ -509,7 +539,7 @@ export function candidates(
 
 export async function complete(req: AiRequest): Promise<{ text: string; provider: string; model: string }> {
   const settings = getAiSettings()
-  const list = candidates(listProviders(), req, settings, paidThisMonth())
+  const list = candidates(listProviders(), req, settings)
   if (!list.length) {
     throw new Error(
       'Nenhum provedor de IA disponível. Cadastre uma chave em Assistente de IA → Provedores (Groq e Gemini têm plano gratuito).'
@@ -544,7 +574,11 @@ export async function complete(req: AiRequest): Promise<{ text: string; provider
         .run(p.name, model, req.task, req.customerData ? 1 : 0, req.system.length + req.prompt.length, Date.now())
       return { text: r.text, provider: p.name, model }
     } catch (e) {
-      const err = e instanceof ProviderError ? e : new ProviderError((e as Error).message, 30_000)
+      // erro inesperado (rede, redirecionamento, tempo): mensagem genérica, sem o texto cru do erro
+      const err =
+        e instanceof ProviderError
+          ? e
+          : new ProviderError((e as Error)?.name === 'TimeoutError' ? 'tempo esgotado' : 'falha de conexão', 30_000)
       track(p.id, false)
       if (err.retryAfterMs) cooldown(p.id, err.retryAfterMs)
       errors.push(`${p.name}: ${err.message}`)
@@ -566,6 +600,10 @@ function explainTestError(e: unknown): string {
     if (/limite/.test(msg))
       return 'Você atingiu o limite de uso do provedor. Espere um pouco ou confira o seu plano no site dele.'
     if (/servidor/.test(msg)) return `O provedor está com problema agora (${msg}). Tente mais tarde.`
+    if (/404/.test(msg))
+      return 'O provedor não encontrou o modelo ou o endereço (erro 404). O nome do modelo pode ter mudado; edite o modelo em Provedores, conferindo o nome no site do provedor.'
+    if (/400|422/.test(msg))
+      return `O provedor recusou o pedido (${msg}). O nome do modelo pode ter mudado; edite o modelo em Provedores, conferindo o nome no site do provedor.`
     return `O provedor recusou o pedido (${msg}). Confira o nome do modelo e o endereço.`
   }
   return 'Não consegui conectar ao provedor. Confira a sua internet e o endereço da API.'

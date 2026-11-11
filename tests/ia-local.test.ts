@@ -473,7 +473,7 @@ describe('roteador com IA no computador', () => {
   const claude = p({ id: 3, preset: 'claude', name: 'Claude', paid: true })
   const s: AiSettings = { privacy: 'anonimizar', paidMonthlyLimit: 10 }
   const names = (list: AiProvider[], req: Parameters<typeof candidates>[1], set = s): string[] =>
-    candidates(list, req, set, 0).map((x) => x.name)
+    candidates(list, req, set).map((x) => x.name)
 
   test('sem IA local: nada muda', () => {
     expect(names([groq, claude], { customerData: false, tier: 'fast' })).toEqual(['Groq', 'Claude'])
@@ -582,8 +582,7 @@ describe('roteador: pedido grande demais para a IA local', () => {
       candidates(
         listProviders(),
         { customerData: false, tier: 'fast' },
-        { privacy: 'anonimizar', paidMonthlyLimit: 0 },
-        0
+        { privacy: 'anonimizar', paidMonthlyLimit: 0 }
       )
     ).toHaveLength(1)
   })

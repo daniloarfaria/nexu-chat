@@ -494,6 +494,11 @@ const MIGRATIONS: string[] = [
   `
   -- provedores de IA (NVIDIA, DeepSeek)
   ALTER TABLE ai_providers ADD COLUMN no_customer_data INTEGER NOT NULL DEFAULT 0;
+  `,
+  `
+  -- provedores de IA: limite mensal por provedor pago; NVIDIA e DeepSeek sem conversas de clientes por padrão
+  ALTER TABLE ai_providers ADD COLUMN monthly_limit INTEGER;
+  UPDATE ai_providers SET no_customer_data = 1 WHERE preset IN ('nvidia', 'deepseek');
   `
 ]
 

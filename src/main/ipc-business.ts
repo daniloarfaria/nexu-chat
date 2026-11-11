@@ -682,6 +682,8 @@ export function registerBusinessIpc(handle: Handle, getWindow: () => BrowserWind
         modelSmart: z.string().max(120).optional(),
         trainsOnData: z.boolean().optional(),
         noCustomerData: z.boolean().optional(),
+        rpm: z.number().int().min(1).max(10_000).nullable().optional(),
+        monthlyLimit: z.number().int().min(0).max(100_000).nullable().optional(),
         enabled: z.boolean().optional(),
         priority: z.number().int().min(0).max(1000).optional()
       })

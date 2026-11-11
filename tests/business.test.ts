@@ -318,15 +318,16 @@ describe('IA', () => {
     p({ id: 6, name: 'em pausa', cooldownUntil: Date.now() + 60_000 })
   ]
   test('gratuitos primeiro, pago por último; pula sem chave, esgotado e em pausa', () => {
-    const r = candidates(list, { customerData: false }, { privacy: 'anonimizar', paidMonthlyLimit: 10 }, 0)
+    const r = candidates(list, { customerData: false }, { privacy: 'anonimizar', paidMonthlyLimit: 10 })
     expect(r.map((x) => x.name)).toEqual(['gemini', 'groq', 'claude'])
   })
   test('modo estrito: dados de clientes só em quem não treina; limite mensal do pago', () => {
-    const r = candidates(list, { customerData: true }, { privacy: 'estrita', paidMonthlyLimit: 10 }, 10)
+    const usados = list.map((x) => (x.paid ? { ...x, usedMonth: 10 } : x))
+    const r = candidates(usados, { customerData: true }, { privacy: 'estrita', paidMonthlyLimit: 10 })
     expect(r.map((x) => x.name)).toEqual(['groq'])
   })
   test('tarefa premium tenta o pago primeiro', () => {
-    const r = candidates(list, { customerData: false, premium: true }, { privacy: 'livre', paidMonthlyLimit: 10 }, 0)
+    const r = candidates(list, { customerData: false, premium: true }, { privacy: 'livre', paidMonthlyLimit: 10 })
     expect(r[0].name).toBe('claude')
   })
 })

@@ -593,11 +593,15 @@ export interface AiProvider {
   usedToday: number
   errorsToday: number
   cooldownUntil: number
+  /** Pedidos feitos neste mês (o limite mensal de cada provedor pago é contado só com os pedidos dele) */
+  usedMonth?: number
+  /** Limite de pedidos por mês deste provedor pago; vazio em provedor não pago */
+  monthlyLimit?: number | null
 }
 
 export interface AiSettings {
   privacy: AiPrivacy
-  paidMonthlyLimit: number // máximo de chamadas pagas por mês
+  paidMonthlyLimit: number // limite mensal padrão de cada provedor pago que não tem limite próprio
 }
 
 export interface AiUsageEntry {
@@ -716,6 +720,8 @@ export interface TranscribeStatus {
   settings: TranscribeSettings
   local: { ready: boolean; whisper: string | null; model: string | null; ffmpeg: string | null }
   groq: boolean
+  /** Há Groq com chave, mas a privacidade escolhida não deixa enviar o áudio do cliente */
+  groqBlocked: 'sem-clientes' | 'estrita' | 'treina' | null
 }
 
 // ---------- Licença ----------

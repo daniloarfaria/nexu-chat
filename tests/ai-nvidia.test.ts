@@ -83,7 +83,7 @@ describe('provedor NVIDIA', () => {
     expect(nv.cooldownUntil).toBeGreaterThan(Date.now())
     expect(nv.errorsToday).toBe(1)
     expect(
-      candidates(listProviders(), { customerData: false }, { privacy: 'anonimizar', paidMonthlyLimit: 300 }, 0).map(
+      candidates(listProviders(), { customerData: false }, { privacy: 'anonimizar', paidMonthlyLimit: 300 }).map(
         (p) => p.preset
       )
     ).toEqual(['groq'])
@@ -91,7 +91,7 @@ describe('provedor NVIDIA', () => {
 
   test('modo estrito com dados de cliente pula a NVIDIA (pode treinar com os dados)', () => {
     saveProvider({ preset: 'nvidia', apiKey: 'nvapi-abc' })
-    const l = candidates(listProviders(), { customerData: true }, { privacy: 'estrita', paidMonthlyLimit: 300 }, 0)
+    const l = candidates(listProviders(), { customerData: true }, { privacy: 'estrita', paidMonthlyLimit: 300 })
     expect(l).toEqual([])
   })
 
@@ -137,15 +137,15 @@ describe('provedor DeepSeek', () => {
     expect(JSON.parse(init.body).model).toBe('deepseek-v4-pro')
   })
 
-  test('"não usar em conversas de clientes" só deixa tarefas sem dado de cliente', () => {
-    const p = saveProvider({ preset: 'deepseek', apiKey: 'sk-ds-1', noCustomerData: true })
+  test('sem "usar em conversas de clientes" só faz tarefas sem dado de cliente (é o padrão)', () => {
+    const p = saveProvider({ preset: 'deepseek', apiKey: 'sk-ds-1' })
     expect(p.noCustomerData).toBe(true)
     const s = { privacy: 'livre' as const, paidMonthlyLimit: 300 }
-    expect(candidates(listProviders(), { customerData: true }, s, 0)).toEqual([])
-    expect(candidates(listProviders(), { customerData: false }, s, 0).map((x) => x.preset)).toEqual(['deepseek'])
-    // pode desmarcar depois
+    expect(candidates(listProviders(), { customerData: true }, s)).toEqual([])
+    expect(candidates(listProviders(), { customerData: false }, s).map((x) => x.preset)).toEqual(['deepseek'])
+    // o dono liga depois, de propósito
     saveProvider({ id: p.id, preset: 'deepseek', noCustomerData: false })
-    expect(candidates(listProviders(), { customerData: true }, s, 0)).toHaveLength(1)
+    expect(candidates(listProviders(), { customerData: true }, s)).toHaveLength(1)
   })
 
   test('chave recusada (401) no teste dá mensagem clara', async () => {
