@@ -13,6 +13,7 @@ import type {
 import { getDb, transaction } from '../db'
 import { log } from '../log'
 import { extractAdAttribution, recordAttribution } from '../ads'
+import { moveFollowups } from '../recoveryLink'
 import { mutationOf, parseMessage, previewOf } from './parse'
 
 /**
@@ -130,6 +131,7 @@ function mergeChat(accountId: string, from: string, to: string): void {
   db.prepare('UPDATE deals SET chat_jid = ? WHERE account_id = ? AND chat_jid = ?').run(to, accountId, from)
   db.prepare('UPDATE auto_log SET jid = ? WHERE account_id = ? AND jid = ?').run(to, accountId, from)
   mergeAttribution(accountId, from, to)
+  moveFollowups(accountId, from, to)
   db.prepare('UPDATE OR IGNORE chat_ai_mode SET chat_jid = ? WHERE account_id = ? AND chat_jid = ?').run(
     to,
     accountId,

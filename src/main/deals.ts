@@ -6,7 +6,7 @@ import { dayKey } from '@shared/rules'
 import { findPersonByJid } from './people'
 import { getAccount } from './accounts'
 import { getAttribution } from './ads'
-import { linkDeal, recoveryTouch } from './recoveryLink'
+import { MAX_RECOVERY_CENTS, linkDeal, recoveryTouch } from './recoveryLink'
 
 /** Por quantos dias, depois do primeiro contato vindo de anúncio, a venda ainda conta como "Anúncio". */
 export const AD_ORIGIN_DAYS = 30
@@ -62,7 +62,11 @@ export function saveDeal(
   const adOrigin = !touch && getAccount(accountId)?.modules.metaConversoes ? getAttribution(accountId, d.chatJid) : null
   const fromAd = !!adOrigin && Date.now() / 1000 - adOrigin.firstTs <= AD_ORIGIN_DAYS * 86400
   // Uma recuperação de vendas enviada há pouco vale mais que uma campanha antiga: foi ela que chamou o cliente de volta
-  const recovery = d.chatJid.endsWith('@g.us') ? null : recoveryTouch(accountId, d.chatJid)
+  // Só venda ganha, de valor plausível, e só se o cliente respondeu depois da mensagem de recuperação
+  const recovery =
+    d.chatJid.endsWith('@g.us') || d.status !== 'won' || d.amountCents > MAX_RECOVERY_CENTS
+      ? null
+      : recoveryTouch(accountId, d.chatJid)
   const sourceType: Deal['sourceType'] = d.chatJid.endsWith('@g.us')
     ? 'group'
     : recovery
