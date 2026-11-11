@@ -1,4 +1,4 @@
-import type { PanelBucket, PanelData, PanelFunnelStage, PanelOriginKind, PanelQuery, StageKind } from '@shared/types'
+import type { PanelBucket, PanelData, PanelFunnelStage, PanelOriginKind, PanelQuery } from '@shared/types'
 import { dayKey, phoneIdentity, phoneVariants } from '@shared/rules'
 import { getDb } from './db'
 import { getAccount } from './accounts'
@@ -280,7 +280,7 @@ export function panel(q: PanelQuery): PanelData {
       recoveredCents: rec?.revenueCents ?? 0
     },
     pipelines,
-    funnel: chosen ? { pipelineId: chosen.id, name: chosen.name, stages: funnelStages(chosen.id) } : null,
+    funnel: chosen ? buildFunnel(chosen.id, chosen.name) : null,
     revenue: [...buckets.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([key, v]) => ({ key, label: key, ...v })),
@@ -296,47 +296,35 @@ export function panel(q: PanelQuery): PanelData {
   }
 }
 
+/** Por coluna: só quantos cartões e a soma dos valores. Sem presumir ordem nem significado das colunas. */
+function buildFunnel(pipelineId: number, name: string): NonNullable<PanelData['funnel']> {
+  const stages = funnelStages(pipelineId)
+  return {
+    pipelineId,
+    name,
+    stages,
+    totalCount: stages.reduce((n, s) => n + s.count, 0),
+    totalValueCents: stages.reduce((n, s) => n + s.valueCents, 0)
+  }
+}
+
 function funnelStages(pipelineId: number): PanelFunnelStage[] {
   const db = getDb()
   const stages = db
-    .prepare('SELECT id, name, kind FROM pipeline_stages WHERE pipeline_id = ? ORDER BY position, id')
-    .all(pipelineId) as Array<{ id: number; name: string; kind: StageKind }>
+    .prepare('SELECT id, name FROM pipeline_stages WHERE pipeline_id = ? ORDER BY position, id')
+    .all(pipelineId) as Array<{ id: number; name: string }>
   const agg = new Map(
     (
       db
         .prepare(
-          `SELECT stage_id, COUNT(*) AS n, SUM(value_cents) AS cents, AVG(moved_at) AS moved FROM pipeline_cards
+          `SELECT stage_id, COUNT(*) AS n, SUM(value_cents) AS cents FROM pipeline_cards
            WHERE pipeline_id = ? GROUP BY stage_id`
         )
-        .all(pipelineId) as Array<{ stage_id: number; n: number; cents: number | null; moved: number }>
+        .all(pipelineId) as Array<{ stage_id: number; n: number; cents: number | null }>
     ).map((r) => [r.stage_id, r])
   )
-  const now = Date.now()
-  // "Chegou até aqui" = cartões que estão nesta coluna ou em uma mais adiante (colunas de perda não entram)
-  const reached: number[] = new Array(stages.length).fill(0)
-  let acc = 0
-  for (let i = stages.length - 1; i >= 0; i--) {
-    if (stages[i].kind !== 'lost') acc += agg.get(stages[i].id)?.n ?? 0
-    reached[i] = stages[i].kind === 'lost' ? 0 : acc
-  }
-  let prev: number | null = null
-  return stages.map((s, i) => {
+  return stages.map((s) => {
     const a = agg.get(s.id)
-    let rate: number | null = null
-    if (s.kind !== 'lost') {
-      if (prev != null && prev > 0) rate = reached[i] / prev
-      prev = reached[i]
-    }
-    return {
-      id: s.id,
-      name: s.name,
-      kind: s.kind,
-      count: a?.n ?? 0,
-      valueCents: a?.cents ?? 0,
-      reached: reached[i],
-      rateFromPrev: rate,
-      // Colunas de ganho e perda são o fim do caminho: tempo parado não faz sentido
-      avgIdleDays: a && s.kind === 'open' ? Math.max(0, (now - a.moved) / DAY_MS) : null
-    }
+    return { id: s.id, name: s.name, count: a?.n ?? 0, valueCents: a?.cents ?? 0 }
   })
 }

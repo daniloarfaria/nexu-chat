@@ -91,70 +91,59 @@ function RevenueChart({ data, bucket }: { data: PanelData['revenue']; bucket: Pa
 }
 
 function Funnel({ data }: { data: NonNullable<PanelData['funnel']> }): React.JSX.Element {
-  const top = Math.max(1, ...data.stages.map((s) => (s.kind === 'lost' ? s.count : s.reached)))
+  const top = Math.max(1, ...data.stages.map((s) => s.count))
   return (
     <div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[520px] text-[13.5px]">
-          <caption className="sr-only">Funil {data.name}: clientes por coluna</caption>
+        <table className="w-full min-w-[420px] text-[13.5px]">
+          <caption className="sr-only">Funil {data.name}: cartões e valores por coluna</caption>
           <thead className="text-left text-[12.5px] text-ink-2">
             <tr>
               <th scope="col" className="pb-2 font-medium">
                 Coluna
               </th>
               <th scope="col" className="pb-2 font-medium">
-                Chegaram até aqui
+                Cartões
               </th>
               <th scope="col" className="pb-2 text-right font-medium">
-                Passaram
-              </th>
-              <th scope="col" className="pb-2 text-right font-medium">
-                Parados
+                Soma dos valores
               </th>
             </tr>
           </thead>
           <tbody>
-            {data.stages.map((s) => {
-              const lost = s.kind === 'lost'
-              const n = lost ? s.count : s.reached
-              return (
-                <tr key={s.id} className="border-t border-line">
-                  <th scope="row" className="max-w-[200px] truncate py-2 pr-3 text-left font-medium" title={s.name}>
-                    {s.name}
-                  </th>
-                  <td className="py-2 pr-3">
-                    <div className="flex items-center gap-2">
-                      <div className="h-4 min-w-16 flex-1 overflow-hidden rounded bg-sunken" aria-hidden>
-                        <div
-                          className="h-full rounded"
-                          style={{
-                            width: `${(n / top) * 100}%`,
-                            background: lost ? 'var(--color-ink-3)' : 'var(--color-accent)'
-                          }}
-                        />
-                      </div>
-                      <span className="tabular whitespace-nowrap">
-                        {n}
-                        {!lost && s.count !== s.reached && <span className="text-ink-2"> ({s.count} aqui)</span>}
-                      </span>
+            {data.stages.map((s) => (
+              <tr key={s.id} className="border-t border-line">
+                <th scope="row" className="max-w-[200px] truncate py-2 pr-3 text-left font-medium" title={s.name}>
+                  {s.name}
+                </th>
+                <td className="py-2 pr-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-4 min-w-16 flex-1 overflow-hidden rounded bg-sunken" aria-hidden>
+                      <div
+                        className="h-full rounded"
+                        style={{ width: `${(s.count / top) * 100}%`, background: 'var(--color-accent)' }}
+                      />
                     </div>
-                  </td>
-                  <td className="tabular py-2 text-right">
-                    {s.rateFromPrev == null ? '—' : `${Math.round(s.rateFromPrev * 100)}%`}
-                  </td>
-                  <td className="tabular py-2 text-right text-ink-2">
-                    {s.avgIdleDays == null ? '—' : `${Math.round(s.avgIdleDays)} d`}
-                  </td>
-                </tr>
-              )
-            })}
+                    <span className="tabular whitespace-nowrap">{s.count}</span>
+                  </div>
+                </td>
+                <td className="tabular py-2 text-right">{money(s.valueCents)}</td>
+              </tr>
+            ))}
           </tbody>
+          <tfoot>
+            <tr className="border-t border-line font-medium">
+              <th scope="row" className="py-2 pr-3 text-left font-medium">
+                Total do funil
+              </th>
+              <td className="tabular py-2 pr-3">{data.totalCount}</td>
+              <td className="tabular py-2 text-right">{money(data.totalValueCents)}</td>
+            </tr>
+          </tfoot>
         </table>
       </div>
       <p className="mt-3 text-[12.5px] text-ink-2">
-        <b className="font-medium">Passaram:</b> dos clientes que chegaram na coluna anterior, quantos chegaram nesta.{' '}
-        <b className="font-medium">Parados:</b> média de dias desde a última mudança de coluna (só colunas em
-        andamento).
+        Mostra só quantos cartões estão em cada coluna agora e a soma dos valores deles, na ordem que você definiu.
       </p>
     </div>
   )
@@ -485,8 +474,8 @@ export function Painel(): React.JSX.Element {
                   tenha fechado depois do período.
                 </>,
                 <>
-                  O funil mostra onde cada cliente está hoje, sem histórico de passagens. “Passaram” soma os clientes
-                  que estão naquela coluna ou mais adiante.
+                  O funil mostra, por coluna, quantos cartões estão ali hoje e a soma dos valores. O painel não
+                  interpreta o que cada coluna significa nem calcula passagem entre elas.
                 </>,
                 <>
                   {data.coverage.hasAdData
