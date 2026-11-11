@@ -12,7 +12,7 @@ import type {
 } from '@shared/types'
 import { getDb, transaction } from '../db'
 import { log } from '../log'
-import { extractAdAttribution, recordAttribution } from '../ads'
+import { extractAdAttribution, getAttribution, mergeOrigin, recordAttribution } from '../ads'
 import { mutationOf, parseMessage, previewOf } from './parse'
 
 /**
@@ -100,27 +100,22 @@ export function saveLidMappings(accountId: string, maps: Array<{ lid: string; pn
   })
 }
 
-/** A origem de anúncio segue a conversa: o destino completa campos vazios e fica com a origem mais antiga. */
+/** A origem de anúncio segue a conversa. Vale a primeira atribuição, como unidade (veja mergeOrigin em ads.ts). */
 function mergeAttribution(accountId: string, from: string, to: string): void {
   const db = getDb()
-  const src = db
-    .prepare('SELECT first_ts FROM chat_attribution WHERE account_id = ? AND chat_jid = ?')
-    .get(accountId, from) as { first_ts: number } | undefined
+  const src = getAttribution(accountId, from)
   if (!src) return
-  db.prepare('UPDATE OR IGNORE chat_attribution SET chat_jid = ? WHERE account_id = ? AND chat_jid = ?').run(
-    to,
-    accountId,
-    from
-  )
-  // Se o destino já tinha origem, a do LID completa o que faltava
-  const cols = ['conversion_source', 'entry_point', 'ad_id', 'ad_url', 'ctwa_clid']
-  const fill = cols
-    .map((c) => `${c} = COALESCE(${c}, (SELECT ${c} FROM chat_attribution WHERE account_id = ?1 AND chat_jid = ?2))`)
-    .join(', ')
-  db.prepare(
-    `UPDATE chat_attribution SET ${fill}, first_ts = MIN(first_ts, ?3) WHERE account_id = ?1 AND chat_jid = ?4`
-  ).run(accountId, from, src.first_ts, to)
+  const dst = getAttribution(accountId, to)
   db.prepare('DELETE FROM chat_attribution WHERE account_id = ? AND chat_jid = ?').run(accountId, from)
+  const m = dst ? mergeOrigin(dst, src) : src
+  db.prepare(
+    `INSERT INTO chat_attribution (account_id, chat_jid, conversion_source, entry_point, ad_id, ad_url, ctwa_clid, first_ts, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(account_id, chat_jid) DO UPDATE SET
+       conversion_source = excluded.conversion_source, entry_point = excluded.entry_point, ad_id = excluded.ad_id,
+       ad_url = excluded.ad_url, ctwa_clid = excluded.ctwa_clid, first_ts = excluded.first_ts,
+       updated_at = excluded.updated_at`
+  ).run(accountId, to, m.conversionSource, m.entryPoint, m.adId, m.adUrl, m.ctwaClid, m.firstTs, Date.now())
 }
 
 const AI_MODE_RANK: Record<string, number> = { humano: 3, espera: 2, ia: 1 }
