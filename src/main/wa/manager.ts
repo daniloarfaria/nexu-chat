@@ -6,6 +6,7 @@ import { sqliteAuthState } from './auth-store'
 import { refreshWaVersion, versionForSocket } from './version'
 import { log } from '../log'
 import { getDb } from '../db'
+import { getAccount } from '../accounts'
 import { attachStore } from './sync'
 import { findRawById, resetAccountData } from './store'
 import { deleteAccountMedia } from './media'
@@ -35,6 +36,7 @@ class WhatsAppManager extends EventEmitter {
   }
 
   getSocket(accountId: string): WASocket | null {
+    if (getAccount(accountId)?.licenseBlocked) return null
     const s = this.sessions.get(accountId)
     return s?.state.status === 'connected' ? s.sock : null
   }
@@ -53,6 +55,10 @@ class WhatsAppManager extends EventEmitter {
   }
 
   async connect(accountId: string, opts: { pairingPhone?: string } = {}): Promise<void> {
+    if (getAccount(accountId)?.licenseBlocked)
+      throw new Error(
+        'Esta conta excede o limite de números da licença ativa. Amplie a licença ou ajuste os cadastros.'
+      )
     let s = this.sessions.get(accountId)
     if (s && (s.state.status === 'connected' || s.state.status === 'connecting' || s.state.status === 'qr') && s.sock) {
       if (!opts.pairingPhone) return
@@ -82,6 +88,10 @@ class WhatsAppManager extends EventEmitter {
   }
 
   private async start(accountId: string, s: Session): Promise<void> {
+    if (getAccount(accountId)?.licenseBlocked) {
+      this.disconnect(accountId)
+      return
+    }
     if (s.stopped) return
     const gen = ++s.gen // conexões antigas reconhecem que foram substituídas
     this.setState(s, { status: 'connecting', error: undefined })

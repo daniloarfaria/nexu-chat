@@ -215,6 +215,7 @@ function AccountRow({ account }: { account: Account }): React.JSX.Element {
           Conectar ao abrir
           <Switch
             label="Conectar ao abrir o app"
+            disabled={account.licenseBlocked}
             checked={account.autoConnect}
             onChange={(v) =>
               void run('auto', () => window.api.invoke('accounts:update', { id: account.id, autoConnect: v }))
@@ -234,6 +235,7 @@ function AccountRow({ account }: { account: Account }): React.JSX.Element {
             <Button
               size="sm"
               variant="primary"
+              disabled={account.licenseBlocked}
               loading={busy === 'conn'}
               onClick={() => void run('conn', () => window.api.invoke('accounts:connect', { id: account.id }))}
             >
@@ -283,6 +285,14 @@ function AccountRow({ account }: { account: Account }): React.JSX.Element {
         </div>
       </div>
 
+      {account.licenseBlocked && (
+        <div className="mt-3">
+          <Notice tone="warn">
+            Esta conta excede a quantidade de números da licença ativa. Os dados foram preservados. Amplie a licença ou
+            ajuste os cadastros para voltar a usar.
+          </Notice>
+        </div>
+      )}
       {state.error && state.status !== 'connected' && (
         <div className="mt-3">
           <Notice tone={state.status === 'connecting' ? 'info' : 'warn'}>{state.error}</Notice>

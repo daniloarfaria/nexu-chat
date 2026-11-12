@@ -218,7 +218,10 @@ if (!app.requestSingleInstanceLock()) {
       updateBadge()
     })
     storeEvents.on('messages', (p: unknown) => send('messages:changed', p))
-    licenseEvents.on('changed', (st: unknown) => send('license:changed', st))
+    licenseEvents.on('changed', (st: unknown) => {
+      for (const account of listAccounts()) if (account.licenseBlocked) wa.disconnect(account.id)
+      send('license:changed', st)
+    })
     storeEvents.on('reload', (p: unknown) => send('messages:reload', p))
     storeEvents.on('merged', (p: unknown) => send('chats:merged', p))
     storeEvents.on('sync', (p: SyncState) => send('sync:changed', p))

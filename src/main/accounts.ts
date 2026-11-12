@@ -23,7 +23,14 @@ function toAccount(r: Row): Account {
   const modules = { ...DEFAULT_MODULES }
   for (const k of MODULE_KEYS) if (typeof mods[k] === 'boolean') modules[k] = mods[k] as boolean
   // Só fica ligado o que a licença libera
-  const allowed = licenseStatus().modules
+  const license = licenseStatus()
+  const position = (
+    getDb()
+      .prepare('SELECT COUNT(*) AS n FROM accounts WHERE created_at < ? OR (created_at = ? AND id < ?)')
+      .get(r.created_at, r.created_at, r.id) as { n: number }
+  ).n
+  const licenseBlocked = position >= license.maxAccounts
+  const allowed = licenseBlocked ? [] : license.modules
   for (const k of MODULE_KEYS) if (!allowed.includes(k)) modules[k] = false
   // O perfil pela IA, o robô de atendimento e a recuperação de vendas dependem do Assistente de IA
   if (!modules.ia) {
@@ -37,13 +44,14 @@ function toAccount(r: Row): Account {
     color: r.color,
     phone: r.phone,
     modules,
-    autoConnect: !!r.auto_connect,
+    autoConnect: !!r.auto_connect && !licenseBlocked,
+    licenseBlocked,
     createdAt: r.created_at
   }
 }
 
 export function listAccounts(): Account[] {
-  return (getDb().prepare('SELECT * FROM accounts ORDER BY created_at').all() as unknown as Row[]).map(toAccount)
+  return (getDb().prepare('SELECT * FROM accounts ORDER BY created_at, id').all() as unknown as Row[]).map(toAccount)
 }
 
 export function getAccount(id: string): Account | null {
