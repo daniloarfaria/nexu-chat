@@ -192,6 +192,15 @@ export function randomBetween(min: number, max: number, rnd = Math.random): numb
   return lo + rnd() * (hi - lo)
 }
 
+/** O endereço aponta para este computador? (localhost, 127.0.0.1 ou [::1]) */
+export function isLoopbackUrl(raw: string): boolean {
+  try {
+    return ['localhost', '127.0.0.1', '[::1]'].includes(new URL(raw.trim()).hostname)
+  } catch {
+    return false
+  }
+}
+
 export function dayKey(d = new Date()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }

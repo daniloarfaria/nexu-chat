@@ -535,6 +535,15 @@ const MIGRATIONS: string[] = [
   CREATE INDEX followup_attempts_followup ON followup_attempts (followup_id, n);
   CREATE INDEX followup_attempts_queue ON followup_attempts (account_id, status);
   CREATE INDEX followup_attempts_sent ON followup_attempts (account_id, sent_at);
+  `,
+  `
+  -- provedores de IA (NVIDIA, DeepSeek)
+  ALTER TABLE ai_providers ADD COLUMN no_customer_data INTEGER NOT NULL DEFAULT 0;
+  `,
+  `
+  -- provedores de IA: limite mensal por provedor pago; NVIDIA e DeepSeek sem conversas de clientes por padrão
+  ALTER TABLE ai_providers ADD COLUMN monthly_limit INTEGER;
+  UPDATE ai_providers SET no_customer_data = 1 WHERE preset IN ('nvidia', 'deepseek');
   `
 ]
 

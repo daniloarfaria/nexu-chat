@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Bot, BookOpenText, KeyRound, Plus, Settings2, ShieldCheck, Trash2, Wand2 } from 'lucide-react'
 import type { AiPreset, AiProvider, AiPrivacy } from '@shared/types'
+import { isLoopbackUrl } from '@shared/rules'
 import { useActiveAccount } from '../lib/store'
 import { useAction, useLoad } from '../lib/useAsync'
 import { formatDateTime, timeAgo } from '../lib/format'
@@ -22,55 +23,84 @@ import { cn } from '../lib/cn'
 import { MeuNegocio } from './ia/MeuNegocio'
 import { ConfigurarIA } from './ia/ConfigurarIA'
 
+const FAIXA = 'Tem faixa gratuita com limites; confira no site do provedor.'
+
 const PRESETS: Array<{ id: AiPreset; name: string; note: string; url: string; free: boolean }> = [
   {
     id: 'groq',
     name: 'Groq',
-    note: 'Gratuito, muito rápido, ~1.000 pedidos/dia. Não usa seus dados para treinar.',
+    note: `${FAIXA} Rápido. Não usa seus dados para treinar.`,
     url: 'https://console.groq.com/keys',
     free: true
   },
   {
     id: 'gemini',
     name: 'Google Gemini',
-    note: 'Gratuito. No plano grátis o Google pode usar os textos para melhorar produtos.',
+    note: `${FAIXA} No plano gratuito o Google pode usar os textos para melhorar produtos.`,
     url: 'https://aistudio.google.com/apikey',
     free: true
   },
   {
+    id: 'nvidia',
+    name: 'NVIDIA',
+    note: `${FAIXA} Você cola a sua chave, criada em build.nvidia.com. O modelo pode ser trocado.`,
+    url: 'https://build.nvidia.com/settings/api-keys',
+    free: true
+  },
+  {
+    id: 'deepseek',
+    name: 'DeepSeek',
+    note: 'Cobrado por uso (costuma ser barato); confira os preços no site do provedor. Você cola a sua chave.',
+    url: 'https://platform.deepseek.com/api_keys',
+    free: false
+  },
+  {
     id: 'openrouter',
     name: 'OpenRouter',
-    note: 'Vários modelos gratuitos (:free), 50 pedidos/dia. Rotas grátis podem registrar dados.',
+    note: `${FAIXA} Vários modelos com sufixo :free, com poucos pedidos por dia. Rotas gratuitas podem registrar dados.`,
     url: 'https://openrouter.ai/keys',
     free: true
   },
   {
     id: 'mistral',
     name: 'Mistral',
-    note: 'Gratuito. Treina com os dados, a menos que você desative na conta.',
+    note: `${FAIXA} Treina com os dados, a menos que você desative na conta.`,
     url: 'https://console.mistral.ai/api-keys',
     free: true
   },
   {
     id: 'ollama',
-    name: 'Ollama (local)',
-    note: 'Roda no próprio computador, nada sai daqui. Precisa instalar o Ollama.',
+    name: 'Ollama (no computador)',
+    note: 'Grátis e sem chave. Roda no próprio computador, nada sai daqui. Precisa instalar o Ollama.',
     url: 'https://ollama.com/download',
     free: true
   },
   {
     id: 'claude',
     name: 'Claude (Anthropic)',
-    note: 'Pago, melhor qualidade. Usado só quando os gratuitos falham, com limite mensal.',
+    note: 'Pago, melhor qualidade. Entra depois dos gratuitos, com limite de pedidos por mês só dele.',
     url: 'https://platform.claude.com/settings/keys',
     free: false
   }
 ]
 
+/** Provedores de nuvem: o texto sai do computador (anonimizado, conforme a privacidade escolhida). */
+const CLOUD_WARNING =
+  'Este provedor fica na nuvem: os trechos enviados (anonimizados, conforme a privacidade escolhida) saem do computador e vão para o provedor.'
+const DEEPSEEK_WARNING =
+  'Os trechos anonimizados vão para os servidores da DeepSeek, que ficam fora do Brasil. Confira a política de privacidade antes de usar com dados de clientes.'
+
+const CUSTOM_WARNING =
+  'Provedor personalizado: os trechos enviados saem do computador e vão para o endereço que você informar. Só use um endereço em que você confia.'
+/** Entram com o uso em conversas de clientes desligado: o dono liga de propósito, depois de ler o aviso. */
+const CUSTOMERS_OFF_BY_DEFAULT: AiPreset[] = ['nvidia', 'deepseek', 'custom']
+const PAID_PRESETS: AiPreset[] = ['claude', 'deepseek']
+const isLocalPreset = (preset: AiPreset): boolean => preset === 'ollama' || preset === 'local'
+
 const PRIVACY: Record<AiPrivacy, { label: string; desc: string }> = {
   estrita: {
     label: 'Estrita',
-    desc: 'Conversas de clientes só vão para provedores que não treinam com os dados (Groq, Ollama, Claude).'
+    desc: 'Conversas de clientes só vão para provedores que não treinam com os dados (Groq, Ollama, Claude). Áudios só são transcritos no próprio computador.'
   },
   anonimizar: {
     label: 'Anonimizar',
@@ -93,6 +123,12 @@ function ProviderForm({
   const [fast, setFast] = useState(p?.modelFast ?? '')
   const [smart, setSmart] = useState(p?.modelSmart ?? '')
   const [baseUrl, setBaseUrl] = useState(p?.baseUrl ?? '')
+  const [useCust, setUseCust] = useState(p ? !p.noCustomerData : !CUSTOMERS_OFF_BY_DEFAULT.includes(preset))
+  const paid = p?.paid ?? PAID_PRESETS.includes(preset)
+  const [rpm, setRpm] = useState(p?.rpm ? String(p.rpm) : '')
+  const [monthly, setMonthly] = useState(p?.monthlyLimit != null ? String(p.monthlyLimit) : '')
+  const whole = (text: string, min: number): number | undefined =>
+    text.trim() === '' || !Number.isFinite(Number(text)) ? undefined : Math.max(min, Math.round(Number(text)))
   const [test, setTest] = useState<string | null>(null)
   const { busy, error, run } = useAction()
   return (
@@ -115,6 +151,10 @@ function ProviderForm({
                   apiKey: key ? key : undefined,
                   modelFast: fast || undefined,
                   modelSmart: smart || undefined,
+                  noCustomerData: isLocalPreset(preset) ? undefined : !useCust,
+                  // só na edição: no cadastro vale o limite padrão do provedor
+                  rpm: p ? (whole(rpm, 1) ?? null) : undefined,
+                  monthlyLimit: paid ? whole(monthly, 0) : undefined,
                   baseUrl: preset === 'custom' || p ? baseUrl || undefined : undefined
                 })
               )
@@ -131,6 +171,29 @@ function ProviderForm({
     >
       <div className="flex flex-col gap-4">
         {info && <Notice tone={info.free ? 'info' : 'warn'}>{info.note}</Notice>}
+        {!isLocalPreset(preset) && (
+          <Notice tone="warn">
+            {preset === 'deepseek' ? DEEPSEEK_WARNING : preset === 'custom' ? CUSTOM_WARNING : CLOUD_WARNING}
+          </Notice>
+        )}
+        {!isLocalPreset(preset) && (
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-line p-3">
+            <div className="text-[13px]">
+              <b>Usar em conversas de clientes</b>
+              <div className="text-[12px] text-ink-2">
+                Desligado, o provedor só faz tarefas sem dado de cliente, como variações de campanha. Ligue só depois de
+                ler o aviso acima.
+              </div>
+            </div>
+            <Switch label="Usar este provedor em conversas de clientes" checked={useCust} onChange={setUseCust} />
+          </div>
+        )}
+        {isLocalPreset(preset) && (
+          <Notice tone="info">
+            Este provedor roda no próprio computador. O endereço precisa ser localhost ou 127.0.0.1; para um servidor de
+            fora, cadastre um provedor personalizado.
+          </Notice>
+        )}
         {error && <Notice tone="bad">{error}</Notice>}
         {test && <Notice tone="ok">{test}</Notice>}
         {preset !== 'ollama' && (
@@ -180,6 +243,39 @@ function ProviderForm({
             />
           </Field>
         </div>
+        {(p || paid) && (
+          <div className="grid grid-cols-2 gap-3">
+            {p && (
+              <Field label="Pedidos por minuto" htmlFor="ai-rpm" hint="Vazio: sem limite por minuto">
+                <Input
+                  id="ai-rpm"
+                  type="number"
+                  min={1}
+                  className="tabular"
+                  value={rpm}
+                  onChange={(e) => setRpm(e.target.value)}
+                />
+              </Field>
+            )}
+            {paid && (
+              <Field
+                label="Limite de pedidos por mês"
+                htmlFor="ai-monthly"
+                hint="Só deste provedor. Ao chegar no limite, ele espera o mês seguinte."
+              >
+                <Input
+                  id="ai-monthly"
+                  type="number"
+                  min={0}
+                  className="tabular"
+                  value={monthly}
+                  onChange={(e) => setMonthly(e.target.value)}
+                  placeholder="padrão: 300"
+                />
+              </Field>
+            )}
+          </div>
+        )}
       </div>
     </Drawer>
   )
@@ -197,7 +293,7 @@ function Providers(): React.JSX.Element {
     <div className="flex flex-col gap-4">
       <Section
         title="Provedores"
-        description="O app usa primeiro os gratuitos e troca sozinho de provedor quando um atinge o limite. Cadastre pelo menos dois."
+        description="O app usa primeiro os que têm faixa gratuita e troca sozinho de provedor quando um atinge o limite. Cadastre pelo menos dois. Os cobrados por uso (DeepSeek, Claude) entram depois dos gratuitos, cada um com o seu limite de pedidos por mês. Provedores de nuvem recebem trechos anonimizados das conversas."
       >
         {providers.length > 0 && (
           <ul className="mb-4 divide-y divide-line rounded-lg border border-line">
@@ -206,7 +302,18 @@ function Providers(): React.JSX.Element {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{p.name}</span>
-                    {p.paid ? <Badge tone="warn">pago</Badge> : <Badge tone="ok">grátis</Badge>}
+                    {p.paid ? (
+                      <Badge tone="warn">{p.preset === 'claude' ? 'pago' : 'cobrado por uso'}</Badge>
+                    ) : isLocalPreset(p.preset) ? (
+                      p.preset === 'local' || isLoopbackUrl(p.baseUrl) ? (
+                        <Badge tone="ok">grátis, sem chave</Badge>
+                      ) : (
+                        <Badge tone="bad">endereço de fora do computador: não é usado</Badge>
+                      )
+                    ) : (
+                      <Badge tone="info">faixa gratuita com limites</Badge>
+                    )}
+                    {p.noCustomerData && <Badge tone="warn">sem conversas de clientes</Badge>}
                     {p.trainsOnData ? <Badge>pode treinar com dados</Badge> : <Badge tone="info">não treina</Badge>}
                     {!p.hasKey && p.preset !== 'ollama' && p.preset !== 'local' && <Badge tone="bad">sem chave</Badge>}
                     {p.preset === 'local' && <Badge tone="info">no computador</Badge>}
@@ -221,6 +328,7 @@ function Providers(): React.JSX.Element {
                     {p.modelFast}
                     {p.modelSmart !== p.modelFast && ` / ${p.modelSmart}`} · hoje {p.usedToday}
                     {p.rpd ? ` de ${p.rpd}` : ''} pedidos{p.errorsToday ? ` · ${p.errorsToday} erros` : ''}
+                    {p.paid && p.monthlyLimit != null && ` · este mês ${p.usedMonth ?? 0} de ${p.monthlyLimit}`}
                   </div>
                 </div>
                 <Switch
@@ -298,24 +406,6 @@ function Providers(): React.JSX.Element {
                 <span className="text-[12px] text-ink-2">{PRIVACY[k].desc}</span>
               </button>
             ))}
-          </div>
-          <div className="mt-4 flex items-center gap-3">
-            <Field label="Limite de chamadas pagas por mês" htmlFor="ai-limit">
-              <Input
-                id="ai-limit"
-                type="number"
-                min={0}
-                className="tabular w-28"
-                defaultValue={settings.data.paidMonthlyLimit}
-                onBlur={(e) =>
-                  void run('l', () =>
-                    window.api.invoke('ai:settings-save', {
-                      paidMonthlyLimit: Math.max(0, Number(e.target.value) || 0)
-                    })
-                  )
-                }
-              />
-            </Field>
           </div>
         </Section>
       )}

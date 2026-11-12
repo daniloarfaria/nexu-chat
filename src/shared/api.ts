@@ -439,6 +439,9 @@ export interface ApiMap {
         modelFast?: string
         modelSmart?: string
         trainsOnData?: boolean
+        noCustomerData?: boolean
+        rpm?: number | null
+        monthlyLimit?: number | null
         enabled?: boolean
         priority?: number
       }

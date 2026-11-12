@@ -126,7 +126,13 @@ Embaixo de cada áudio ou mensagem de voz aparece **Transcrever**. O texto fica 
   - **quando:** pelo botão, automático para toda mensagem de voz recebida, ou desligado;
   - **onde:** no computador ou na Groq.
 - **No computador (Whisper):** o áudio não sai daqui. O app encontra sozinho o whisper-cli, o modelo e o ffmpeg; se não achar, use **Escolher**.
-- **Na Groq:** gratuito e não treina com os dados. Usa a mesma chave da Groq cadastrada no Assistente de IA.
+- **Na Groq:** usa a mesma chave da Groq cadastrada no Assistente de IA. O áudio do cliente sai do computador como está (áudio não é anonimizado). A Groq tem faixa gratuita com limites e diz que não treina com os dados; confira no site dela.
+- **A privacidade vale também para os áudios.** O áudio **não** é enviado para a Groq quando:
+  - a privacidade do Assistente de IA está em **Estrita**;
+  - a Groq está com **Usar em conversas de clientes** desligado;
+  - a Groq está marcada como "pode treinar com os dados".
+
+  Nesses casos o app transcreve no computador, se o Whisper estiver instalado. Se não estiver, o áudio fica **sem transcrição** e a tela diz o motivo.
 
 ### Notificações
 Quando chega mensagem e você não está olhando aquela conversa, aparece uma notificação. Clique nela para abrir a conversa. Conversas silenciadas ou arquivadas não notificam.
@@ -519,7 +525,11 @@ O botão **Configurar IA**, no alto da página **Assistente de IA**, abre uma te
    - pedido grande demais para a IA no computador vai direto para a nuvem;
    - computadores com 16 GB de memória ou mais podem ligar também o **modelo médio** (Qwen3 4B, cerca de 2,4 GB), que escreve melhor. Com ele ligado, as sugestões de resposta e os textos também são feitos no computador, e a nuvem fica de reserva;
    - **Remover IA local** apaga todos os arquivos dela.
-3. **IA gratuita na nuvem (Groq):** clique em **abrir o site do Groq**, crie a chave, cole e clique em **Salvar e testar**.
+3. **IA na nuvem (Groq, NVIDIA ou DeepSeek):** em cada cartão, clique no link do site do provedor, crie a **sua** chave, cole e clique em **Salvar e testar**. O app nunca traz chave embutida: a chave é sua e fica guardada criptografada neste computador. Se o teste falhar, a tela explica o motivo (chave recusada, limite, sem internet ou demora).
+   - **Groq e NVIDIA:** têm faixa gratuita com limites; confira no site do provedor.
+   - **DeepSeek:** cobrado por uso (costuma ser barato); confira os preços no site do provedor.
+   - **NVIDIA e DeepSeek entram com "Usar em conversas de clientes" desligado.** Assim eles só fazem tarefas sem dado de cliente, como variações de campanha. Para usar com conversas de clientes, leia o aviso do cartão e ligue o interruptor, no próprio cartão ou em Provedores.
+   - Todo provedor de nuvem recebe trechos das conversas (anonimizados, conforme a privacidade escolhida), que saem do computador.
 
 O recomendado é usar as duas: a IA no computador como principal para as tarefas rápidas e a nuvem como reserva. Em computador mais fraco, a IA no computador responde devagar.
 
@@ -540,16 +550,29 @@ A IA usa esse contexto nas sugestões de resposta, nas versões de campanha e no
 
 ### Provedores (manual)
 Em **Assistente de IA → Provedores**, dá para adicionar outros provedores. Cada um tem o link para criar a chave:
-- **Groq:** rápido, cerca de 1.000 pedidos por dia, não treina com seus dados;
-- **Google Gemini:** no plano grátis pode usar os textos para melhorar produtos;
-- **OpenRouter**, **Mistral**, ou **Ollama** (roda no próprio computador);
-- **Claude (pago, opcional):** usado só quando todos os gratuitos falham, com limite de chamadas por mês.
+- **Groq:** rápido, tem faixa gratuita com limites (confira no site do provedor), não treina com seus dados;
+- **Google Gemini:** tem faixa gratuita com limites; no plano gratuito pode usar os textos para melhorar produtos;
+- **NVIDIA** (build.nvidia.com): tem faixa gratuita com limites; modelo padrão `nvidia/nemotron-3.5-lightning-30b-a3b`, que você pode trocar;
+- **DeepSeek** (platform.deepseek.com): cobrado por uso (costuma ser barato); confira os preços no site do provedor. Os trechos anonimizados vão para os servidores da DeepSeek, que ficam fora do Brasil; confira a política de privacidade antes de usar com dados de clientes. Modelos padrão `deepseek-flash` e `deepseek-v4-pro`, que você pode trocar;
+- **OpenRouter**, **Mistral** (também com faixa gratuita e limites), ou **Ollama** (grátis e sem chave, roda no próprio computador);
+- **Claude (pago, opcional):** melhor qualidade, cobrado por uso;
+- **Personalizado:** qualquer serviço compatível com a API da OpenAI. Os trechos enviados saem do computador e vão para o endereço que você informar; só use um endereço em que confia.
 
-O app usa primeiro os gratuitos e **troca sozinho de provedor** quando um atinge o limite do dia ou do minuto.
+**Ordem de uso:** o app usa primeiro os provedores com faixa gratuita e a IA no computador, e **troca sozinho de provedor** quando um falha ou atinge o limite do dia ou do minuto. Os cobrados por uso (**DeepSeek** e **Claude**) só entram depois, quando nenhum dos gratuitos respondeu.
+
+**Limite por mês dos pagos:** cada provedor cobrado por uso tem o **seu** contador e o **seu** limite de pedidos por mês (padrão: 300 pedidos; mude em **Editar**). Chegar no limite de um não desliga o outro. A lista mostra quantos pedidos cada um já fez no mês. O limite conta pedidos, não reais: confira o gasto no site do provedor.
+
+**Usar em conversas de clientes:** todo provedor de nuvem tem esse interruptor. Desligado, o provedor só faz tarefas sem dado de cliente, como variações de campanha. **NVIDIA e DeepSeek já entram com ele desligado**; ligue de propósito, depois de ler o aviso. No provedor personalizado o interruptor e o aviso aparecem sempre, e ele também começa desligado.
+
+**Ollama só no próprio computador:** o endereço do Ollama precisa ser `localhost` ou `127.0.0.1`. Para um servidor de fora, cadastre um provedor personalizado. O selo "grátis, sem chave" só aparece quando o endereço é mesmo deste computador; todo provedor de nuvem manda trechos para fora.
+
+**Se o teste falhar dizendo que o modelo não foi encontrado:** o provedor pode ter trocado o nome do modelo. Clique em **Editar** e ajuste o nome conforme o site do provedor. Em **Editar** também dá para mudar o limite de pedidos por minuto.
 
 ### Privacidade
 - **Anonimizar** (recomendado): nomes, telefones, e-mails, CPF e endereços viram marcadores antes de sair do computador.
-- **Estrita:** conversas só vão para provedores que não treinam com os dados.
+- **Estrita:** conversas só vão para provedores que não treinam com os dados, e os áudios só são transcritos no próprio computador (nada de áudio para a Groq).
+- **Livre:** envia as conversas como estão. Use só com provedores de confiança.
+- Provedor com **Usar em conversas de clientes** desligado nunca recebe conversa de cliente, em nenhum dos modos.
 - A aba **Uso** registra cada chamada, sem o conteúdo.
 
 ### Usar

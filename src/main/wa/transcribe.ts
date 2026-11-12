@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import type { MediaInfo, TranscribeSettings, TranscribeStatus } from '@shared/types'
 import { getDb, getSetting, setSetting } from '../db'
-import { listProviders } from '../ai/router'
+import { getAiSettings, listProviders } from '../ai/router'
 import { exclusiveLocal } from '../ai/local/service'
 import { unsealString } from '../secure'
 import { ensureMedia } from './media'
@@ -17,7 +17,8 @@ import { log } from '../log'
 /**
  * Transcrição de áudios e mensagens de voz com Whisper.
  * 1) Local (whisper.cpp + ffmpeg): o áudio não sai do computador.
- * 2) Groq (Whisper na nuvem, gratuito, não treina com os dados): usa a chave cadastrada no Assistente de IA.
+ * 2) Groq (Whisper na nuvem): usa a chave cadastrada no Assistente de IA. O áudio é dado de cliente e não
+ *    dá para anonimizar, então só sai do computador se a privacidade escolhida deixar (ver `groqState`).
  */
 
 const run = promisify(execFile)
@@ -85,23 +86,41 @@ function localTools(s: TranscribeSettings): { whisper: string | null; model: str
   }
 }
 
-function groqProvider(): { baseUrl: string; key: string } | null {
+type GroqBlocked = TranscribeStatus['groqBlocked']
+
+/**
+ * A Groq pode receber o áudio do cliente? Vale a mesma regra das conversas (`candidates` do roteador), mais
+ * rígida porque áudio não é anonimizado: não vai se o provedor está marcado "sem conversas de clientes",
+ * se ele pode treinar com os dados, ou se a privacidade é Estrita.
+ */
+function groqState(): { provider: { baseUrl: string; key: string } | null; blocked: GroqBlocked } {
   const p = listProviders().find((x) => x.preset === 'groq' && x.enabled && x.hasKey)
-  if (!p) return null
+  if (!p) return { provider: null, blocked: null }
+  if (p.noCustomerData) return { provider: null, blocked: 'sem-clientes' }
+  if (getAiSettings().privacy === 'estrita') return { provider: null, blocked: 'estrita' }
+  if (p.trainsOnData) return { provider: null, blocked: 'treina' }
   const row = getDb().prepare('SELECT base_url, api_key FROM ai_providers WHERE id = ?').get(p.id) as {
     base_url: string
     api_key: string
   }
-  return { baseUrl: row.base_url, key: unsealString(row.api_key) }
+  return { provider: { baseUrl: row.base_url, key: unsealString(row.api_key) }, blocked: null }
+}
+
+const BLOCKED_WHY: Record<Exclude<GroqBlocked, null>, string> = {
+  'sem-clientes': 'a Groq está marcada para não receber conversas de clientes',
+  estrita: 'a privacidade Estrita não deixa o áudio sair do computador',
+  treina: 'a Groq está marcada como "pode treinar com os dados"'
 }
 
 export function transcribeStatus(): TranscribeStatus {
   const settings = getTranscribeSettings()
   const local = localTools(settings)
+  const g = groqState()
   return {
     settings,
     local: { ...local, ready: !!(local.whisper && local.model && local.ffmpeg) },
-    groq: !!groqProvider()
+    groq: !!g.provider,
+    groqBlocked: g.blocked
   }
 }
 
@@ -136,6 +155,8 @@ async function transcribeGroq(file: string, mime: string, g: { baseUrl: string; 
     method: 'POST',
     headers: { authorization: `Bearer ${g.key}` },
     body: form,
+    // nunca segue redirecionamento: o áudio e a chave só vão para o endereço cadastrado
+    redirect: 'error',
     signal: AbortSignal.timeout(120_000)
   })
   if (!res.ok) {
@@ -167,18 +188,25 @@ export function transcribe(sock: WASocket | null, accountId: string, chatJid: st
     const s = getTranscribeSettings()
     const tools = localTools(s)
     const localOk = tools.whisper && tools.model && tools.ffmpeg
-    const g = groqProvider()
+    const { provider: g, blocked } = groqState()
     let text: string
-    if ((s.engine === 'local' || s.engine === 'auto') && localOk) {
+    // "Só Groq" com a Groq barrada pela privacidade: usa o Whisper do computador, que é mais reservado
+    if (localOk && (s.engine !== 'groq' || (!g && blocked))) {
       // nunca junto com o modelo de texto local: entra na fila dele e o desliga antes (memória baixa)
       text = await exclusiveLocal(() =>
         transcribeLocal(file, tools as { whisper: string; model: string; ffmpeg: string })
       )
     } else if ((s.engine === 'groq' || s.engine === 'auto') && g) {
       text = await transcribeGroq(file, media.mimetype ?? 'audio/ogg', g)
+    } else if (blocked && s.engine !== 'local') {
+      throw new Error(
+        `Sem transcrição: ${BLOCKED_WHY[blocked]}. Instale o Whisper no computador (Configurações → Transcrição de áudio) para transcrever sem enviar o áudio para fora.`
+      )
     } else {
       throw new Error(
-        'Transcrição indisponível: instale o Whisper no computador ou cadastre a Groq no Assistente de IA'
+        s.engine === 'local'
+          ? 'Sem transcrição: o Whisper não está instalado neste computador (Configurações → Transcrição de áudio)'
+          : 'Sem transcrição: instale o Whisper no computador ou cadastre a Groq no Assistente de IA'
       )
     }
     text = text.slice(0, 20_000) || '(sem fala reconhecida)'

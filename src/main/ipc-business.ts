@@ -663,13 +663,27 @@ export function registerBusinessIpc(handle: Handle, getWindow: () => BrowserWind
     z
       .object({
         id: id.optional(),
-        preset: z.enum(['groq', 'gemini', 'openrouter', 'mistral', 'ollama', 'claude', 'local', 'custom']),
+        preset: z.enum([
+          'groq',
+          'gemini',
+          'openrouter',
+          'mistral',
+          'nvidia',
+          'deepseek',
+          'ollama',
+          'claude',
+          'local',
+          'custom'
+        ]),
         name: z.string().max(60).optional(),
         baseUrl: z.string().max(300).optional(),
         apiKey: z.string().max(400).nullable().optional(),
         modelFast: z.string().max(120).optional(),
         modelSmart: z.string().max(120).optional(),
         trainsOnData: z.boolean().optional(),
+        noCustomerData: z.boolean().optional(),
+        rpm: z.number().int().min(1).max(10_000).nullable().optional(),
+        monthlyLimit: z.number().int().min(0).max(100_000).nullable().optional(),
         enabled: z.boolean().optional(),
         priority: z.number().int().min(0).max(1000).optional()
       })
