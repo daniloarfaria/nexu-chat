@@ -111,3 +111,40 @@ test.each([new Uint8Array(), new Uint8Array(64 * 1024 * 1024 + 1), [1, 2]])(
     expect(h.send).not.toHaveBeenCalled()
   }
 )
+
+test('teste envia cada versão com sua mídia salva, incluindo versão sem mídia', async () => {
+  const c = C.saveCampaign({
+    ...args(),
+    name: 'Versões',
+    templates: ['A', 'B', 'C'],
+    audience: { type: 'all' },
+    scheduledAt: null
+  })
+  C.setCampaignMedia(c.id, { ...image, data: new Uint8Array([1]) }, 0)
+  C.setCampaignMedia(c.id, { ...image, data: new Uint8Array([2]) }, 1)
+  await invoke({
+    ...args(),
+    templates: ['C', 'B', 'A'],
+    campaignId: c.id,
+    mediaIndices: [2, 1, 0],
+    files: [null, null, null]
+  })
+  expect(h.send.mock.calls.map((call) => call[1])).toEqual([
+    { text: '[TESTE]\nC' },
+    { image: Buffer.from([2]), mimetype: 'image/png', caption: '[TESTE]\nB' },
+    { image: Buffer.from([1]), mimetype: 'image/png', caption: '[TESTE]\nA' }
+  ])
+})
+test('teste de gravação converte WebM para voz Ogg antes de enviar', async () => {
+  const { readFileSync } = await import('node:fs')
+  const data = new Uint8Array(readFileSync(join(__dirname, 'fixtures/voice.webm')))
+  await invoke({ ...args(), file: { name: 'voz.webm', mime: 'audio/webm;codecs=opus', data, voice: true } })
+  expect(h.send.mock.calls[0][1]).toMatchObject({ mimetype: 'audio/ogg; codecs=opus', ptt: true })
+  expect(h.send.mock.calls[0][1].audio.subarray(0, 4).toString()).toBe('OggS')
+})
+test('índice inválido é rejeitado antes de enviar qualquer versão', async () => {
+  await expect(
+    invoke({ ...args(), templates: ['A', 'B'], campaignId: saved().id, mediaIndices: [0, 9] })
+  ).rejects.toThrow('Versão não encontrada')
+  expect(h.send).not.toHaveBeenCalled()
+})

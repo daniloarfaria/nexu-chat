@@ -247,7 +247,7 @@ class CampaignEngine extends EventEmitter {
       unlock = lockChat(accountId, jid!)
       if (!unlock) return 'skip'
       const vars = t.vars ? (JSON.parse(t.vars) as Record<string, string>) : {}
-      const tpl = c.templates[Math.floor(Math.random() * c.templates.length)]
+      const { text: tpl, media } = C.campaignVersion(c, Math.floor(Math.random() * c.templates.length))
       let text = renderTemplate(tpl, vars)
       if (c.optOutFooter && c.kind !== 'groups') text += `\n\n_${OPT_OUT_FOOTER}_`
 
@@ -266,13 +266,13 @@ class CampaignEngine extends EventEmitter {
       if (!C.targetStillPending(c.id, t.seq)) return 'skip' // contato excluído ou alvo alterado
 
       let content: AnyMessageContent
-      if (c.media) {
-        const data = readFileSync(C.mediaPath(c.media))
-        const mime = c.media.mime
+      if (media) {
+        const data = readFileSync(C.mediaPath(media))
+        const mime = media.mime
         if (/^image\/(jpeg|png|gif|webp)$/.test(mime)) content = { image: data, caption: text, mimetype: mime }
         else if (/^video\//.test(mime)) content = { video: data, caption: text, mimetype: 'video/mp4' }
-        else if (/^audio\//.test(mime)) content = { audio: data, mimetype: mime }
-        else content = { document: data, mimetype: mime, fileName: c.media.name, caption: text }
+        else if (/^audio\//.test(mime)) content = { audio: data, mimetype: mime, ptt: !!media.voice }
+        else content = { document: data, mimetype: mime, fileName: media.name, caption: text }
       } else {
         content = { text }
       }
@@ -284,7 +284,7 @@ class CampaignEngine extends EventEmitter {
       // Áudio não tem legenda: manda o texto em seguida
       // O principal já foi: marca como enviado antes do complemento, para nunca reenviar em dobro
       C.markTarget(c.id, t.seq, 'sent', { messageId: sent?.key.id ?? undefined, jid: jid! })
-      if (c.media && /^audio\//.test(c.media.mime) && text) {
+      if (media && /^audio\//.test(media.mime) && text) {
         await sendAndStore(sock, accountId, jid!, { text }).catch((e: Error) =>
           log.warn('Texto após o áudio não foi enviado', { erro: e.message })
         )

@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   AlertTriangle,
   ArrowLeft,
   Copy,
   Download,
-  FileText,
   Image as ImageIcon,
   Megaphone,
   Pause,
@@ -16,7 +15,14 @@ import {
   Trash2,
   X
 } from 'lucide-react'
-import type { Campaign, CampaignAudience, CampaignTarget, EngineState, TargetStatus } from '@shared/types'
+import type {
+  Campaign,
+  CampaignAudience,
+  CampaignMedia,
+  CampaignTarget,
+  EngineState,
+  TargetStatus
+} from '@shared/types'
 import { hasLink, OPT_OUT_FOOTER, renderTemplate } from '@shared/rules'
 import { useActiveAccount, useApp } from '../lib/store'
 import { fileBytes, pct, useAction, useLoad } from '../lib/useAsync'
@@ -34,6 +40,8 @@ import {
   Tabs,
   Textarea
 } from '../components/ui'
+import { CampaignAudioRecorder } from '../components/CampaignAudioRecorder'
+import { CampaignMediaPreview } from '../components/CampaignMediaPreview'
 import { cn } from '../lib/cn'
 import { ColorDot, TagToggles } from '../components/tags'
 import { useTagDefs } from '../lib/tagColors'
@@ -106,7 +114,46 @@ function Editor({
   const iaEnabled = !!account?.modules.ia
   const funilEnabled = !!account?.modules.funil
   const [name, setName] = useState(initial?.name ?? draft?.name ?? '')
-  const [templates, setTemplates] = useState<string[]>(initial?.templates.length ? initial.templates : [''])
+  const [versions, setVersions] = useState(() =>
+    (initial?.templates.length ? initial.templates : ['']).map((text, i) => ({
+      key: crypto.randomUUID(),
+      text,
+      sourceIndex: initial ? (i as number | null) : null,
+      file: null as File | null,
+      saved: (initial?.templateMedia
+        ? (initial.templateMedia[i] ?? null)
+        : (initial?.media ?? null)) as CampaignMedia | null,
+      voice: false,
+      recording: false
+    }))
+  )
+  const templates = versions.map((v) => v.text)
+  const recording = versions.some((v) => v.recording)
+  function setTemplates(texts: string[]): void {
+    setVersions((previous) =>
+      texts.map((text, i) =>
+        previous[i]
+          ? { ...previous[i], text }
+          : {
+              key: crypto.randomUUID(),
+              text,
+              sourceIndex: null,
+              file: null,
+              saved: null,
+              voice: false,
+              recording: false
+            }
+      )
+    )
+  }
+  function patchVersion(index: number, patch: Partial<(typeof versions)[number]>): void {
+    setVersions((previous) => previous.map((version, i) => (i === index ? { ...version, ...patch } : version)))
+  }
+  async function outgoing(
+    version: (typeof versions)[number]
+  ): Promise<(Awaited<ReturnType<typeof fileBytes>> & { voice?: boolean }) | null> {
+    return version.file ? { ...(await fileBytes(version.file)), ...(version.voice ? { voice: true } : {}) } : null
+  }
   const [audience, setAudience] = useState<CampaignAudience>(
     initial?.audience ?? draft?.audience ?? { type: 'tags', tags: [] }
   )
@@ -116,8 +163,6 @@ function Editor({
       ? new Date(initial.scheduledAt - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
       : ''
   )
-  const [media, setMedia] = useState<File | null>(null)
-  const [keepMedia, setKeepMedia] = useState(!!initial?.media)
   const [brief, setBrief] = useState('')
   const { busy, error, run, setError, attempt } = useAction()
   const tagDefs = useTagDefs(accountId)
@@ -139,27 +184,26 @@ function Editor({
   const vars = ['primeiro_nome', 'nome', 'loja', ...(fields.data ?? [])]
   const anyLink = templates.some((t) => hasLink(t))
 
-  const preview = useMemo(() => {
-    const t = templates.find((x) => x.trim()) ?? ''
+  const previews = templates.map((t) => {
     let out = renderTemplate(t, { ...SAMPLE, loja: account?.name ?? '' }, () => previewSeed)
     if (footer && !isGroups && out) out += `\n\n${OPT_OUT_FOOTER}`
     return out
-  }, [templates, previewSeed, footer, isGroups, account?.name])
+  })
 
   async function save(start: boolean): Promise<void> {
     const c = await run(start ? 'start' : 'save', async () => {
+      const valid = versions.filter((v) => v.text.trim())
       let saved = await window.api.invoke('campaigns:save', {
         id: initial?.id,
         accountId,
         name: name || 'Campanha sem nome',
-        templates: templates.filter((t) => t.trim()),
+        templates: valid.map((v) => v.text),
+        mediaIndices: valid.map((v) => (v.saved ? v.sourceIndex : null)),
+        files: await Promise.all(valid.map(outgoing)),
         audience,
         optOutFooter: footer && !isGroups,
         scheduledAt: when ? new Date(when).getTime() : null
       })
-      if (media) saved = await window.api.invoke('campaigns:media', { id: saved.id, file: await fileBytes(media) })
-      else if (!keepMedia && saved.media)
-        saved = await window.api.invoke('campaigns:media', { id: saved.id, file: null })
       if (start) saved = await window.api.invoke('campaigns:start', { id: saved.id })
       return saved
     })
@@ -377,13 +421,14 @@ function Editor({
           >
             <div className="flex flex-col gap-3">
               {templates.map((t, i) => (
-                <div key={i} className="rounded-lg border border-line p-3">
+                <div key={versions[i].key} className="rounded-lg border border-line p-3">
                   <div className="mb-2 flex items-center justify-between">
                     <span className="text-[12.5px] font-medium text-ink-2">Versão {i + 1}</span>
                     {templates.length > 1 && (
                       <button
                         aria-label={`Remover versão ${i + 1}`}
-                        onClick={() => setTemplates(templates.filter((_, j) => j !== i))}
+                        disabled={recording}
+                        onClick={() => setVersions(versions.filter((_, j) => j !== i))}
                         className="text-ink-3 hover:text-bad"
                       >
                         <X className="size-4" />
@@ -407,6 +452,59 @@ function Editor({
                       </button>
                     ))}
                   </div>
+                  <div className="mt-3 flex flex-col gap-2 border-t border-line pt-3">
+                    <span className="text-[12.5px] text-ink-2">Mídia desta versão (opcional)</span>
+                    {(versions[i].file || versions[i].saved) && (
+                      <div className="flex items-center gap-2 text-[13px]">
+                        <span className="min-w-0 flex-1 truncate">
+                          {versions[i].file?.name ?? versions[i].saved?.name}
+                        </span>
+                        <span className="text-[12px] text-ink-3">
+                          {formatBytes(versions[i].file?.size ?? versions[i].saved?.size ?? 0)}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={recording}
+                          onClick={() => patchVersion(i, { file: null, saved: null, sourceIndex: null, voice: false })}
+                        >
+                          Remover mídia
+                        </Button>
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-start gap-2">
+                      <label
+                        className={cn(
+                          'inline-flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-line-strong bg-panel px-3 text-[13px] hover:bg-sunken',
+                          recording && 'pointer-events-none opacity-50'
+                        )}
+                      >
+                        <ImageIcon className="size-4" /> Escolher arquivo
+                        <input
+                          type="file"
+                          className="sr-only"
+                          disabled={recording}
+                          aria-label={`Arquivo da versão ${i + 1}`}
+                          accept="image/*,video/*,audio/*,application/pdf"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0]
+                            if (file && file.size > 64 * 1024 * 1024)
+                              setError('Arquivo maior que 64 MB. Escolha um arquivo menor.')
+                            else if (file) patchVersion(i, { file, saved: null, voice: false })
+                            e.target.value = ''
+                          }}
+                        />
+                      </label>
+                      <CampaignAudioRecorder
+                        disabled={recording || !!busy}
+                        onStateChange={(active) => patchVersion(i, { recording: active })}
+                        onRecorded={(file) => patchVersion(i, { file, saved: null, voice: true })}
+                      />
+                    </div>
+                    <p className="text-[12px] text-ink-3">
+                      Imagem e vídeo recebem o texto como legenda. Áudio é enviado antes do texto.
+                    </p>
+                  </div>
                 </div>
               ))}
               <div className="flex flex-wrap items-center gap-2">
@@ -427,6 +525,7 @@ function Editor({
                     <Button
                       size="sm"
                       loading={busy === 'ai'}
+                      disabled={recording}
                       onClick={async () => {
                         const v = await run('ai', () =>
                           window.api.invoke('ai:variations', {
@@ -436,7 +535,21 @@ function Editor({
                             brief: brief || undefined
                           })
                         )
-                        if (v?.length) setTemplates([...templates.filter((x) => x.trim()), ...v].slice(0, 10))
+                        if (v?.length)
+                          setVersions((previous) =>
+                            [
+                              ...previous,
+                              ...v.map((text) => ({
+                                key: crypto.randomUUID(),
+                                text,
+                                sourceIndex: null,
+                                file: null,
+                                saved: null,
+                                voice: false,
+                                recording: false
+                              }))
+                            ].slice(0, 10)
+                          )
                       }}
                     >
                       <Sparkles className="size-4" /> Gerar versões com IA
@@ -463,35 +576,6 @@ function Editor({
                 />
               </label>
             </div>
-          </Section>
-
-          <Section title="Imagem, vídeo ou arquivo (opcional)" description="A mensagem vira a legenda.">
-            {media || (keepMedia && initial?.media) ? (
-              <div className="flex items-center gap-3 rounded-lg bg-sunken px-3 py-2.5">
-                {(media?.type ?? initial?.media?.mime ?? '').startsWith('image') ? (
-                  <ImageIcon className="size-5 text-ink-2" />
-                ) : (
-                  <FileText className="size-5 text-ink-2" />
-                )}
-                <span className="flex-1 truncate text-[13.5px]">{media?.name ?? initial?.media?.name}</span>
-                <span className="tabular text-[12.5px] text-ink-3">
-                  {formatBytes(media?.size ?? initial?.media?.size ?? 0)}
-                </span>
-                <Button size="sm" variant="ghost" onClick={() => (setMedia(null), setKeepMedia(false))}>
-                  Remover
-                </Button>
-              </div>
-            ) : (
-              <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-line-strong bg-panel px-3.5 text-[14px] shadow-card hover:bg-sunken">
-                <ImageIcon className="size-4" /> Escolher arquivo
-                <input
-                  type="file"
-                  hidden
-                  accept="image/*,video/*,audio/*,application/pdf"
-                  onChange={(e) => setMedia(e.target.files?.[0] ?? null)}
-                />
-              </label>
-            )}
           </Section>
 
           <Section title="Quando enviar">
@@ -521,27 +605,42 @@ function Editor({
                 sortear outra
               </button>
             </div>
-            <div
-              className="ml-auto max-w-[92%] rounded-xl rounded-tr-sm bg-[#d9fdd3] px-3 py-2 text-[14px] leading-[1.45] whitespace-pre-wrap text-[#111b21] shadow-card dark:bg-[#005c4b] dark:text-[#e9edef]"
-              data-selectable
-            >
-              {(media || (keepMedia && initial?.media)) && (
-                <div className="mb-1.5 grid h-28 place-items-center rounded-lg bg-black/10 text-[12px]">anexo</div>
-              )}
-              {preview || <span className="opacity-60">Escreva a mensagem…</span>}
+            <div className="flex max-h-[58vh] flex-col gap-4 overflow-y-auto">
+              {versions.map((version, i) => (
+                <div key={version.key}>
+                  <p className="mb-1 text-[12px] text-ink-2">Versão {i + 1}</p>
+                  <div
+                    className="ml-auto max-w-[96%] rounded-xl rounded-tr-sm bg-[#d9fdd3] px-3 py-2 text-[14px] leading-[1.45] text-[#111b21] shadow-card dark:bg-[#005c4b] dark:text-[#e9edef]"
+                    data-selectable
+                  >
+                    <CampaignMediaPreview
+                      file={version.file}
+                      saved={version.saved}
+                      campaignId={initial?.id}
+                      accountId={accountId}
+                      sourceIndex={version.sourceIndex}
+                    />
+                    <div className="whitespace-pre-wrap">
+                      {previews[i] || <span className="opacity-60">Escreva a mensagem…</span>}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
           <Button
             loading={busy === 'test'}
-            disabled={!templates.some((t) => t.trim())}
+            disabled={recording || !templates.some((t) => t.trim())}
             onClick={async () => {
+              const valid = versions.filter((v) => v.text.trim())
               const ok = await attempt('test', async () =>
                 window.api.invoke('campaigns:test', {
                   accountId,
-                  templates: templates.filter((t) => t.trim()),
+                  templates: valid.map((v) => v.text),
+                  files: await Promise.all(valid.map(outgoing)),
+                  mediaIndices: valid.map((v) => (v.saved ? v.sourceIndex : null)),
                   optOutFooter: footer && !isGroups,
-                  file: media ? await fileBytes(media) : undefined,
-                  campaignId: !media && keepMedia ? initial?.id : undefined
+                  campaignId: initial?.id
                 })
               )
               if (ok) setError(null)
@@ -549,13 +648,18 @@ function Editor({
           >
             <Send className="size-4" /> Enviar teste para mim
           </Button>
-          <Button loading={busy === 'save'} onClick={() => void save(false)}>
+          <Button loading={busy === 'save'} disabled={recording} onClick={() => void save(false)}>
             Salvar rascunho
           </Button>
           <Button
             variant="primary"
             loading={busy === 'start'}
-            disabled={!templates.some((t) => t.trim()) || !count.data || count.data.total - count.data.optedOut <= 0}
+            disabled={
+              recording ||
+              !templates.some((t) => t.trim()) ||
+              !count.data ||
+              count.data.total - count.data.optedOut <= 0
+            }
             onClick={() => void save(true)}
           >
             <Play className="size-4" /> {when ? 'Agendar campanha' : 'Iniciar campanha'}

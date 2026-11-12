@@ -11,7 +11,7 @@ vi.mock('electron', () => ({
 }))
 
 // WhatsApp simulado
-const sent: Array<{ jid: string; text: string }> = []
+const sent: Array<{ jid: string; text: string; image?: Buffer; audio?: Buffer; ptt?: boolean }> = []
 let connected = true
 const fakeSock = {
   user: { id: '5511900000000:1@s.whatsapp.net' },
@@ -19,8 +19,11 @@ const fakeSock = {
     phone.endsWith('9999') ? [{ exists: false, jid: '' }] : [{ exists: true, jid: `${phone}@s.whatsapp.net` }],
   presenceSubscribe: async () => undefined,
   sendPresenceUpdate: async () => undefined,
-  sendMessage: async (jid: string, content: { text?: string; caption?: string }) => {
-    sent.push({ jid, text: content.text ?? content.caption ?? '' })
+  sendMessage: async (
+    jid: string,
+    content: { text?: string; caption?: string; image?: Buffer; audio?: Buffer; ptt?: boolean }
+  ) => {
+    sent.push({ ...content, jid, text: content.text ?? content.caption ?? '' })
     return {
       key: { remoteJid: jid, fromMe: true, id: `OUT${sent.length}` },
       message: { conversation: content.text ?? '' },
@@ -185,4 +188,26 @@ describe('motor de campanhas', () => {
     e.stop(ACC)
     expect(sent).toHaveLength(0)
   }, 15000)
+})
+
+test.each([0.1, 0.9])('motor usa o mesmo índice sorteado para texto e imagem (%s)', async (random) => {
+  people.savePerson(ACC, { name: 'Ana', phone: '11987650001' })
+  let c = C.saveCampaign({
+    accountId: ACC,
+    name: 'Versões',
+    templates: ['Mensagem A', 'Mensagem B'],
+    audience: { type: 'all' },
+    optOutFooter: false,
+    scheduledAt: null
+  })
+  c = C.setCampaignMedia(c.id, { name: 'a.png', mime: 'image/png', data: new Uint8Array([1]) }, 0)
+  C.setCampaignMedia(c.id, { name: 'b.png', mime: 'image/png', data: new Uint8Array([2]) }, 1)
+  C.startCampaign(c.id)
+  vi.spyOn(Math, 'random').mockReturnValue(random)
+  await step()
+  expect(sent).toHaveLength(1)
+  const index = random < 0.5 ? 0 : 1
+  expect(sent[0]).toMatchObject({ text: index === 0 ? 'Mensagem A' : 'Mensagem B', image: Buffer.from([index + 1]) })
+  C.pauseCampaign(c.id, null)
+  C.deleteCampaign(c.id)
 })
