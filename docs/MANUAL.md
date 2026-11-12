@@ -227,7 +227,7 @@ Como usar:
    - Com a IA ligada, **Gerar versões com IA** escreve variações para você.
 4. Deixe ligado o rodapé **"responda SAIR para não receber"**.
 5. Se quiser, anexe imagem, vídeo, áudio ou PDF. A mensagem vira a legenda.
-6. Confira a **prévia** e use **Enviar teste para mim** para ver no seu celular.
+6. Confira a **prévia** e use **Enviar teste para mim** para ver no seu celular a mensagem e o anexo selecionado, mesmo antes de salvar.
 7. **Iniciar campanha** começa agora. Se você preencher uma data em "Agendar para", ela começa sozinha nesse horário.
 
 ### Acompanhar

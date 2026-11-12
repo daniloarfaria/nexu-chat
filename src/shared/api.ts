@@ -326,7 +326,10 @@ export interface ApiMap {
     ret: CampaignTarget[]
   }
   'campaigns:export': { args: [{ id: number }]; ret: void }
-  'campaigns:test': { args: [{ accountId: string; templates: string[]; optOutFooter: boolean }]; ret: void }
+  'campaigns:test': {
+    args: [{ accountId: string; templates: string[]; optOutFooter: boolean; file?: OutgoingFile; campaignId?: number }]
+    ret: void
+  }
   'engine:state': { args: [{ accountId: string }]; ret: EngineState }
 
   // Respostas automáticas

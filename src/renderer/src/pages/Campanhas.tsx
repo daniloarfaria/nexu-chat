@@ -535,11 +535,13 @@ function Editor({
             loading={busy === 'test'}
             disabled={!templates.some((t) => t.trim())}
             onClick={async () => {
-              const ok = await attempt('test', () =>
+              const ok = await attempt('test', async () =>
                 window.api.invoke('campaigns:test', {
                   accountId,
                   templates: templates.filter((t) => t.trim()),
-                  optOutFooter: footer && !isGroups
+                  optOutFooter: footer && !isGroups,
+                  file: media ? await fileBytes(media) : undefined,
+                  campaignId: !media && keepMedia ? initial?.id : undefined
                 })
               )
               if (ok) setError(null)

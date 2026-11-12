@@ -1,7 +1,8 @@
 import { dialog, app, type BrowserWindow } from 'electron'
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
+import type { AnyMessageContent } from 'baileys'
 import type { ModuleKey } from '@shared/types'
 import type { Handle } from './ipc'
 import { getAccount } from './accounts'
@@ -385,9 +386,36 @@ export function registerBusinessIpc(handle: Handle, getWindow: () => BrowserWind
   handle(
     'campaigns:test',
     z
-      .object({ accountId, templates: z.array(z.string().max(4096)).min(1).max(10), optOutFooter: z.boolean() })
+      .object({
+        accountId,
+        templates: z.array(z.string().max(4096)).min(1).max(10),
+        optOutFooter: z.boolean(),
+        campaignId: id.optional(),
+        file: z
+          .object({
+            name: z.string().min(1).max(255),
+            mime: z.string().min(1).max(120),
+            data: bytes.refine(
+              (data) => data.byteLength > 0 && data.byteLength <= 64 * 1024 * 1024,
+              'Arquivo vazio ou maior que 64 MB'
+            )
+          })
+          .strict()
+          .optional()
+      })
       .strict(),
     async (a) => {
+      const campaign = a.campaignId ? campaignOf(a.campaignId) : null
+      if (campaign && campaign.accountId !== a.accountId) throw new Error('Campanha não encontrada')
+      const media =
+        a.file ??
+        (campaign?.media
+          ? {
+              name: campaign.media.name,
+              mime: campaign.media.mime,
+              data: readFileSync(C.mediaPath(campaign.media))
+            }
+          : null)
       const s = sock(a.accountId)
       const me = s.user?.id ? `${s.user.id.split(':')[0].split('@')[0]}@s.whatsapp.net` : null
       if (!me) throw new Error('Número da conta desconhecido')
@@ -399,7 +427,18 @@ export function registerBusinessIpc(handle: Handle, getWindow: () => BrowserWind
           loja: account?.name ?? ''
         })
         if (a.optOutFooter) text += `\n\n_${OPT_OUT_FOOTER}_`
-        await sendAndStore(s, a.accountId, me, { text: `[TESTE]\n${text}` })
+        text = `[TESTE]\n${text}`
+        let content: AnyMessageContent = { text }
+        if (media) {
+          const data = Buffer.from(media.data)
+          const mime = media.mime
+          if (/^image\/(jpeg|png|gif|webp)$/.test(mime)) content = { image: data, caption: text, mimetype: mime }
+          else if (/^video\//.test(mime)) content = { video: data, caption: text, mimetype: 'video/mp4' }
+          else if (/^audio\//.test(mime)) content = { audio: data, mimetype: mime }
+          else content = { document: data, mimetype: mime, fileName: media.name, caption: text }
+        }
+        await sendAndStore(s, a.accountId, me, content)
+        if (media && /^audio\//.test(media.mime)) await sendAndStore(s, a.accountId, me, { text })
       }
     }
   )
