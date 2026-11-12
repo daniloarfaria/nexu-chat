@@ -1,6 +1,6 @@
 {
   "name": "disparador",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Campanhas, conversas e gestão de grupos no WhatsApp",
   "main": "./out/main/index.cjs",
   "author": "Danilo Ribeiro",
@@ -15,11 +15,11 @@
     "build": "npm run typecheck && electron-vite build",
     "postinstall": "patch-package && install-electron && electron-builder install-app-deps",
     "build:unpack": "npm run build && electron-builder --dir",
-    "build:win": "npm run build && electron-builder --win --publish never",
+    "build:win": "npm run typecheck && NO_BYTECODE=1 electron-vite build && electron-builder --win --publish never",
     "build:mac": "npm run build && electron-builder --mac --arm64 --publish never",
     "test": "vitest run",
-    "build:all": "npm run build && electron-builder --mac --win --publish never",
-    "release": "npm run build && electron-builder --mac --win --publish always",
+    "build:all": "npm run build:mac && npm run build:mac-intel && npm run build:win",
+    "release": "npm run build && electron-builder --mac --arm64 --publish always && NO_BYTECODE=1 electron-vite build && electron-builder --mac --x64 --win --publish always",
     "build:mac-intel": "npm run typecheck && NO_BYTECODE=1 electron-vite build && electron-builder --mac --x64 --publish never"
   },
   "dependencies": {

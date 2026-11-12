@@ -10,7 +10,7 @@ export default defineConfig({
     resolve: { alias: shared },
     build: {
       // Processo principal compilado para bytecode do V8 (dificulta ler e alterar a lógica de licença)
-      // O bytecode só roda na arquitetura em que foi gerado: NO_BYTECODE=1 para gerar o Mac Intel num Mac Apple
+      // O bytecode só roda na arquitetura em que foi gerado: NO_BYTECODE=1 para gerar o Mac Intel e o Windows num Mac Apple
       bytecode: process.env.NO_BYTECODE
         ? false
         : { transformArrowFunctions: true, protectedStrings: ['DSP1', 'Safe Storage'] },
