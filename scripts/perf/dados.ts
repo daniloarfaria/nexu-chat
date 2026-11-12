@@ -441,9 +441,10 @@ export function generateBase(path: string, now: number): Meta {
       const mine = chats.filter((c) => c.acc === ai && !c.isGroup)
       const count = Math.round(SIZES.people * a.share)
       const stride = Math.max(1, Math.floor(mine.length / Math.ceil(count * 0.85)))
+      let withChatCount = 0
       for (let i = 0; i < count; i++) {
         const withChat = i % 20 < 17
-        const chat = withChat ? (mine[(Math.floor(i * 0.85) * stride) % mine.length] ?? null) : null
+        const chat = withChat ? (mine[(withChatCount++ * stride) % mine.length] ?? null) : null
         const phone = chat?.phone ?? `55${11 + (i % 80)}9${String(60_000_000 + ai * 1_000_000 + i)}`
         const bd = r() < 0.4
         const birthday = bd

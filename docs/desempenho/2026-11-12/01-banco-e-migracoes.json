@@ -1,0 +1,144 @@
+{
+  "medidoEm": "2026-11-12T04:06:29.982Z",
+  "codigoBase": "e5410c80afdffb257df05d66998c0e3764e5cf29",
+  "maquina": {
+    "cpu": "Apple M1",
+    "nucleos": 8,
+    "memoriaGB": 8,
+    "sistema": "darwin 27.0.0 (arm64)",
+    "node": "v26.11.1",
+    "sqlite": "3.53.4"
+  },
+  "geracao": {
+    "segundos": 19.5,
+    "tamanhoMB": 528.2,
+    "contagens": {
+      "accounts": 3,
+      "chats": 20000,
+      "messages": 500000,
+      "contacts": 30418,
+      "lid_map": 11021,
+      "people": 5000,
+      "person_tags": 5338,
+      "deals": 3000,
+      "pipeline_cards": 2000,
+      "campaigns": 40,
+      "campaign_targets": 19998,
+      "reminders": 9,
+      "reminder_log": 2700,
+      "auto_log": 5000,
+      "avatars": 8000,
+      "groups_cache": 603,
+      "ai_log": 20000,
+      "wa_auth": 6000
+    }
+  },
+  "versoes": {
+    "referencia": 7,
+    "atual": 12
+  },
+  "vazio": {
+    "novoV0aAtual": {
+      "n": 30,
+      "medianMs": 5.311,
+      "p95Ms": 6.917,
+      "minMs": 4.528,
+      "maxMs": 7.433
+    },
+    "reabrirSemMigrar": {
+      "n": 30,
+      "medianMs": 0.687,
+      "p95Ms": 0.806,
+      "minMs": 0.617,
+      "maxMs": 1.594
+    },
+    "referenciaAAtual": {
+      "n": 30,
+      "medianMs": 1.377,
+      "p95Ms": 2.469,
+      "minMs": 1.235,
+      "maxMs": 2.57
+    }
+  },
+  "grandeAtualizacao": {
+    "abrirEMigrar": {
+      "n": 5,
+      "medianMs": 2.051,
+      "p95Ms": 2.336,
+      "minMs": 1.562,
+      "maxMs": 2.336
+    },
+    "fechar": {
+      "n": 5,
+      "medianMs": 0.691,
+      "p95Ms": 1.09,
+      "minMs": 0.59,
+      "maxMs": 1.09
+    }
+  },
+  "grandePrimeiraAbertura": {
+    "abrirMs": 0.7586249999985739,
+    "reparseUnsupportedMs": 90.58345800000097
+  },
+  "grandeAbrir": {
+    "abrir": {
+      "n": 10,
+      "medianMs": 0.689,
+      "p95Ms": 1.117,
+      "minMs": 0.639,
+      "maxMs": 1.117
+    },
+    "reparseUnsupported": {
+      "n": 10,
+      "medianMs": 84.172,
+      "p95Ms": 91.161,
+      "minMs": 79.627,
+      "maxMs": 91.161
+    },
+    "fechar": {
+      "n": 10,
+      "medianMs": 0.38,
+      "p95Ms": 0.673,
+      "minMs": 0.307,
+      "maxMs": 0.673
+    }
+  },
+  "tabelasNovas": {
+    "leads": 5000,
+    "contact_notes": 4000,
+    "contact_profile_state": 1500,
+    "chat_ai_mode": 3000,
+    "ia_atendimento_log": 2000,
+    "status_posts": 300
+  },
+  "anuncios": {
+    "terminou": true,
+    "lotes": 481,
+    "mensagensLidas": 240163,
+    "conversasDeAnuncio": 1368,
+    "porLote": {
+      "n": 481,
+      "medianMs": 1.768,
+      "p95Ms": 3.541,
+      "minMs": 0.585,
+      "maxMs": 168.892
+    },
+    "primeiroTerco": {
+      "n": 160,
+      "medianMs": 1.771,
+      "p95Ms": 3.512,
+      "minMs": 1.362,
+      "maxMs": 168.892
+    },
+    "ultimoTerco": {
+      "n": 160,
+      "medianMs": 1.812,
+      "p95Ms": 3.35,
+      "minMs": 0.585,
+      "maxMs": 5.902
+    },
+    "cpuTotalSegundos": 1.2,
+    "relogioNoAppSegundos": 97.4
+  },
+  "tamanhoFinalMB": 535.9
+}

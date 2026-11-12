@@ -158,7 +158,7 @@ export interface Plan {
 /** EXPLAIN QUERY PLAN do comando, com as linhas problemáticas separadas. */
 export function explain(db: DatabaseSync, sql: string): Plan {
   if (!/^\s*(SELECT|UPDATE|DELETE|INSERT|WITH)/i.test(sql)) return { sql, plan: [], flags: [] }
-  let rows: Array<{ detail: string }> = []
+  let rows: Array<{ detail: string }>
   try {
     rows = db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>
   } catch (e) {
@@ -233,7 +233,19 @@ export function fileMB(path: string): number {
 
 export function save(name: string, data: unknown): void {
   ensureDirs()
-  writeFileSync(join(RESULTS, `${name}.json`), JSON.stringify({ maquina: machine(), ...(data as object) }, null, 2))
+  writeFileSync(
+    join(RESULTS, `${name}.json`),
+    JSON.stringify(
+      {
+        medidoEm: new Date().toISOString(),
+        codigoBase: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+        maquina: machine(),
+        ...(data as object)
+      },
+      null,
+      2
+    )
+  )
 }
 
 export function readMeta(): { now: number; nowSec: number; samples: Record<string, unknown> } {
