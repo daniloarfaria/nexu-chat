@@ -14,6 +14,7 @@ import {
   Mic,
   Music,
   Pencil,
+  Printer,
   Phone,
   Play,
   Reply,
@@ -22,6 +23,7 @@ import {
   CalendarDays,
   Eye
 } from 'lucide-react'
+import { printableMediaKind } from '@shared/printing'
 import type { MediaInfo, MessageItem } from '@shared/types'
 import { cn } from '../../lib/cn'
 import { useChatStore } from '../../lib/chatStore'
@@ -457,6 +459,7 @@ export const Message = memo(function Message({
 }): React.JSX.Element {
   const { accountId, setReply, setEditing } = useChatStore()
   const [picker, setPicker] = useState(false)
+  const [printing, setPrinting] = useState(false)
   const [openedAt] = useState(() => Date.now() / 1000)
 
   if (m.type === 'system') {
@@ -594,6 +597,23 @@ export const Message = memo(function Message({
             >
               <Reply className="size-4" />
             </button>
+            {printableMediaKind(m.media) && (
+              <button
+                aria-label="Imprimir"
+                title={printing ? 'Preparando impressão…' : 'Imprimir'}
+                aria-busy={printing}
+                disabled={printing}
+                onClick={() => {
+                  setPrinting(true)
+                  void act(() => window.api.invoke('media:print', { accountId, jid: m.chatJid, id: m.id })).finally(
+                    () => setPrinting(false)
+                  )
+                }}
+                className="grid size-7 place-items-center rounded-full text-ink-2 hover:bg-panel hover:text-ink disabled:cursor-wait disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                <Printer className="size-3.5" />
+              </button>
+            )}
             {canEdit && (
               <button
                 aria-label="Editar"

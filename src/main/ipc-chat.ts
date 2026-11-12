@@ -9,6 +9,7 @@ import { wa } from './wa/manager'
 import * as store from './wa/store'
 import * as send from './wa/send'
 import { ensureMedia, markDownloaded, safeFileName } from './wa/media'
+import { printMessageMedia } from './wa/print'
 import { getAvatars } from './wa/avatars'
 import {
   cancelVoiceInstall,
@@ -188,6 +189,10 @@ export function registerChatIpc(handle: Handle, getWindow: () => BrowserWindow |
   handle('media:get', z.object({ accountId, jid, id: msgId }).strict(), (a) => {
     account(a.accountId)
     return ensureMedia(wa.getSocket(a.accountId), a.accountId, a.jid, a.id)
+  })
+  handle('media:print', z.object({ accountId, jid, id: msgId }).strict(), (a) => {
+    account(a.accountId)
+    return printMessageMedia(wa.getSocket(a.accountId), a.accountId, a.jid, a.id, getWindow())
   })
   handle('media:save-as', z.object({ accountId, jid, id: msgId }).strict(), async (a) => {
     account(a.accountId)
