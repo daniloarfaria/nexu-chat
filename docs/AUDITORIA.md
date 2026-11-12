@@ -150,3 +150,40 @@ o timeout antigo não foi reproduzido e a criptografia não foi alterada.
 
 O envio de eventos à Meta continua bloqueado por decisão do usuário.
 Publicação, alteração de versão e merge em `main` não fazem parte desta retomada.
+
+
+Na integração de 12/11/2026, recuperação de vendas recebeu reserva diária
+atômica, bloqueio por conversa, filtro sensível na nuvem e exclusão dos
+acompanhamentos/tentativas. A revisão independente do commit `182c325`
+encontrou e levou à correção de concorrências durante classificação, geração
+e digitação: exclusão/SAIR, fusão LID/número e mudança de envio automático
+para aprovação. Cobertura em `recuperacao.test.ts` e `recuperacao2.test.ts`.
+A revisão não encontrou achados importantes restantes nesse escopo; isso
+não equivale a uma nova auditoria integral.
+
+Provedores: controles de uso com clientes também valem para transcrição;
+NVIDIA e DeepSeek começam sem uso de conversas de clientes; limites mensais
+são por provedor. Validação e fontes em `PROVEDORES-VALIDACAO.md`.
+A ordem das migrações preserva a base e acrescenta recuperação, depois as
+duas migrações dos provedores. A suíte integrada passou em 684/684 testes
+(40 arquivos), antes da correção adicional do botão de teste de campanha.
+
+Referência de desempenho e limitações em `DESEMPENHO.md`: banco sintético
+de 500 mil mensagens/20 mil conversas; sem medir memória do Electron,
+latência de inferência ou funcionamento com conta WhatsApp real.
+
+
+Validação final da retomada: 697 testes passaram em 41 arquivos, incluindo
+13 regressões do botão “Enviar teste para mim”. O botão agora envia o
+anexo selecionado mesmo antes de salvar, reaproveita o anexo salvo ao editar
+e respeita sua remoção. Conferência de propriedade impede usar anexo de
+outra conta. Revisão independente do commit `6a5b24a` sem achados importantes.
+Typecheck, build e ESLint passaram (os dois tipos de retorno faltantes nos
+helpers do novo teste foram acrescentados após a primeira execução do lint).
+
+O smoke visual `tests/e2e/ia-shots.mjs` abriu Meu negócio e Configurar IA
+nos temas claro/escuro em perfil temporário. Não houve exceção da página;
+o console registrou o aviso de CSP `frame-ancestors` ignorada em meta,
+que já existe no HTML e não impede abrir as telas. Capturas locais em
+`/tmp/nexu-retomada-telas/`. Nenhuma mensagem real foi enviada e não houve
+inferência paga: o envio do anexo foi validado com socket simulado.

@@ -43,8 +43,12 @@ afterEach(() => {
   closeDb()
   rmSync(h.root, { recursive: true, force: true })
 })
-const args = () => ({ accountId: ACC, templates: ['Olá {primeiro_nome}'], optOutFooter: false })
-const saved = () =>
+const args = (): { accountId: string; templates: string[]; optOutFooter: boolean } => ({
+  accountId: ACC,
+  templates: ['Olá {primeiro_nome}'],
+  optOutFooter: false
+})
+const saved = (): ReturnType<typeof C.setCampaignMedia> =>
   C.setCampaignMedia(
     C.saveCampaign({
       accountId: ACC,
