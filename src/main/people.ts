@@ -471,13 +471,38 @@ export function runImport(accountId: string, token: string, mapping: ImportMappi
   return result
 }
 
+const fieldKey = (name: string): string => fold(name).replace(/\s+/g, '_')
+const reservedFields = new Set(['__proto__', 'prototype', 'constructor', 'nome', 'primeiro_nome', 'loja', 'telefone'])
+
+export function validFieldName(name: string): boolean {
+  return (
+    name.trim().length > 0 &&
+    name.trim().length <= 40 &&
+    /^[\p{L}\d_ ]+$/u.test(name.trim()) &&
+    !reservedFields.has(fieldKey(name.trim()))
+  )
+}
+
+export function fieldDefinitions(accountId: string): string[] {
+  return getSetting<string[]>(`peopleFieldDefinitions:${accountId}`, [])
+}
+
+export function setFieldDefinitions(accountId: string, names: string[]): string[] {
+  const trimmed = names.map((name) => name.trim())
+  if (trimmed.length > 50 || trimmed.some((name) => !validFieldName(name)))
+    throw new Error('Use até 50 campos, com nomes de 1 a 40 caracteres, sem variáveis padrão ou nomes reservados.')
+  if (new Set(trimmed.map(fieldKey)).size !== trimmed.length) throw new Error('Os nomes dos campos devem ser únicos.')
+  setSetting(`peopleFieldDefinitions:${accountId}`, trimmed)
+  return trimmed
+}
+
 export function customFieldNames(accountId: string): string[] {
   const rows = getDb()
-    .prepare('SELECT fields FROM people WHERE account_id = ? AND fields IS NOT NULL LIMIT 2000')
+    .prepare('SELECT fields FROM people WHERE account_id = ? AND fields IS NOT NULL')
     .all(accountId) as Array<{
     fields: string
   }>
-  const set = new Set<string>()
+  const set = new Set<string>(fieldDefinitions(accountId))
   for (const r of rows) for (const k of Object.keys(JSON.parse(r.fields))) set.add(k)
   return [...set].sort()
 }

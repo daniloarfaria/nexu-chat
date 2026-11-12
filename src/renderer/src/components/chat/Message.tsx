@@ -578,7 +578,7 @@ export const Message = memo(function Message({
         {!m.deleted && accountId && (
           <div
             onKeyDown={(e) => escapeInner(e, picker, () => setPicker(false))}
-            className="relative flex shrink-0 items-center gap-0.5 self-center opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
+            className="relative flex shrink-0 items-center gap-0.5 self-center opacity-70 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
           >
             <button
               aria-label="Reagir"
@@ -606,11 +606,12 @@ export const Message = memo(function Message({
             {m.fromMe && (
               <button
                 aria-label="Apagar para todos"
+                title="Apagar para todos"
                 onClick={() => {
                   if (confirm('Apagar esta mensagem para todos?'))
                     void act(() => window.api.invoke('messages:delete', { accountId, jid: m.chatJid, id: m.id }))
                 }}
-                className="grid size-7 place-items-center rounded-full text-ink-3 hover:bg-panel hover:text-bad"
+                className="grid size-7 place-items-center rounded-full text-ink-2 hover:bg-panel hover:text-bad focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               >
                 <Trash2 className="size-3.5" />
               </button>

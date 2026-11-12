@@ -163,6 +163,18 @@ export async function deleteForEveryone(sock: WASocket, accountId: string, chatJ
   const msg = getRawMessage(accountId, chatJid, id)
   if (!msg?.key.fromMe) throw new Error('Só é possível apagar mensagens enviadas por você')
   await sendAndStore(sock, accountId, chatJid, { delete: msg.key })
+  // O socket pode confirmar o envio sem devolver o protocolo. Aplique também
+  // localmente, usando o mesmo fluxo que remove mídia, busca e atualiza a UI.
+  saveMessages(
+    accountId,
+    [
+      {
+        key: { remoteJid: chatJid, id: generateMessageIDV2(sock.user?.id), fromMe: true },
+        message: { protocolMessage: { type: proto.Message.ProtocolMessage.Type.REVOKE, key: msg.key } }
+      }
+    ],
+    { live: false, ownJid: sock.user?.id ?? null }
+  )
 }
 
 export async function editText(

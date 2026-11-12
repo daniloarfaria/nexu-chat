@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Ban,
   Download,
@@ -36,12 +36,14 @@ function PersonForm({
   accountId,
   person,
   tagDefs,
+  fieldNames,
   funil,
   onDone
 }: {
   accountId: string
   person: Person | null
   tagDefs: TagDef[]
+  fieldNames: string[]
   funil: boolean
   onDone: () => void
 }): React.JSX.Element {
@@ -55,7 +57,12 @@ function PersonForm({
     [accountId, person?.id, funil]
   )
   const openPipeline = useApp((s) => s.openPipeline)
-  const [fields, setFields] = useState<Array<[string, string]>>(Object.entries(person?.fields ?? {}))
+  const [fields, setFields] = useState<Array<[string, string]>>(() =>
+    [...new Set([...fieldNames, ...Object.keys(person?.fields ?? {})])].map((name) => [
+      name,
+      person?.fields[name] ?? ''
+    ])
+  )
   const { busy, error, run } = useAction()
 
   async function save(): Promise<void> {
@@ -128,25 +135,35 @@ function PersonForm({
           </Field>
         )}
         <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1.5 text-[13px] font-medium">Outras informações</legend>
+          <legend className="mb-1.5 text-[13px] font-medium">Campos do negócio</legend>
           {fields.map(([k, v], i) => (
             <div key={i} className="flex flex-col gap-0.5">
               <div className="grid grid-cols-[1fr_1.4fr_auto] gap-2">
                 <Input
                   aria-label="Nome do campo"
                   placeholder="Ex.: data_compra"
+                  maxLength={40}
+                  readOnly={fieldNames.includes(k)}
                   value={k}
                   onChange={(e) => setFields(fields.map((f, j) => (j === i ? [e.target.value, f[1]] : f)))}
                 />
                 <Input
-                  aria-label="Valor"
+                  aria-label={`Valor de ${k || 'novo campo'}`}
+                  maxLength={500}
                   value={v}
                   onChange={(e) => setFields(fields.map((f, j) => (j === i ? [f[0], e.target.value] : f)))}
                 />
                 <Button
                   variant="ghost"
-                  aria-label="Remover campo"
-                  onClick={() => setFields(fields.filter((_, j) => j !== i))}
+                  aria-label={fieldNames.includes(k) ? `Limpar ${k}` : `Remover ${k || 'campo'}`}
+                  title={fieldNames.includes(k) ? 'Limpar valor' : 'Remover campo deste contato'}
+                  onClick={() =>
+                    setFields(
+                      fieldNames.includes(k)
+                        ? fields.map((f, j) => (j === i ? [f[0], ''] : f))
+                        : fields.filter((_, j) => j !== i)
+                    )
+                  }
                 >
                   <Trash2 className="size-4" />
                 </Button>
@@ -171,6 +188,100 @@ function PersonForm({
             />
           </>
         )}
+      </div>
+    </Drawer>
+  )
+}
+
+function BusinessFields({
+  accountId,
+  names,
+  onDone
+}: {
+  accountId: string
+  names: string[]
+  onDone: (changed: boolean) => void
+}): React.JSX.Element {
+  const [draft, setDraft] = useState(names)
+  const [name, setName] = useState('')
+  const { busy, error, run } = useAction()
+  return (
+    <Drawer
+      title="Campos do negócio"
+      onClose={() => onDone(false)}
+      footer={
+        <>
+          <Button variant="ghost" onClick={() => onDone(false)}>
+            Cancelar
+          </Button>
+          <Button
+            variant="primary"
+            loading={busy === 'save'}
+            onClick={async () => {
+              const saved = await run('save', () =>
+                window.api.invoke('people:set-field-definitions', { accountId, names: draft })
+              )
+              if (saved) onDone(true)
+            }}
+          >
+            Salvar campos
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        <p className="text-[13.5px] text-ink-2">
+          Crie informações para preencher em todos os contatos desta conta, como data_compra ou modelo. Use o nome entre
+          chaves nas campanhas: {'{modelo}'}.
+        </p>
+        <p className="text-[12.5px] text-ink-3">
+          Remover um campo desta lista mantém os valores já salvos nos contatos.
+        </p>
+        {error && <Notice tone="bad">{error}</Notice>}
+        <form
+          className="flex items-end gap-2"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (name.trim() && draft.length < 50) {
+              setDraft([...draft, name.trim()])
+              setName('')
+            }
+          }}
+        >
+          <Field
+            label="Nome do campo"
+            htmlFor="business-field-name"
+            hint="Até 50 campos. Use letras, números, espaços ou sublinhado."
+          >
+            <Input
+              id="business-field-name"
+              autoFocus
+              value={name}
+              maxLength={40}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Ex.: data_compra"
+            />
+          </Field>
+          <Button type="submit" disabled={!name.trim() || draft.length >= 50}>
+            <Plus className="size-4" /> Adicionar
+          </Button>
+        </form>
+        <ul className="divide-y divide-line">
+          {draft.map((field, i) => (
+            <li key={`${field}-${i}`} className="flex items-center justify-between gap-3 py-2">
+              <span className="break-words text-[13.5px]">{field}</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={`Remover ${field}`}
+                onClick={() => setDraft(draft.filter((_, j) => i !== j))}
+              >
+                <Trash2 className="size-4" /> Remover
+              </Button>
+            </li>
+          ))}
+        </ul>
+        {!draft.length && <p className="text-[13px] text-ink-3">Nenhum campo cadastrado. Adicione o primeiro acima.</p>}
       </div>
     </Drawer>
   )
@@ -423,6 +534,7 @@ export function Contatos(): React.JSX.Element {
   const [importing, setImporting] = useState(false)
   const [tagInput, setTagInput] = useState('')
   const [managing, setManaging] = useState(false)
+  const [managingFields, setManagingFields] = useState(false)
   const [toFunnel, setToFunnel] = useState(false)
   const [funnelStage, setFunnelStage] = useState<number | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -441,6 +553,15 @@ export function Contatos(): React.JSX.Element {
     () => (accountId ? window.api.invoke('people:tags', { accountId }) : Promise.resolve([])),
     [accountId, list.data]
   )
+  const fieldDefs = useLoad(
+    () => (accountId ? window.api.invoke('people:field-definitions', { accountId }) : Promise.resolve([])),
+    [accountId],
+    { resetOnChange: true }
+  )
+  useEffect(() => {
+    setEditing(null)
+    setManagingFields(false)
+  }, [accountId])
   const items = list.data?.items ?? []
   const total = list.data?.total ?? 0
   const allChecked = items.length > 0 && items.every((p) => selected.has(p.id))
@@ -462,6 +583,9 @@ export function Contatos(): React.JSX.Element {
         description="Sua base de clientes para campanhas e lembretes. Quem responde SAIR vai para a lista de não receber automaticamente."
         actions={
           <>
+            <Button disabled={!fieldDefs.data} onClick={() => setManagingFields(true)}>
+              <FileSpreadsheet className="size-4" /> Campos do negócio
+            </Button>
             <Button onClick={() => setManaging(true)}>
               <Tags className="size-4" /> Etiquetas
             </Button>
@@ -591,9 +715,9 @@ export function Contatos(): React.JSX.Element {
           <Notice tone="ok">{notice}</Notice>
         </div>
       )}
-      {(error || list.error) && (
+      {(error || list.error || fieldDefs.error) && (
         <div className="mb-3">
-          <Notice tone="bad">{error ?? list.error}</Notice>
+          <Notice tone="bad">{error ?? list.error ?? fieldDefs.error}</Notice>
         </div>
       )}
 
@@ -697,8 +821,10 @@ export function Contatos(): React.JSX.Element {
         </div>
       )}
 
-      {editing && (
+      {editing && fieldDefs.data && (
         <PersonForm
+          key={`${accountId}:${editing === 'new' ? 'new' : editing.id}`}
+          fieldNames={fieldDefs.data}
           accountId={accountId}
           person={editing === 'new' ? null : editing}
           tagDefs={tagDefs.defs}
@@ -707,6 +833,17 @@ export function Contatos(): React.JSX.Element {
             setEditing(null)
             void list.reload()
             void tagDefs.reload()
+          }}
+        />
+      )}
+      {managingFields && fieldDefs.data && (
+        <BusinessFields
+          key={accountId}
+          accountId={accountId}
+          names={fieldDefs.data}
+          onDone={(changed) => {
+            setManagingFields(false)
+            if (changed) void fieldDefs.reload()
           }}
         />
       )}
