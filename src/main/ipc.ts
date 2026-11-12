@@ -80,8 +80,14 @@ export function registerIpc(getWindow: () => BrowserWindow | null, relaunch: () 
   handle('license:remove', null, () => removeLicense())
   handle(
     'license:login',
-    z.object({ email: z.string().trim().email().max(200), password: z.string().min(1).max(200) }).strict(),
-    (a) => loginOnline(a.email.toLowerCase(), a.password)
+    z
+      .object({
+        email: z.string().trim().email().max(200),
+        password: z.string().min(1).max(200),
+        licenseId: z.string().min(1).max(80).optional()
+      })
+      .strict(),
+    (a) => loginOnline(a.email.toLowerCase(), a.password, a.licenseId)
   )
   handle('license:logout', null, () => logoutOnline())
   handle('license:refresh', null, async () => {

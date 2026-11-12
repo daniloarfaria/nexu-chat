@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BadgeCheck, ExternalLink, KeyRound, LogIn, LogOut, RefreshCw } from 'lucide-react'
-import { MODULE_INFO, PLANS } from '@shared/types'
+import { MODULE_INFO, PLANS, type LicenseSelection } from '@shared/types'
 import { useLicense } from '../lib/useLicense'
 import { useApp } from '../lib/store'
 import { useAction } from '../lib/useAsync'
@@ -14,7 +14,18 @@ export function Licenca(): React.JSX.Element {
   const [senha, setSenha] = useState('')
   const [key, setKey] = useState('')
   const [manual, setManual] = useState(false)
-  const { busy, error, run } = useAction()
+  const [switching, setSwitching] = useState(false)
+  const [selection, setSelection] = useState<LicenseSelection | null>(null)
+  const [licenseId, setLicenseId] = useState('')
+  const loginLock = useRef(false)
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
+  const { busy, error, setError, run } = useAction()
   const reloadAccounts = useApp((s) => s.reloadAccounts)
   if (!st) return <div className="h-40 animate-pulse rounded-xl bg-sunken" />
   const p = st.payload
@@ -30,6 +41,50 @@ export function Licenca(): React.JSX.Element {
     }
   }
 
+  function cancelLogin(): void {
+    if (loginLock.current) return
+    setSenha('')
+    setSelection(null)
+    setLicenseId('')
+    setSwitching(false)
+    setError(null)
+  }
+
+  function login(): void {
+    if (loginLock.current || busy || !senha || (selection && !licenseId)) return
+    loginLock.current = true
+    void run('l', async () => {
+      try {
+        const result = await window.api.invoke('license:login', {
+          email,
+          password: senha,
+          ...(selection ? { licenseId } : {})
+        })
+        if (!mounted.current) return
+        if ('selectionRequired' in result) {
+          setSelection(result)
+          setLicenseId('')
+        } else {
+          setSenha('')
+          setSelection(null)
+          setLicenseId('')
+          setSwitching(false)
+          setSt(result)
+          await reloadAccounts()
+        }
+      } catch (e) {
+        if (mounted.current) {
+          setSenha('')
+          setSelection(null)
+          setLicenseId('')
+        }
+        throw e
+      } finally {
+        loginLock.current = false
+      }
+    })
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <Notice tone={tone} icon={<BadgeCheck className="size-4" />}>
@@ -37,20 +92,35 @@ export function Licenca(): React.JSX.Element {
       </Notice>
       {st.notice && st.state !== 'active' && <Notice tone="warn">{st.notice}</Notice>}
 
-      {st.online ? (
+      {st.online && (
         <Section title="Conta conectada" description={st.online.email}>
           <div className="flex flex-wrap gap-2">
             <Button
+              disabled={busy !== null}
               loading={busy === 'r'}
               onClick={() => void run('r', () => apply(() => window.api.invoke('license:refresh')))}
             >
               <RefreshCw className="size-4" /> Verificar agora
+            </Button>
+            <Button
+              disabled={busy !== null}
+              onClick={() => {
+                setEmail(st.online?.email ?? '')
+                setSenha('')
+                setSelection(null)
+                setLicenseId('')
+                setError(null)
+                setSwitching(true)
+              }}
+            >
+              Trocar licença
             </Button>
             <Button onClick={() => site('conta')}>
               <ExternalLink className="size-4" /> Minha conta no site
             </Button>
             <Button
               variant="ghost"
+              disabled={busy !== null}
               loading={busy === 'o'}
               onClick={() =>
                 confirm('Sair desta conta neste computador? Os módulos pagos ficam bloqueados até entrar de novo.') &&
@@ -61,52 +131,109 @@ export function Licenca(): React.JSX.Element {
             </Button>
           </div>
         </Section>
-      ) : (
-        <Section title="Entrar com sua conta" description="Use o e-mail e a senha da compra ou do teste grátis.">
+      )}
+      {(!st.online || switching) && (
+        <Section
+          title={
+            selection ? 'Escolha a licença deste computador' : switching ? 'Trocar licença' : 'Entrar com sua conta'
+          }
+          description={
+            selection
+              ? `Conta ${email}. Cada licença tem seu próprio plano e limite de números.`
+              : switching
+                ? 'Entre novamente para escolher. A licença atual continua em uso até confirmar a troca.'
+                : 'Use o e-mail e a senha da compra ou do teste grátis.'
+          }
+        >
           <form
             className="flex max-w-md flex-col gap-3"
             onSubmit={(e) => {
               e.preventDefault()
-              void run('l', () =>
-                apply(async () => {
-                  const r = await window.api.invoke('license:login', { email, password: senha })
-                  setSenha('')
-                  return r
-                })
-              )
+              login()
             }}
           >
-            <Field label="E-mail" htmlFor="lic-email">
-              <Input
-                id="lic-email"
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </Field>
-            <Field label="Senha" htmlFor="lic-senha" error={busy === null ? error : null}>
-              <Input
-                id="lic-senha"
-                type="password"
-                autoComplete="current-password"
-                value={senha}
-                onChange={(e) => setSenha(e.target.value)}
-                required
-              />
-            </Field>
+            {error && <Notice tone="bad">{error}</Notice>}
+            {selection ? (
+              <fieldset className="flex flex-col gap-2" disabled={busy !== null}>
+                <legend className="mb-2 text-[13px] text-ink-2">Selecione uma licença para ativar aqui.</legend>
+                {selection.licenses.map((option) => (
+                  <label
+                    key={option.id}
+                    className="flex cursor-pointer items-start gap-3 rounded-lg border border-line p-3"
+                  >
+                    <input
+                      type="radio"
+                      name="license"
+                      className="mt-1"
+                      checked={licenseId === option.id}
+                      onChange={() => setLicenseId(option.id)}
+                    />
+                    <span className="flex min-w-0 flex-col gap-1 text-[13px]">
+                      <span className="font-semibold">
+                        {PLANS[option.plano].nome} · {option.contas} número(s) de WhatsApp{' '}
+                        {option.teste ? '· teste' : ''}
+                      </span>
+                      <span className="break-all text-ink-2">Licença {option.id}</span>
+                      <span className="text-ink-2">
+                        {option.fim ? `Válida até ${br(option.fim.slice(0, 10))}` : 'Sem vencimento'}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+            ) : (
+              <>
+                <Field label="E-mail" htmlFor="lic-email">
+                  <Input
+                    id="lic-email"
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    disabled={busy !== null}
+                    onChange={(e) => {
+                      setEmail(e.target.value)
+                      setSenha('')
+                      setError(null)
+                    }}
+                    required
+                  />
+                </Field>
+                <Field label="Senha" htmlFor="lic-senha">
+                  <Input
+                    id="lic-senha"
+                    type="password"
+                    autoComplete="current-password"
+                    value={senha}
+                    disabled={busy !== null}
+                    onChange={(e) => setSenha(e.target.value)}
+                    required
+                  />
+                </Field>
+              </>
+            )}
             <div className="flex flex-wrap items-center gap-3">
-              <Button type="submit" variant="primary" loading={busy === 'l'} disabled={!email || !senha}>
-                <LogIn className="size-4" /> Entrar
-              </Button>
-              <button
-                type="button"
-                onClick={() => site('recuperar')}
-                className="text-[13.5px] text-accent hover:underline"
+              <Button
+                type="submit"
+                variant="primary"
+                loading={busy === 'l'}
+                disabled={busy !== null || !email || !senha || (!!selection && !licenseId)}
               >
-                Esqueci minha senha / criar senha
-              </button>
+                <LogIn className="size-4" /> {selection ? 'Usar esta licença' : 'Entrar'}
+              </Button>
+              {(selection || switching) && (
+                <Button type="button" disabled={busy !== null} onClick={cancelLogin}>
+                  {selection && !switching ? 'Usar outra conta' : 'Cancelar'}
+                </Button>
+              )}
+              {!selection && (
+                <button
+                  type="button"
+                  onClick={() => site('recuperar')}
+                  className="text-[13.5px] text-accent hover:underline"
+                >
+                  Esqueci minha senha / criar senha
+                </button>
+              )}
             </div>
             <p className="text-[13px] text-ink-2">
               Ainda não tem conta?{' '}
@@ -188,7 +315,12 @@ export function Licenca(): React.JSX.Element {
                     spellCheck={false}
                   />
                 </Field>
-                <Button type="submit" className="self-start" loading={busy === 'a'} disabled={key.trim().length < 20}>
+                <Button
+                  type="submit"
+                  className="self-start"
+                  loading={busy === 'a'}
+                  disabled={busy !== null || key.trim().length < 20}
+                >
                   <KeyRound className="size-4" /> Ativar
                 </Button>
               </form>
