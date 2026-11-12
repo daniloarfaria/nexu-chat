@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Ban,
   Download,
@@ -524,6 +524,10 @@ function ImportWizard({
 
 export function Contatos(): React.JSX.Element {
   const active = useActiveAccount()
+  return <ContatosAccount key={active?.id ?? 'none'} active={active} />
+}
+
+function ContatosAccount({ active }: { active: ReturnType<typeof useActiveAccount> }): React.JSX.Element {
   const accountId = active?.id ?? ''
   const [search, setSearch] = useState('')
   const [tag, setTag] = useState<string | null>(null)
@@ -558,10 +562,6 @@ export function Contatos(): React.JSX.Element {
     [accountId],
     { resetOnChange: true }
   )
-  useEffect(() => {
-    setEditing(null)
-    setManagingFields(false)
-  }, [accountId])
   const items = list.data?.items ?? []
   const total = list.data?.total ?? 0
   const allChecked = items.length > 0 && items.every((p) => selected.has(p.id))
