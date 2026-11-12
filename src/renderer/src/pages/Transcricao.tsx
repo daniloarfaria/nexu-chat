@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle2, CircleAlert, FolderOpen, Mic } from 'lucide-react'
+import { CheckCircle2, CircleAlert, Download, FolderOpen, LoaderCircle, Mic } from 'lucide-react'
 import type { TranscribeStatus } from '@shared/types'
 import { Button, Notice, Section } from '../components/ui'
 import { cn } from '../lib/cn'
@@ -63,14 +63,36 @@ function Item({
 
 export function Transcricao(): React.JSX.Element {
   const [st, setSt] = useState<TranscribeStatus | null>(null)
+  const [error, setError] = useState<string | null>(null)
   useEffect(() => {
     let alive = true
-    void window.api.invoke('transcribe:status').then((s) => alive && setSt(s))
+    const refresh = (): void => {
+      void window.api
+        .invoke('transcribe:status')
+        .then((s) => {
+          if (alive) setSt(s)
+        })
+        .catch((e) => {
+          if (alive) setError(String(e))
+        })
+    }
+    refresh()
+    const timer = window.setInterval(refresh, 1000)
     return () => {
       alive = false
+      window.clearInterval(timer)
     }
   }, [])
-  if (!st) return <div className="h-40 animate-pulse rounded-xl bg-sunken" />
+  if (!st)
+    return error ? <Notice tone="warn">{error}</Notice> : <div className="h-40 animate-pulse rounded-xl bg-sunken" />
+  const installAction = (channel: 'transcribe:install' | 'transcribe:cancel'): void => {
+    setError(null)
+    void window.api
+      .invoke(channel)
+      .then(setSt)
+      .catch((e) => setError(String(e)))
+  }
+  const mb = (bytes: number): string => `${Math.ceil(bytes / 1_000_000)} MB`
   const save = (p: Parameters<typeof window.api.invoke<'transcribe:save'>>[1]): void =>
     void window.api.invoke('transcribe:save', p).then(setSt)
   const pick = (what: 'whisper' | 'model' | 'ffmpeg'): void =>
@@ -123,29 +145,79 @@ export function Transcricao(): React.JSX.Element {
         description={
           st.local.ready
             ? 'Pronto: os áudios são transcritos aqui, sem internet.'
-            : 'Encontre os 3 itens abaixo para transcrever sem enviar áudio para fora.'
+            : 'Baixe e configure a voz para transcrever neste computador. A internet é necessária apenas na instalação.'
         }
       >
-        <ul className="-my-1 divide-y divide-line">
-          <Item
-            ok={!!st.local.whisper}
-            label="Programa whisper-cli (whisper.cpp)"
-            value={st.local.whisper}
-            onPick={() => pick('whisper')}
-          />
-          <Item
-            ok={!!st.local.model}
-            label="Modelo (ggml-small.bin recomendado)"
-            value={st.local.model}
-            onPick={() => pick('model')}
-          />
-          <Item
-            ok={!!st.local.ffmpeg}
-            label="ffmpeg (converte o áudio do WhatsApp)"
-            value={st.local.ffmpeg}
-            onPick={() => pick('ffmpeg')}
-          />
-        </ul>
+        {!st.local.ready && !st.install.running && (
+          <div className="mb-3 flex flex-col items-start gap-2">
+            <Button disabled={!st.install.supported} onClick={() => installAction('transcribe:install')}>
+              <Download className="size-4" /> Baixar e configurar
+            </Button>
+            <p className="text-[12px] text-ink-2">
+              {st.install.supported
+                ? `Download de até ${mb(st.install.downloadBytes)}. Os componentes já encontrados serão aproveitados.`
+                : 'Instalação automática indisponível neste instalador ou sistema. Atualize o Nexu Chat ou use as opções avançadas.'}
+            </p>
+          </div>
+        )}
+        {st.install.running && (
+          <div className="mb-3 flex flex-col gap-2" role="status" aria-live="polite">
+            <div className="flex items-center gap-2 text-[13px]">
+              <LoaderCircle className="size-4 animate-spin" /> {st.install.label}
+              <Button size="sm" variant="ghost" onClick={() => installAction('transcribe:cancel')}>
+                Cancelar
+              </Button>
+            </div>
+            {st.install.total > 0 && (
+              <>
+                <progress
+                  className="h-2 w-full accent-accent"
+                  value={st.install.received}
+                  max={st.install.total}
+                  aria-label={st.install.label}
+                />
+                <span className="text-[12px] text-ink-2">
+                  {mb(st.install.received)} de {mb(st.install.total)}
+                </span>
+              </>
+            )}
+          </div>
+        )}
+        {(error || st.install.error) && (
+          <div className="mb-3">
+            <Notice tone="warn">{error || st.install.error}</Notice>
+          </div>
+        )}
+        {!st.install.running && st.install.label && !st.install.error && (
+          <p className="mb-3 text-[12px] text-ink-2" role="status">
+            {st.install.label}
+          </p>
+        )}
+        <details>
+          <summary className="cursor-pointer text-[13px] text-ink-2">
+            Opções avançadas: escolher arquivos manualmente
+          </summary>
+          <ul className="mt-2 divide-y divide-line">
+            <Item
+              ok={!!st.local.whisper}
+              label="Programa whisper-cli (whisper.cpp)"
+              value={st.local.whisper}
+              onPick={() => pick('whisper')}
+            />
+            <Item
+              ok={!!st.local.model}
+              label="Modelo (ggml-small.bin recomendado)"
+              value={st.local.model}
+              onPick={() => pick('model')}
+            />
+            <Item
+              ok={!!st.local.ffmpeg}
+              label="ffmpeg (converte o áudio do WhatsApp)"
+              value={st.local.ffmpeg}
+              onPick={() => pick('ffmpeg')}
+            />
+          </ul>
+        </details>
       </Section>
       <Section title="Whisper da Groq (nuvem)">
         <p className="text-[13.5px] text-ink-2">

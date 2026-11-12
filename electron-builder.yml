@@ -11,6 +11,7 @@ files:
   - 'package.json'
   - 'resources/**/*'
   - '!**/*.map'
+beforePack: ./scripts/verify-whisper-package.mjs
 asar: true
 compression: maximum
 asarUnpack:

@@ -44,7 +44,7 @@ const pidFile = (): string => join(runDir(), 'motor.pid')
 const modelPath = (file: string): string => join(baseDir(), 'models', file)
 const exeName = process.platform === 'win32' ? 'llama-server.exe' : 'llama-server'
 
-async function extract(archive: string, dest: string, signal: AbortSignal): Promise<void> {
+export async function extract(archive: string, dest: string, signal: AbortSignal): Promise<void> {
   // tar do próprio sistema: no Mac (/usr/bin/tar) e no Windows 10+ (System32\tar.exe, também abre .zip).
   // Ele recusa caminhos absolutos e "..", então nada sai da pasta de destino.
   const tar =

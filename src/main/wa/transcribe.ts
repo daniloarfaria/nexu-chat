@@ -1,13 +1,16 @@
 import { app } from 'electron'
 import { execFile } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { accessSync, constants, existsSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import type { MediaInfo, TranscribeSettings, TranscribeStatus } from '@shared/types'
 import { getDb, getSetting, setSetting } from '../db'
 import { getAiSettings, listProviders } from '../ai/router'
-import { exclusiveLocal } from '../ai/local/service'
+import { exclusiveLocal, extract } from '../ai/local/service'
+import { downloadVerified } from '../ai/local/download'
+import { installVoiceComponents, isWhisperModel } from './voice-install'
+import { voiceAssetsFor, WHISPER_MODEL } from './voice-catalog'
 import { unsealString } from '../secure'
 import { ensureMedia } from './media'
 import { touchMessage } from './store'
@@ -43,7 +46,16 @@ export function setTranscribeSettings(patch: Partial<TranscribeSettings>): Trans
 const exe = process.platform === 'win32' ? '.exe' : ''
 
 function firstExisting(paths: Array<string | null | undefined>): string | null {
-  for (const p of paths) if (p && existsSync(p)) return p
+  for (const p of paths) {
+    if (!p) continue
+    try {
+      if (!statSync(p).isFile()) continue
+      accessSync(p, process.platform === 'win32' ? constants.F_OK : constants.X_OK)
+      return p
+    } catch {
+      /* removido ou não executável */
+    }
+  }
   return null
 }
 
@@ -52,7 +64,7 @@ function onPath(name: string): Array<string> {
 }
 
 function findModel(custom: string | null): string | null {
-  if (custom && existsSync(custom)) return custom
+  if (custom && isWhisperModel(custom)) return custom
   const dirs = [
     join(app.getPath('userData'), 'models'),
     join(homedir(), '.cache', 'whisper'),
@@ -67,7 +79,7 @@ function findModel(custom: string | null): string | null {
     const files = readdirSync(d).filter((f) => /^ggml-.*\.bin$/.test(f))
     for (const o of order) {
       const f = files.find((x) => x.includes(o))
-      if (f) return join(d, f)
+      if (f && isWhisperModel(join(d, f))) return join(d, f)
     }
   }
   return null
@@ -84,6 +96,107 @@ function localTools(s: TranscribeSettings): { whisper: string | null; model: str
     model: findModel(s.modelPath),
     ffmpeg: firstExisting([s.ffmpegPath, '/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg', ...onPath('ffmpeg')])
   }
+}
+
+function bundledTool(name: 'whisper-cli' | 'ffmpeg'): string | null {
+  const file = join('resources', 'transcribe', `darwin-${process.arch}`, name)
+  return firstExisting([
+    join(app.getAppPath?.() ?? process.cwd(), file).replace(/app\.asar([/\\])/, 'app.asar.unpacked$1'),
+    join(process.resourcesPath ?? '', 'transcribe', `darwin-${process.arch}`, name)
+  ])
+}
+
+let installation: { abort: AbortController; job: Promise<void> } | null = null
+let installProgress = { label: '', received: 0, total: 0, error: null as string | null }
+
+function voiceInstallStatus(tools: ReturnType<typeof localTools>): TranscribeStatus['install'] {
+  const assets = voiceAssetsFor(process.platform, process.arch)
+  const supported =
+    !!assets &&
+    (process.platform !== 'darwin' ||
+      ((!!tools.whisper || !!bundledTool('whisper-cli')) && (!!tools.ffmpeg || !!bundledTool('ffmpeg'))))
+  return {
+    ...installProgress,
+    running: !!installation,
+    supported,
+    downloadBytes: !assets
+      ? 0
+      : (tools.ffmpeg ? 0 : (assets.ffmpeg?.size ?? 0)) +
+        (tools.model ? 0 : WHISPER_MODEL.size) +
+        (tools.whisper ? 0 : (assets.binary?.size ?? 0))
+  }
+}
+
+/** Inicia em segundo plano; progresso fica disponível também ao sair e voltar para a tela. */
+export function startVoiceInstall(): TranscribeStatus {
+  if (installation) return transcribeStatus()
+  const abort = new AbortController()
+  const initialSettings = getTranscribeSettings()
+  installProgress = { label: 'Preparando instalação', received: 0, total: 0, error: null }
+  const job = Promise.resolve()
+    .then(async () => {
+      const tools = await installVoiceComponents({
+        root: join(app.getPath('userData'), 'voice-local'),
+        platform: process.platform,
+        arch: process.arch,
+        bundledWhisper: bundledTool('whisper-cli'),
+        bundledFfmpeg: bundledTool('ffmpeg'),
+        tools: localTools(initialSettings),
+        signal: abort.signal,
+        download: downloadVerified,
+        extract,
+        progress: (label, received, total) => {
+          installProgress = { label, received, total, error: null }
+        },
+        validate: async (file, kind, signal) => {
+          try {
+            await run(file, [kind === 'whisper' ? '-h' : '-version'], {
+              timeout: 20_000,
+              windowsHide: true,
+              signal,
+              maxBuffer: 1024 * 1024
+            })
+          } catch (error) {
+            if (signal.aborted) throw error
+            throw new Error(
+              process.platform === 'win32' && kind === 'whisper'
+                ? 'O Windows não conseguiu iniciar o Whisper. Este pacote requer Microsoft Visual C++ Runtime x64. Nenhum caminho foi salvo; use as opções avançadas se já tiver outra instalação.'
+                : `Não foi possível executar ${kind === 'whisper' ? 'o Whisper' : 'o conversor de áudio'}. Nenhum caminho foi salvo.`,
+              { cause: error }
+            )
+          }
+        }
+      })
+      abort.signal.throwIfAborted()
+      // Não muda modo/provedor nem sobrescreve escolhas manuais feitas durante o download.
+      const current = getTranscribeSettings()
+      setTranscribeSettings({
+        whisperPath: current.whisperPath !== initialSettings.whisperPath ? current.whisperPath : tools.whisper,
+        ffmpegPath: current.ffmpegPath !== initialSettings.ffmpegPath ? current.ffmpegPath : tools.ffmpeg,
+        modelPath: current.modelPath !== initialSettings.modelPath ? current.modelPath : tools.model
+      })
+      installProgress = { label: 'Voz pronta para usar', received: 0, total: 0, error: null }
+    })
+    .catch((error: unknown) => {
+      installProgress = {
+        label: abort.signal.aborted
+          ? 'Instalação cancelada. Você pode retomar o download.'
+          : 'Não foi possível concluir',
+        received: 0,
+        total: 0,
+        error: abort.signal.aborted ? null : (error as Error).message
+      }
+    })
+    .finally(() => {
+      installation = null
+    })
+  installation = { abort, job }
+  return transcribeStatus()
+}
+
+export function cancelVoiceInstall(): TranscribeStatus {
+  installation?.abort.abort()
+  return transcribeStatus()
 }
 
 type GroqBlocked = TranscribeStatus['groqBlocked']
@@ -118,6 +231,7 @@ export function transcribeStatus(): TranscribeStatus {
   const g = groqState()
   return {
     settings,
+    install: voiceInstallStatus(local),
     local: { ...local, ready: !!(local.whisper && local.model && local.ffmpeg) },
     groq: !!g.provider,
     groqBlocked: g.blocked
@@ -132,7 +246,23 @@ async function transcribeLocal(
   try {
     await run(
       tools.ffmpeg,
-      ['-y', '-loglevel', 'error', '-i', file, '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', wav],
+      [
+        '-y',
+        '-nostdin',
+        '-loglevel',
+        'error',
+        '-protocol_whitelist',
+        'file,pipe',
+        '-i',
+        file,
+        '-ar',
+        '16000',
+        '-ac',
+        '1',
+        '-c:a',
+        'pcm_s16le',
+        wav
+      ],
       { timeout: 60_000 }
     )
     const { stdout } = await run(tools.whisper, ['-m', tools.model, '-f', wav, '-l', 'pt', '-nt', '-np', '-t', '4'], {

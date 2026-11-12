@@ -10,7 +10,13 @@ import * as store from './wa/store'
 import * as send from './wa/send'
 import { ensureMedia, markDownloaded, safeFileName } from './wa/media'
 import { getAvatars } from './wa/avatars'
-import { setTranscribeSettings, transcribe, transcribeStatus } from './wa/transcribe'
+import {
+  cancelVoiceInstall,
+  startVoiceInstall,
+  setTranscribeSettings,
+  transcribe,
+  transcribeStatus
+} from './wa/transcribe'
 import type { Handle } from './ipc'
 import { noteHumanMessage } from './iaAtendimento'
 import { onHumanMessage } from './recuperacao'
@@ -208,6 +214,8 @@ export function registerChatIpc(handle: Handle, getWindow: () => BrowserWindow |
     return transcribe(wa.getSocket(a.accountId), a.accountId, a.jid, a.id)
   })
   handle('transcribe:status', null, () => transcribeStatus())
+  handle('transcribe:install', null, () => startVoiceInstall())
+  handle('transcribe:cancel', null, () => cancelVoiceInstall())
   handle(
     'transcribe:save',
     z
