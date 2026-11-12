@@ -19,6 +19,7 @@ import { registerBusinessIpc } from './ipc-business'
 import { registerStatusIpc } from './ipc-status'
 import { registerNotesIpc } from './ipc-notes'
 import { registerRobotIpc } from './ipc-robot'
+import { registerRecoveryIpc } from './ipc-recuperacao'
 import { checkForUpdates, downloadUpdate, getUpdateStatus, installUpdate } from './updater'
 
 export type Handle = <C extends ApiChannel>(channel: C, schema: z.ZodTypeAny | null, fn: Handler<C>) => void
@@ -145,6 +146,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null, relaunch: () 
   registerStatusIpc(handle)
   registerNotesIpc(handle)
   registerRobotIpc(handle)
+  registerRecoveryIpc(handle)
 
   handle('backup:get', null, () => backup.getBackupSettings())
   handle(

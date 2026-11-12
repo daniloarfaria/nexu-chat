@@ -13,6 +13,7 @@ import { log } from './log'
 import { enqueueSend } from './outbox'
 import { markAutoMessage } from './autoMessages'
 import { onClientMessage, onOwnMessage, robotActive, startRobot } from './iaAtendimento'
+import { onClientReply, onHumanMessage, startRecovery } from './recuperacao'
 
 /**
  * Tudo que reage a mensagens recebidas:
@@ -173,9 +174,14 @@ async function onIncoming(accountId: string, m: MessageItem): Promise<void> {
   const sock = wa.getSocket(accountId)
   // Mensagem da loja digitada no celular: o atendente assumiu (o robô para)
   if (m.fromMe) {
-    onOwnMessage(accountId, m, wasSentByApp(accountId, m.id))
+    const sentByApp = wasSentByApp(accountId, m.id)
+    onOwnMessage(accountId, m, sentByApp)
+    // Uma pessoa escreveu pelo celular: a recuperação de vendas para (as mensagens do próprio app já vêm marcadas)
+    if (!sentByApp && m.type !== 'system' && m.type !== 'call') onHumanMessage(accountId, m.chatJid)
     return
   }
+  // O cliente escreveu: a recuperação de vendas para na hora ("SAIR" também), mesmo sem conexão no momento
+  onClientReply(accountId, m)
   if (!account || !sock) return
 
   if (isJidGroup(m.chatJid)) {
@@ -239,6 +245,7 @@ async function autoReply(
 
 export function startAutomation(): void {
   startRobot()
+  startRecovery()
   storeEvents.on('incoming', ({ accountId, message }: { accountId: string; message: MessageItem }) => {
     onIncoming(accountId, message).catch((e) => log.warn('Falha na automação', { erro: (e as Error).message }))
   })

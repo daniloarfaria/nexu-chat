@@ -19,7 +19,8 @@ export const MODULE_KEYS = [
   'metaConversoes',
   'leadsPlanilha',
   'perfilIa',
-  'iaAtendimento'
+  'iaAtendimento',
+  'recuperacao'
 ] as const
 
 export type ModuleKey = (typeof MODULE_KEYS)[number]
@@ -76,6 +77,12 @@ export const MODULE_INFO: Record<ModuleKey, { label: string; description: string
     description:
       'A IA responde as conversas novas, passa para um atendente quando precisa e para quando você assume. Só liga com o Assistente de IA ligado. Trechos anonimizados da conversa vão para a IA a cada resposta',
     group: 'Atendimento'
+  },
+  recuperacao: {
+    label: 'Recuperação de vendas',
+    description:
+      'A IA chama de volta o cliente que sumiu (nas colunas e etiquetas que você escolher), com até 3 mensagens e um desconto que só você define. Por padrão, você aprova cada mensagem antes de sair. Só liga com o Assistente de IA ligado. Trechos anonimizados da conversa vão para a IA',
+    group: 'Vendas'
   }
 }
 
@@ -96,7 +103,8 @@ export const DEFAULT_MODULES: Modules = {
   metaConversoes: false,
   leadsPlanilha: false,
   perfilIa: false,
-  iaAtendimento: false
+  iaAtendimento: false,
+  recuperacao: false
 }
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'qr' | 'connected' | 'logged_out'
@@ -464,7 +472,7 @@ export interface Deal {
   payment: string | null
   reason: string | null
   note: string | null
-  sourceType: 'campaign' | 'reminder' | 'group' | 'organic' | 'ad'
+  sourceType: 'campaign' | 'reminder' | 'group' | 'organic' | 'ad' | 'recovery'
   sourceName: string | null
   createdAt: number
 }
@@ -519,6 +527,8 @@ export interface PanelData {
     newChatsSold: number
     recovered: number
     recoveredCents: number
+    /** Quanto as vendas recuperadas custaram em desconto (estimativa) */
+    recoveredDiscountCents: number
   }
   pipelines: Array<{ id: number; name: string; accountId: string; accountName: string }>
   funnel: {
@@ -1117,6 +1127,88 @@ export interface RobotSettings {
   handoffOnClose: boolean
   /** Uma pessoa por linha: "Ana: lentes de contato, financeiro". */
   agentsText: string
+}
+
+// ---------- Recuperação de vendas ----------
+
+export type RecoveryMode = 'approve' | 'auto'
+
+export interface RecoverySettings {
+  enabled: boolean
+  /** 'approve': a mensagem espera na fila "Para aprovar". 'auto': sai sozinha. */
+  mode: RecoveryMode
+  /** Horas de silêncio do cliente, depois da última resposta da loja, até a primeira tentativa. */
+  idleHours: number
+  /** Quantas tentativas no máximo (1 a 3). */
+  attempts: number
+  /** Dias entre a 1ª e a 2ª tentativa e entre a 2ª e a 3ª. */
+  gapDays: [number, number]
+  /** Entra: o cliente tem um cartão em uma destas colunas (ids). Coluna de ganho ou perda nunca entra (vale o tipo, não o nome). */
+  stageIds: number[]
+  /** Entra: o cliente tem uma destas etiquetas (o nome é a identidade da etiqueta). */
+  tags: string[]
+  /** Entra: a IA percebeu interesse de compra na conversa. */
+  byInterest: boolean
+  /** Percentual de desconto (0 = sem desconto). O número vem só daqui, a IA nunca escolhe. */
+  discountPct: number
+  /** A partir de qual tentativa o desconto entra (1 a 3). */
+  discountFrom: number
+  discountValidDays: number
+  /** Teto do desconto em reais (null = sem teto). */
+  discountCapReais: number | null
+  /** Condição do desconto, ex.: "na compra à vista". */
+  discountCondition: string
+  /** Máximo de mensagens de recuperação enviadas por dia. */
+  perDay: number
+}
+
+export type AttemptStatus = 'pendente' | 'aprovada' | 'enviada' | 'descartada' | 'falhou'
+
+export interface RecoveryQueueItem {
+  id: number
+  followupId: number
+  chatJid: string
+  chatName: string
+  /** Número da tentativa (1 a 3) e quantas a regra prevê. */
+  n: number
+  of: number
+  text: string
+  status: AttemptStatus
+  discountPct: number | null
+  /** Texto do desconto, como vai na mensagem. */
+  offer: string | null
+  reasonIn: 'etiqueta' | 'funil' | 'interesse'
+  /** Por que ainda não saiu (fora do horário, limite do dia...). */
+  waiting: string | null
+  createdAt: number
+}
+
+export interface RecoveryFollowupItem {
+  id: number
+  chatJid: string
+  chatName: string
+  status: 'ativo' | 'recuperada' | 'parado' | 'concluido'
+  stopReason: string | null
+  reasonIn: 'etiqueta' | 'funil' | 'interesse'
+  attemptsSent: number
+  nextDueAt: number | null
+  startedAt: number
+  recoveredCents: number
+  discountCents: number
+}
+
+export interface RecoveryStats {
+  /** Conversas em acompanhamento agora. */
+  active: number
+  /** Mensagens esperando aprovação. */
+  pending: number
+  sent: number
+  /** Clientes que responderam depois de uma tentativa. */
+  replied: number
+  recovered: number
+  recoveredCents: number
+  /** Quanto custou em desconto (estimativa, ver o manual). */
+  discountCents: number
 }
 
 export type ChatAiMode = 'ia' | 'humano' | 'espera'

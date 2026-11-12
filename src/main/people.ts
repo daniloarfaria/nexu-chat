@@ -240,6 +240,7 @@ export function deletePeople(accountId: string, ids: number[]): { mediaFiles: st
         db.prepare('DELETE FROM group_warnings WHERE account_id = ? AND participant = ?').run(accountId, jid)
         db.prepare('DELETE FROM lid_map WHERE account_id = ? AND (lid = ? OR pn = ?)').run(accountId, jid, jid)
         db.prepare('DELETE FROM chat_attribution WHERE account_id = ? AND chat_jid = ?').run(accountId, jid)
+        db.prepare('DELETE FROM followups WHERE account_id = ? AND chat_jid = ?').run(accountId, jid)
         db.prepare('DELETE FROM chat_ai_mode WHERE account_id = ? AND chat_jid = ?').run(accountId, jid)
         db.prepare('DELETE FROM ia_atendimento_log WHERE account_id = ? AND chat_jid = ?').run(accountId, jid)
       }
