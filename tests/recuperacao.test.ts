@@ -19,7 +19,8 @@ vi.mock('../src/main/ai/router', () => ({
   complete: vi.fn(),
   getAiSettings: () => ({ privacy: 'anonimizar', paidMonthlyLimit: 300 })
 }))
-vi.mock('../src/main/outbox', () => ({
+vi.mock('../src/main/outbox', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/main/outbox')>()),
   enqueueSend: (_acc: string, job: () => Promise<unknown>): boolean => {
     h.jobs.push(job().catch(() => undefined))
     return true

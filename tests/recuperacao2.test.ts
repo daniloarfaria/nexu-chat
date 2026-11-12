@@ -6,6 +6,7 @@ import { join } from 'node:path'
 const h = vi.hoisted(() => ({
   jobs: [] as Array<Promise<unknown>>,
   sent: [] as Array<{ jid: string; text: string }>,
+  beforeSend: null as (() => void) | null,
   sock: { sendPresenceUpdate: async () => undefined } as Record<string, unknown> | null
 }))
 
@@ -19,7 +20,8 @@ vi.mock('../src/main/ai/router', () => ({
   complete: vi.fn(),
   getAiSettings: () => ({ privacy: 'anonimizar', paidMonthlyLimit: 300 })
 }))
-vi.mock('../src/main/outbox', () => ({
+vi.mock('../src/main/outbox', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/main/outbox')>()),
   enqueueSend: (_acc: string, job: () => Promise<unknown>): boolean => {
     h.jobs.push(job().catch(() => undefined))
     return true
@@ -28,6 +30,7 @@ vi.mock('../src/main/outbox', () => ({
 vi.mock('../src/main/wa/manager', () => ({ wa: { getSocket: () => h.sock, on: () => undefined } }))
 vi.mock('../src/main/wa/send', () => ({
   sendAndStore: async (_s: unknown, _a: string, jid: string, c: { text: string }) => {
+    h.beforeSend?.()
     h.sent.push({ jid, text: c.text })
     return undefined
   },
@@ -38,6 +41,10 @@ import { complete } from '../src/main/ai/router'
 import { closeDb, getDb, openDb } from '../src/main/db'
 import { updateAccount } from '../src/main/accounts'
 import { saveBusinessContext } from '../src/main/ai/context'
+import { lockChat } from '../src/main/outbox'
+import { sentToday, reserveDailySend, releaseDailySend } from '../src/main/campaigns'
+import { deletePeople } from '../src/main/people'
+import { dropSensitiveLines } from '../src/main/ai/privacy'
 import { setAntiBan } from '../src/main/campaigns'
 import { isOptedOut } from '../src/main/people'
 import { saveDeal, deleteDeal } from '../src/main/deals'
@@ -178,6 +185,7 @@ beforeEach(() => {
   R.tuning.sleep = async () => undefined
   h.jobs.length = 0
   h.sent.length = 0
+  h.beforeSend = null
   h.sock = { sendPresenceUpdate: async () => undefined }
   seq = 0
   mockComplete.mockReset()
@@ -677,5 +685,233 @@ describe('L6: migração, módulo e intervalos', () => {
     await R.scanCandidates(ACC)
     R.onHumanMessage(ACC, JID)
     expect(fup().stop_reason).toBe('atendente')
+  })
+})
+
+describe('integração das proteções da auditoria', () => {
+  async function queued(): Promise<number> {
+    chat()
+    mockComplete.mockResolvedValueOnce(ai('Oi! Ficou alguma dúvida?'))
+    await runUntilQueued()
+    return R.listQueue(ACC)[0].id
+  }
+
+  test('a última vaga diária pode ser usada pela própria recuperação', async () => {
+    const id = await queued()
+    setAntiBan(ACC, { dailyLimit: 1 })
+    R.approveAttempt(ACC, id)
+    await flush()
+    expect(h.sent).toHaveLength(1)
+    expect(sentToday(ACC)).toBe(1)
+  })
+
+  test('revalida o limite se uma campanha consome a última vaga durante digitando', async () => {
+    const id = await queued()
+    let reserved = -1
+    R.tuning.sleep = async () => {
+      // Outra campanha consome a última vaga durante o digitando.
+      expect(reserveDailySend(ACC, 1)).toBe(true)
+      reserved = sentToday(ACC)
+    }
+    setAntiBan(ACC, { dailyLimit: 1 })
+    R.approveAttempt(ACC, id)
+    await flush()
+    expect(reserved).toBe(1)
+    expect(h.sent).toHaveLength(0)
+    expect(attempts()[0].status).toBe('aprovada')
+    releaseDailySend(ACC)
+    R.tuning.sleep = async () => undefined
+    expect(R.deliverApproved(ACC)).toBe(1)
+    await flush()
+    expect(h.sent).toHaveLength(1)
+  })
+
+  test('espera a campanha liberar o bloqueio da conversa sem descartar a tentativa', async () => {
+    const id = await queued()
+    const unlock = lockChat(ACC, JID)!
+    try {
+      R.approveAttempt(ACC, id)
+      await flush()
+      expect(h.sent).toHaveLength(0)
+      expect(attempts()[0].status).toBe('aprovada')
+    } finally {
+      unlock()
+    }
+    expect(R.deliverApproved(ACC)).toBe(1)
+    await flush()
+    expect(h.sent).toHaveLength(1)
+  })
+
+  test('a recuperação segura o bloqueio até terminar de enviar', async () => {
+    const id = await queued()
+    R.tuning.sleep = async () => {
+      const unlock = lockChat(ACC, JID)
+      unlock?.()
+      expect(unlock).toBeNull()
+    }
+    R.approveAttempt(ACC, id)
+    await flush()
+    expect(h.sent).toHaveLength(1)
+    const unlock = lockChat(ACC, JID)
+    expect(unlock).not.toBeNull()
+    unlock?.()
+  })
+
+  test('LGPD apaga acompanhamento e tentativa e cancela envio durante digitando', async () => {
+    const id = await queued()
+    const pid = (getDb().prepare('SELECT id FROM people WHERE account_id = ?').get(ACC) as { id: number }).id
+    R.tuning.sleep = async () => {
+      deletePeople(ACC, [pid])
+    }
+    R.approveAttempt(ACC, id)
+    await flush()
+    expect(h.sent).toHaveLength(0)
+    expect(getDb().prepare('SELECT COUNT(*) AS n FROM followups').get()).toEqual({ n: 0 })
+    expect(attempts()).toHaveLength(0)
+  })
+
+  test('geração e classificação usam o filtro sensível antes da nuvem', async () => {
+    await queued()
+    expect(mockComplete.mock.calls[0][0].cloudSanitize).toBe(dropSensitiveLines)
+    R.resetRecoveryState()
+    getDb().prepare('DELETE FROM followups').run()
+    R.saveRecoverySettings(ACC, { byInterest: true, tags: [], stageIds: [] })
+    mockComplete.mockResolvedValueOnce({ text: '{"interesse":true}', provider: 't', model: 'm' })
+    await R.scanCandidates(ACC)
+    expect(mockComplete.mock.calls.at(-1)![0].cloudSanitize).toBe(dropSensitiveLines)
+  })
+})
+
+describe('reserva atômica de envio da recuperação', () => {
+  async function queued(): Promise<number> {
+    chat()
+    mockComplete.mockResolvedValueOnce(ai('Oi! Ficou alguma dúvida?'))
+    await runUntilQueued()
+    return R.listQueue(ACC)[0].id
+  }
+
+  test('campanha não consegue a mesma última vaga enquanto o WhatsApp envia', async () => {
+    const id = await queued()
+    setAntiBan(ACC, { dailyLimit: 1 })
+    let reserved = -1
+    let campaignReserved: boolean | undefined
+    h.beforeSend = () => {
+      reserved = sentToday(ACC)
+      campaignReserved = reserveDailySend(ACC, 1)
+      if (campaignReserved) releaseDailySend(ACC)
+    }
+    R.approveAttempt(ACC, id)
+    await flush()
+    expect(reserved).toBe(1)
+    expect(campaignReserved).toBe(false)
+    expect(h.sent).toHaveLength(1)
+    expect(sentToday(ACC)).toBe(1)
+  })
+
+  test('erro de envio libera reserva diária e bloqueio da conversa', async () => {
+    const id = await queued()
+    let reserved = -1
+    h.beforeSend = () => {
+      reserved = sentToday(ACC)
+      throw new Error('WhatsApp indisponível')
+    }
+    R.approveAttempt(ACC, id)
+    await flush()
+    expect(reserved).toBe(1)
+    expect(sentToday(ACC)).toBe(0)
+    expect(attempts()[0].status).toBe('falhou')
+    const unlock = lockChat(ACC, JID)
+    expect(unlock).not.toBeNull()
+    unlock?.()
+  })
+
+  test('LGPD remove as duas identidades e seus textos de recuperação', () => {
+    chat()
+    const pid = (getDb().prepare('SELECT id FROM people WHERE account_id = ?').get(ACC) as { id: number }).id
+    getDb().prepare('INSERT INTO lid_map (account_id, lid, pn) VALUES (?, ?, ?)').run(ACC, LID, JID)
+    insAttempt(insFollowup(JID), JID)
+    insAttempt(insFollowup(LID), LID)
+    deletePeople(ACC, [pid])
+    expect(getDb().prepare('SELECT COUNT(*) AS n FROM followups').get()).toEqual({ n: 0 })
+    expect(attempts()).toHaveLength(0)
+  })
+})
+
+describe('mudanças durante a classificação de interesse', () => {
+  test.each(['true', 'false'])('LGPD durante classificação (%s) não recria acompanhamento', async (answer) => {
+    chat()
+    R.saveRecoverySettings(ACC, { byInterest: true, tags: [], stageIds: [] })
+    const pid = (getDb().prepare('SELECT id FROM people WHERE account_id = ?').get(ACC) as { id: number }).id
+    mockComplete.mockImplementationOnce(async () => {
+      deletePeople(ACC, [pid])
+      return { text: `{"interesse":${answer}}`, provider: 't', model: 'm' }
+    })
+    expect(await R.scanCandidates(ACC)).toBe(0)
+    expect(getDb().prepare('SELECT COUNT(*) AS n FROM followups').get()).toEqual({ n: 0 })
+  })
+
+  test.each(['desligar', 'sair', 'resposta'])('%s durante classificação impede acompanhamento', async (change) => {
+    chat()
+    R.saveRecoverySettings(ACC, { byInterest: true, tags: [], stageIds: [] })
+    mockComplete.mockImplementationOnce(async () => {
+      if (change === 'desligar') R.saveRecoverySettings(ACC, { enabled: false })
+      if (change === 'sair') {
+        const { optOutByJid } = await import('../src/main/people')
+        optOutByJid(ACC, JID)
+      }
+      if (change === 'resposta') addMsg(false, 'Já resolvi!', nowSec())
+      return { text: '{"interesse":true}', provider: 't', model: 'm' }
+    })
+    expect(await R.scanCandidates(ACC)).toBe(0)
+    expect(getDb().prepare('SELECT COUNT(*) AS n FROM followups').get()).toEqual({ n: 0 })
+  })
+
+  test('fusão LID durante geração não recria tentativa no destino antigo', async () => {
+    addMsg(false, 'Quanto custa?', nowSec() - 2 * DAY - 600, LID)
+    addMsg(true, 'R$ 199.', nowSec() - 2 * DAY, LID)
+    insFollowup(LID)
+    R.saveRecoverySettings(ACC, { byInterest: true, tags: [], stageIds: [] })
+    // Mantém motivo interesse para não depender de etiqueta na identidade antiga.
+    getDb().prepare("UPDATE followups SET reason_in = 'interesse'").run()
+    mockComplete.mockImplementationOnce(async () => {
+      saveLidMappings(ACC, [{ lid: LID, pn: JID }])
+      return ai('Oi! Ficou alguma dúvida?')
+    })
+    await R.processDue(ACC)
+    expect(attempts()).toHaveLength(0)
+    mockComplete.mockResolvedValueOnce(ai('Oi! Ficou alguma dúvida?'))
+    await R.processDue(ACC)
+    expect(getDb().prepare('SELECT chat_jid FROM followup_attempts').get()).toEqual({ chat_jid: JID })
+  })
+})
+
+describe('regra e identidade atualizadas durante espera', () => {
+  test('mudar de automático para aprovar durante geração exige aprovação', async () => {
+    chat()
+    R.saveRecoverySettings(ACC, { mode: 'auto' })
+    await R.scanCandidates(ACC)
+    mockComplete.mockImplementationOnce(async () => {
+      R.saveRecoverySettings(ACC, { mode: 'approve' })
+      return ai('Oi! Ficou alguma dúvida?')
+    })
+    await R.processDue(ACC)
+    expect(attempts()[0].status).toBe('pendente')
+  })
+
+  test('fusão durante digitando aguarda fila obter bloqueio da identidade atual', async () => {
+    addMsg(false, 'Quanto custa?', nowSec() - 2 * DAY - 600, LID)
+    addMsg(true, 'R$ 199.', nowSec() - 2 * DAY, LID)
+    const fid = insFollowup(LID)
+    const id = insAttempt(fid, LID)
+    R.tuning.sleep = async () => {
+      saveLidMappings(ACC, [{ lid: LID, pn: JID }])
+    }
+    R.approveAttempt(ACC, id)
+    await flush()
+    expect(h.sent).toHaveLength(0)
+    R.tuning.sleep = async () => undefined
+    expect(R.deliverApproved(ACC)).toBe(1)
+    await flush()
+    expect(h.sent[0].jid).toBe(JID)
   })
 })
