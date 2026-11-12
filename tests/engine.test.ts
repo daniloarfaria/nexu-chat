@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -69,6 +69,8 @@ beforeEach(() => {
   })
   ;(engine as unknown as { runners: Map<string, unknown> }).runners.clear()
 })
+
+afterEach(() => vi.restoreAllMocks())
 
 function campaign(): number {
   people.savePerson(ACC, { name: 'ANA SOUZA', phone: '11987650001', tags: ['VIP'] })
@@ -149,14 +151,16 @@ describe('motor de campanhas', () => {
   })
 
   test('pausa por baixa taxa de resposta só conta envios com tempo para resposta', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1790000000000)
     const id = campaign()
     C.setAntiBan(ACC, { minReplyRate: 20 })
     const db = getDb()
+    let nextSeq = 1000
     const add = (n: number, at: number): void => {
       for (let i = 0; i < n; i++)
         db.prepare(
           "INSERT INTO campaign_targets (campaign_id, seq, phone, status, sent_at) VALUES (?, ?, ?, 'sent', ?)"
-        ).run(id, 1000 + (at % 7) + i * 10 + n, `5511${at}${i}`, at)
+        ).run(id, nextSeq++, `5511${at}${i}`, at)
     }
     add(30, Date.now()) // recentes: ainda não deu tempo de responder
     await step()

@@ -112,3 +112,41 @@ Dependências que vão no app: **0 vulnerabilidades** (`npm audit --omit=dev`). 
 - **Dados em texto legível no SQLite e nas mídias do computador** (médio): o banco fica legível para quem tem acesso ao computador. Recomendação: criptografia de disco do sistema (FileVault no Mac, BitLocker no Windows) e senha de usuário. A sessão do WhatsApp e as chaves já são criptografadas.
 - **Termos de saúde soltos no texto** (ex.: "tenho glaucoma") não são reconhecidos pela anonimização. Para conversas de saúde, use a privacidade **Estrita** (só provedores que não treinam) ou o Ollama local.
 - **Assinatura de código:** continua pendente (veja acima).
+
+
+## Terceira rodada: novas funções e retomada da integração
+
+12/11/2026. Registro das correções já integradas em `e8c926f` (onda 5a),
+conferidas novamente nos arquivos e testes durante a retomada do trabalho.
+A auditoria original foi feita antes desta data; esta seção não representa
+uma nova auditoria integral do aplicativo.
+
+| Item | Correção e cobertura |
+|---|---|
+| 1 | Exclusão LGPD remove atribuição, modo/log do robô, leads e fila de contatos; variantes de telefone e LID em `people.ts` (`onda5-lgpd.test.ts`). |
+| 2 | Filtro de linhas sensíveis antes da nuvem, inclusive fallback; playbook anonimizado (`ai/privacy.ts`, `onda5-robo.test.ts`). |
+| 3 | Fusão LID/número preserva atendimento humano e cancela timers antigos (`wa/store.ts`, `onda5-robo2.test.ts`). |
+| 4 | Envio manual assume atendimento antes do primeiro await (`ipc-chat.ts`, `onda5-robo.test.ts`). |
+| 5 | Campanha e robô compartilham reserva atômica diária e bloqueio por conversa (`campaigns.ts`, `outbox.ts`, `onda5-envio.test.ts`). Parcial: ritmo e filas continuam separados. |
+| 6 | Público do status respeita supressão por variantes e LID (`people.ts`, `onda5-status.test.ts`). |
+| 7 | Mensagens automáticas não encerram a pergunta pendente (`autoMessages.ts`, `onda5-robo2.test.ts`). Registro somente em memória, TTL de 6 h. |
+| 8 | Atendimento fora do horário reavalia o horário a cada mensagem (`iaAtendimento.ts`, `onda5-robo2.test.ts`). |
+| 9 | Timeout de status conta no limite e retém a conta por 10 min (`status.ts`, `onda5-status.test.ts`). Parcial: reconciliação por retorno tardio, sem consulta ativa ao WhatsApp. |
+| 10 | Troca de URL da planilha reinicia paginação e descarta fetch antigo por geração (`leadsPlanilha.ts`, `onda5-leads.test.ts`). |
+| 11 | Reprocessamento de anúncios usa índice parcial e cursor por timestamp/rowid (`ads.ts`, `onda5-ads.test.ts`). Construção inicial do índice ainda é síncrona. |
+| 12 | Criação de contatos dos leads em lotes de 50, cedendo o event loop (`leadsPlanilha.ts`, `onda5-leads.test.ts`). |
+| 13 | Fusão da origem do anúncio preserva primeira atribuição como unidade (`ads.ts`, `onda5-ads.test.ts`). |
+| 14 | Janela do funil acompanha a conversa após fusão LID/número (`chatStore.test.ts`); teste de store, sem cobertura visual do componente. |
+| 15 | Ações IPC sem retorno informam sucesso à interface (`useAsync.test.ts` e usos de `attempt`). |
+| 16 | Janela por minuto só é mantida para provedores com RPM e é apagada ao remover provedor (`ai/router.ts`). |
+| 17 | Limpeza periódica de mídia do status tolera JSON inválido e falha por arquivo (`onda5-status.test.ts`). |
+
+Na retomada, os 516 testes da base passaram. A falha intermitente
+`UNIQUE campaign_targets.campaign_id, campaign_targets.seq` foi reproduzida
+fixando `Date.now()` em `tests/engine.test.ts`: o gerador derivava sequências
+do horário e repetia chaves entre lotes. A sequência passou a ser incremental,
+mantendo o relógio fixo como regressão. O teste de backup também passou;
+o timeout antigo não foi reproduzido e a criptografia não foi alterada.
+
+O envio de eventos à Meta continua bloqueado por decisão do usuário.
+Publicação, alteração de versão e merge em `main` não fazem parte desta retomada.
