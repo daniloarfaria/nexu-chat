@@ -29,6 +29,11 @@ Em **Configurações → Licença**, cole a chave enviada pela agência e clique
 - Sem licença ou com ela vencida, o app continua mostrando as conversas, e seus dados nunca ficam presos.
 - Para renovar ou mudar de plano, cole a chave nova por cima da antiga.
 
+### Várias licenças na mesma conta de acesso
+O mesmo e-mail pode ter várias licenças. Ao entrar, se houver mais de uma válida, escolha qual usar neste computador. Cada licença mantém seu plano, prazo e quantidade de números, definidos pela agência; as cotas não são somadas.
+Em **Configurações → Licença**, **Trocar licença** permite escolher novamente. A licença atual continua ativa até confirmar a troca. Se houver só uma licença válida, a entrada é automática.
+Ao reduzir o limite de números, os cadastros excedentes ficam bloqueados pela ordem de criação, sem apagar dados ou autenticação. Amplie a licença ou ajuste os cadastros para voltar a usar essas contas. Uma licença encerrada não é trocada automaticamente por outra.
+
 ## 2. Conectar o WhatsApp
 
 1. Abra o menu **Contas** (ou clique em **Adicionar conta**, no alto à esquerda).
@@ -93,6 +98,9 @@ As fotos dos contatos e dos grupos aparecem na lista, no topo da conversa e, nos
 - **Buscar nas mensagens** (lupa no alto à direita): procura dentro de todas as conversas.
 - **Notas do cliente:** na faixa abaixo do nome (onde ficam as etiquetas), o botão **notas** abre o bloco de notas daquele cliente (veja "Notas do cliente" na seção 5).
 
+### Apagar uma mensagem enviada
+Use o botão de lixeira **Apagar para todos** ao lado da sua mensagem e confirme. A ação vale somente para mensagens suas, conforme permitido pelo WhatsApp. Em caso de falha, o app mostra o erro e mantém o conteúdo; após sucesso, a conversa mostra a mensagem apagada e remove o conteúdo da busca local.
+
 ### Enviar arquivos e outros conteúdos
 Clique no **clipe** ao lado da caixa de texto:
 
@@ -120,12 +128,15 @@ Atalhos:
 - Clique em uma foto para ampliar. Clique em um documento para salvar no computador.
 - Mensagens de **visualização única** só podem ser abertas no celular.
 
+### Imprimir imagens e PDFs
+Na conversa, use **Imprimir** ao lado de uma imagem ou PDF. O app abre o diálogo de impressão do sistema para escolher impressora, páginas e cópias. Se necessário, baixa a mídia antes. Cancelar fecha a janela sem enviar o trabalho.
+
 ### Transcrição de áudios
 Embaixo de cada áudio ou mensagem de voz aparece **Transcrever**. O texto fica salvo na conversa, entra na busca e é usado pela IA nas sugestões de resposta e no playbook.
 - Em **Configurações → Transcrição de áudio** você escolhe:
   - **quando:** pelo botão, automático para toda mensagem de voz recebida, ou desligado;
   - **onde:** no computador ou na Groq.
-- **No computador (Whisper):** o áudio não sai daqui. O app encontra sozinho o whisper-cli, o modelo e o ffmpeg; se não achar, use **Escolher**.
+- **No computador (Whisper):** o áudio não sai daqui. Se faltar algum componente, clique em **Baixar e configurar** em Configurações → Transcrição de áudio. O app mostra o tamanho e o progresso, confere os arquivos e configura os caminhos. Componentes válidos já instalados são reaproveitados. Você pode cancelar e retomar. A escolha manual fica em **Opções avançadas**.
 - **Na Groq:** usa a mesma chave da Groq cadastrada no Assistente de IA. O áudio do cliente sai do computador como está (áudio não é anonimizado). A Groq tem faixa gratuita com limites e diz que não treina com os dados; confira no site dela.
 - **A privacidade vale também para os áudios.** O áudio **não** é enviado para a Groq quando:
   - a privacidade do Assistente de IA está em **Estrita**;
@@ -178,6 +189,7 @@ O menu **Contatos** é a base de clientes da loja, usada por campanhas e lembret
   - Renomear ou apagar também atualiza as colunas de funil, os lembretes e as campanhas ainda não enviadas.
   - "VIP" e "vip" são a mesma etiqueta.
   - Na ficha do contato, digite para buscar uma etiqueta; **Enter** cria uma nova.
+- **Campos do negócio:** defina os campos desta conta (por exemplo, `modelo`, `data_compra` ou `veiculo`). Eles aparecem na ficha de todos os contatos e podem ser usados nas mensagens, como `{modelo}`. Cada conta tem seus próprios campos. Remover uma definição mantém os valores já salvos nos contatos.
 - **Adicionar ao funil:** com contatos selecionados, coloque todos de uma vez numa coluna de funil.
 - **Não receber:** quem responde **SAIR** (ou "parar", "não quero mais"…) entra sozinho nessa lista e recebe uma confirmação. Você também pode marcar à mão.
 - **Excluir** atende pedidos de exclusão de dados (LGPD). Apaga o contato junto com as conversas, mensagens, fotos e arquivos recebidos e as vendas registradas. A exclusão vale para todas as formas do número (com e sem o nono dígito e o identificador interno do WhatsApp) e também apaga os leads da planilha, a origem de anúncio, o modo do robô, o registro de respostas da IA e os acompanhamentos e mensagens de recuperação dessa pessoa, além de tirá-la da fila de contatos a criar (para o contato não voltar sozinho). Se a pessoa tinha pedido para não receber, só o número fica guardado na lista de bloqueio, para ela nunca mais receber, mesmo se voltar numa planilha.
@@ -226,8 +238,10 @@ Como usar:
    - Use `{Oi|Olá|E aí}` para o app escolher uma das palavras.
    - Com a IA ligada, **Gerar versões com IA** escreve variações para você.
 4. Deixe ligado o rodapé **"responda SAIR para não receber"**.
-5. Se quiser, anexe imagem, vídeo, áudio ou PDF. A mensagem vira a legenda.
-6. Confira a **prévia** e use **Enviar teste para mim** para ver no seu celular a mensagem e o anexo selecionado, mesmo antes de salvar.
+5. Em cada versão, escolha sua própria imagem, vídeo, áudio ou arquivo. Imagens e vídeos recebem o texto como legenda. Com áudio, o texto é enviado em seguida.
+   - **Gravar áudio** usa o microfone do computador. Clique em **Concluir gravação**, ou em **Cancelar** para descartar. Ouça na prévia antes de salvar ou enviar. Fechar o editor interrompe a captura.
+   - **Remover mídia** retira o anexo somente daquela versão. Campanhas antigas mantêm o anexo que já usavam.
+6. A **prévia** mostra cada versão com sua mídia: imagem, vídeo, player de áudio ou arquivo. Use **Enviar teste para mim** para conferir as versões no seu celular, mesmo antes de salvar. O sorteio do envio mantém o texto e o anexo da mesma versão juntos.
 7. **Iniciar campanha** começa agora. Se você preencher uma data em "Agendar para", ela começa sozinha nesse horário.
 
 ### Acompanhar

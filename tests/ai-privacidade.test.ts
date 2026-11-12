@@ -13,6 +13,7 @@ vi.mock('electron', () => ({
 
 import type { AiProvider, AiSettings } from '../src/shared/types'
 import { dayKey, isLoopbackUrl } from '../src/shared/rules'
+import { migrationsNow, openWith } from '../scripts/perf/lib'
 import { closeDb, getDb, openDb } from '../src/main/db'
 import { candidates, complete, listProviders, saveProvider, setAiSettings, testProvider } from '../src/main/ai/router'
 
@@ -82,7 +83,12 @@ describe('padrão de privacidade dos provedores novos', () => {
   })
 
   test('migração: NVIDIA e DeepSeek já cadastrados passam a não receber conversas de clientes', () => {
-    const db = getDb()
+    closeDb()
+    const migrations = migrationsNow()
+    const beforeMonthly = migrations.findIndex((sql) => sql.includes('ADD COLUMN monthly_limit'))
+    expect(beforeMonthly).toBeGreaterThan(0)
+    const upgradeFile = join(userData, 'antes-limite-mensal.sqlite')
+    const db = openWith(upgradeFile, migrations.slice(0, beforeMonthly))
     const ins = db.prepare(
       `INSERT INTO ai_providers (preset, name, base_url, trains_on_data, no_customer_data, paid, enabled, priority, created_at)
        VALUES (?, ?, 'https://x.example', 1, 0, 0, 1, 100, 0)`
@@ -90,11 +96,8 @@ describe('padrão de privacidade dos provedores novos', () => {
     ins.run('nvidia', 'NVIDIA')
     ins.run('deepseek', 'DeepSeek')
     ins.run('gemini', 'Gemini')
-    const v = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
-    db.exec('ALTER TABLE ai_providers DROP COLUMN monthly_limit')
-    db.exec(`PRAGMA user_version = ${v - 1}`)
-    closeDb()
-    openDb(dbFile)
+    db.close()
+    openDb(upgradeFile)
     const by = Object.fromEntries(listProviders().map((p) => [p.preset, p.noCustomerData]))
     expect(by).toEqual({ nvidia: true, deepseek: true, gemini: false })
   })

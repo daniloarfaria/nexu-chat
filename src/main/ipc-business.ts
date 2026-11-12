@@ -1,5 +1,5 @@
 import { dialog, app, type BrowserWindow } from 'electron'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 import type { AnyMessageContent } from 'baileys'
@@ -222,6 +222,14 @@ export function registerBusinessIpc(handle: Handle, getWindow: () => BrowserWind
     pipes.placementsOfPerson(a.accountId, a.personId)
   )
   handle('people:fields', z.object({ accountId }).strict(), (a) => people.customFieldNames(a.accountId))
+  handle('people:field-definitions', z.object({ accountId }).strict(), (a) => people.fieldDefinitions(a.accountId))
+  handle(
+    'people:set-field-definitions',
+    z
+      .object({ accountId, names: z.array(z.string().trim().min(1).max(40).refine(people.validFieldName)).max(50) })
+      .strict(),
+    (a) => people.setFieldDefinitions(a.accountId, a.names)
+  )
   handle(
     'people:save',
     z
@@ -231,7 +239,16 @@ export function registerBusinessIpc(handle: Handle, getWindow: () => BrowserWind
         name: z.string().max(120),
         phone: z.string().max(30),
         birthday: z.string().max(20).nullable().optional(),
-        fields: z.record(z.string().max(40), z.string().max(500)).optional(),
+        fields: z
+          .custom<Record<string, string>>(
+            (v) =>
+              !!v &&
+              typeof v === 'object' &&
+              !Array.isArray(v) &&
+              Object.keys(v).every((key) => !['__proto__', 'constructor', 'prototype'].includes(key))
+          )
+          .pipe(z.record(z.string().max(40), z.string().max(500)))
+          .optional(),
         tags: z.array(tag).max(30).optional()
       })
       .strict(),
@@ -304,6 +321,23 @@ export function registerBusinessIpc(handle: Handle, getWindow: () => BrowserWind
       return r
     }
   )
+  const campaignFile = z
+    .object({
+      name: z.string().min(1).max(255),
+      mime: z.string().min(1).max(120),
+      data: bytes.refine(
+        (v) => v.byteLength > 0 && v.byteLength <= 64 * 1024 * 1024,
+        'Arquivo vazio ou maior que 64 MB'
+      ),
+      voice: z.boolean().optional()
+    })
+    .strict()
+  const mediaIndices = z.array(z.number().int().min(0).max(9).nullable()).max(10).optional()
+  handle(
+    'campaigns:media-preview',
+    z.object({ id, accountId, variantIndex: z.number().int().min(0).max(9) }).strict(),
+    (a) => C.campaignMediaPreview(a.id, a.accountId, a.variantIndex)
+  )
   handle('campaigns:list', z.object({ accountId }).strict(), (a) => C.listCampaigns(a.accountId))
   handle('campaigns:get', z.object({ id }).strict(), (a) => campaignOf(a.id))
   handle(
@@ -314,6 +348,8 @@ export function registerBusinessIpc(handle: Handle, getWindow: () => BrowserWind
         accountId,
         name: z.string().trim().min(1, 'Dê um nome à campanha').max(100),
         templates: z.array(z.string().max(4096)).min(1).max(10),
+        mediaIndices,
+        files: z.array(campaignFile.nullable()).max(10).optional(),
         audience,
         optOutFooter: z.boolean(),
         scheduledAt: z.number().int().positive().nullable()
@@ -326,10 +362,8 @@ export function registerBusinessIpc(handle: Handle, getWindow: () => BrowserWind
   )
   handle(
     'campaigns:media',
-    z
-      .object({ id, file: z.object({ name: z.string().max(255), mime: z.string().max(120), data: bytes }).nullable() })
-      .strict(),
-    (a) => C.setCampaignMedia(a.id, a.file)
+    z.object({ id, variantIndex: z.number().int().min(0).max(9).optional(), file: campaignFile.nullable() }).strict(),
+    (a) => C.setCampaignMedia(a.id, a.file, a.variantIndex)
   )
   handle('campaigns:audience-count', z.object({ accountId, audience }).strict(), (a) =>
     a.audience.type === 'groups'
@@ -356,17 +390,7 @@ export function registerBusinessIpc(handle: Handle, getWindow: () => BrowserWind
   })
   handle('campaigns:retry', z.object({ id }).strict(), (a) => C.retryFailed(a.id))
   handle('campaigns:delete', z.object({ id }).strict(), (a) => C.deleteCampaign(a.id))
-  handle('campaigns:duplicate', z.object({ id }).strict(), (a) => {
-    const c = campaignOf(a.id)
-    return C.saveCampaign({
-      accountId: c.accountId,
-      name: `${c.name} (cópia)`,
-      templates: c.templates,
-      audience: c.audience,
-      optOutFooter: c.optOutFooter,
-      scheduledAt: null
-    })
-  })
+  handle('campaigns:duplicate', z.object({ id }).strict(), (a) => C.duplicateCampaign(a.id))
   handle(
     'campaigns:targets',
     z
@@ -389,38 +413,36 @@ export function registerBusinessIpc(handle: Handle, getWindow: () => BrowserWind
       .object({
         accountId,
         templates: z.array(z.string().max(4096)).min(1).max(10),
+        mediaIndices,
         optOutFooter: z.boolean(),
         campaignId: id.optional(),
-        file: z
-          .object({
-            name: z.string().min(1).max(255),
-            mime: z.string().min(1).max(120),
-            data: bytes.refine(
-              (data) => data.byteLength > 0 && data.byteLength <= 64 * 1024 * 1024,
-              'Arquivo vazio ou maior que 64 MB'
-            )
-          })
-          .strict()
-          .optional()
+        files: z.array(campaignFile.nullable()).max(10).optional(),
+        file: campaignFile.optional()
       })
       .strict(),
     async (a) => {
       const campaign = a.campaignId ? campaignOf(a.campaignId) : null
       if (campaign && campaign.accountId !== a.accountId) throw new Error('Campanha não encontrada')
-      const media =
-        a.file ??
-        (campaign?.media
-          ? {
-              name: campaign.media.name,
-              mime: campaign.media.mime,
-              data: readFileSync(C.mediaPath(campaign.media))
-            }
-          : null)
+      if (a.files && a.files.length !== a.templates.length) throw new Error('Mídias das versões inválidas')
+      if (a.mediaIndices && a.mediaIndices.length !== a.templates.length) throw new Error('Índices de mídia inválidos')
+      // Valide e prepare todas as versões antes de enviar a primeira.
+      const variants = a.templates
+        .map((text, i) => {
+          const index = a.mediaIndices ? a.mediaIndices[i] : i
+          const upload = a.files ? a.files[i] : a.file
+          const media = upload
+            ? C.prepareCampaignFile(upload)
+            : campaign && index !== null
+              ? C.campaignMediaPreview(campaign.id, a.accountId, index)
+              : null
+          return { text, media }
+        })
+        .filter((v) => v.text.trim())
       const s = sock(a.accountId)
       const me = s.user?.id ? `${s.user.id.split(':')[0].split('@')[0]}@s.whatsapp.net` : null
       if (!me) throw new Error('Número da conta desconhecido')
       const account = getAccount(a.accountId)
-      for (const t of a.templates.filter((x) => x.trim())) {
+      for (const { text: t, media } of variants) {
         let text = renderTemplate(t, {
           nome: 'Maria da Silva',
           primeiro_nome: firstName('Maria da Silva'),
@@ -434,7 +456,7 @@ export function registerBusinessIpc(handle: Handle, getWindow: () => BrowserWind
           const mime = media.mime
           if (/^image\/(jpeg|png|gif|webp)$/.test(mime)) content = { image: data, caption: text, mimetype: mime }
           else if (/^video\//.test(mime)) content = { video: data, caption: text, mimetype: 'video/mp4' }
-          else if (/^audio\//.test(mime)) content = { audio: data, mimetype: mime }
+          else if (/^audio\//.test(mime)) content = { audio: data, mimetype: mime, ptt: !!media.voice }
           else content = { document: data, mimetype: mime, fileName: media.name, caption: text }
         }
         await sendAndStore(s, a.accountId, me, content)

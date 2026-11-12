@@ -110,6 +110,8 @@ export const DEFAULT_MODULES: Modules = {
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'qr' | 'connected' | 'logged_out'
 
 export interface Account {
+  /** Cadastro preservado, mas excede a cota da licença ativa. */
+  licenseBlocked?: boolean
   id: string
   name: string
   color: string
@@ -357,6 +359,7 @@ export interface CampaignAudience {
 }
 
 export interface CampaignMedia {
+  voice?: boolean
   name: string
   mime: string
   file: string // nome do arquivo guardado na pasta do app
@@ -364,6 +367,8 @@ export interface CampaignMedia {
 }
 
 export interface CampaignInput {
+  files?: ({ name: string; mime: string; data: Uint8Array; voice?: boolean } | null)[]
+  mediaIndices?: (number | null)[]
   id?: number
   accountId: string
   name: string
@@ -394,6 +399,7 @@ export interface Campaign {
   status: CampaignStatus
   templates: string[]
   media: CampaignMedia | null
+  templateMedia?: (CampaignMedia | null)[] | null
   audience: CampaignAudience
   optOutFooter: boolean
   scheduledAt: number | null
@@ -728,7 +734,18 @@ export interface TranscribeSettings {
   ffmpegPath: string | null
 }
 
+export interface VoiceInstallStatus {
+  supported: boolean
+  running: boolean
+  label: string
+  received: number
+  total: number
+  downloadBytes: number
+  error: string | null
+}
+
 export interface TranscribeStatus {
+  install: VoiceInstallStatus
   settings: TranscribeSettings
   local: { ready: boolean; whisper: string | null; model: string | null; ffmpeg: string | null }
   groq: boolean
@@ -780,6 +797,20 @@ export interface LicensePayload {
   teste?: boolean
   online?: boolean
 }
+
+export interface LicenseOption {
+  id: string
+  plano: PlanId
+  contas: number
+  teste: boolean
+  fim: string | null
+  status: string
+}
+export interface LicenseSelection {
+  selectionRequired: true
+  licenses: LicenseOption[]
+}
+export type LicenseLoginResult = LicenseStatus | LicenseSelection
 
 export interface LicenseStatus {
   state: 'dev' | 'none' | 'active' | 'grace' | 'expired' | 'invalid'

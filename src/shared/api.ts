@@ -40,6 +40,7 @@ import type {
   GroupInfo,
   GroupRule,
   LicenseStatus,
+  LicenseLoginResult,
   LeadItem,
   LeadsConfig,
   LeadsConfigInput,
@@ -79,7 +80,7 @@ export interface ApiMap {
   'license:status': { args: []; ret: LicenseStatus }
   'license:activate': { args: [{ key: string }]; ret: LicenseStatus }
   'license:remove': { args: []; ret: LicenseStatus }
-  'license:login': { args: [{ email: string; password: string }]; ret: LicenseStatus }
+  'license:login': { args: [{ email: string; password: string; licenseId?: string }]; ret: LicenseLoginResult }
   'license:logout': { args: []; ret: LicenseStatus }
   'license:refresh': { args: []; ret: LicenseStatus }
   'app:open-site': { args: [{ page: SitePage }]; ret: void }
@@ -155,10 +156,16 @@ export interface ApiMap {
   'messages:edit': { args: [{ accountId: string; jid: string; id: string; text: string }]; ret: void }
   'media:get': { args: [{ accountId: string; jid: string; id: string }]; ret: MediaInfo }
   'media:save-as': { args: [{ accountId: string; jid: string; id: string }]; ret: void }
+  'media:print': {
+    args: [{ accountId: string; jid: string; id: string }]
+    ret: { success: boolean; canceled: boolean }
+  }
   'sync:state': { args: [{ accountId: string }]; ret: SyncState }
   'avatars:get': { args: [{ accountId: string; jids: string[] }]; ret: Record<string, string | null> }
   'transcribe:message': { args: [{ accountId: string; jid: string; id: string }]; ret: string }
   'transcribe:status': { args: []; ret: TranscribeStatus }
+  'transcribe:install': { args: []; ret: TranscribeStatus }
+  'transcribe:cancel': { args: []; ret: TranscribeStatus }
   'transcribe:save': { args: [{ mode?: TranscribeMode; engine?: TranscribeEngine }]; ret: TranscribeStatus }
   'transcribe:pick': { args: [{ what: 'whisper' | 'model' | 'ffmpeg' }]; ret: TranscribeStatus }
   'chats:new': { args: [{ accountId: string; phone: string }]; ret: string }
@@ -179,6 +186,8 @@ export interface ApiMap {
   }
   'people:tags': { args: [{ accountId: string }]; ret: Array<{ tag: string; count: number; color: string }> }
   'people:fields': { args: [{ accountId: string }]; ret: string[] }
+  'people:field-definitions': { args: [{ accountId: string }]; ret: string[] }
+  'people:set-field-definitions': { args: [{ accountId: string; names: string[] }]; ret: string[] }
   'people:save': {
     args: [
       {
@@ -300,6 +309,8 @@ export interface ApiMap {
         accountId: string
         name: string
         templates: string[]
+        mediaIndices?: (number | null)[]
+        files?: ((OutgoingFile & { voice?: boolean }) | null)[]
         audience: CampaignAudience
         optOutFooter: boolean
         scheduledAt: number | null
@@ -308,8 +319,12 @@ export interface ApiMap {
     ret: Campaign
   }
   'campaigns:media': {
-    args: [{ id: number; file: { name: string; mime: string; data: Uint8Array } | null }]
+    args: [{ id: number; variantIndex?: number; file: (OutgoingFile & { voice?: boolean }) | null }]
     ret: Campaign
+  }
+  'campaigns:media-preview': {
+    args: [{ id: number; accountId: string; variantIndex: number }]
+    ret: (OutgoingFile & { voice?: boolean }) | null
   }
   'campaigns:audience-count': {
     args: [{ accountId: string; audience: CampaignAudience }]
@@ -327,7 +342,17 @@ export interface ApiMap {
   }
   'campaigns:export': { args: [{ id: number }]; ret: void }
   'campaigns:test': {
-    args: [{ accountId: string; templates: string[]; optOutFooter: boolean; file?: OutgoingFile; campaignId?: number }]
+    args: [
+      {
+        accountId: string
+        templates: string[]
+        optOutFooter: boolean
+        file?: OutgoingFile & { voice?: boolean }
+        files?: ((OutgoingFile & { voice?: boolean }) | null)[]
+        mediaIndices?: (number | null)[]
+        campaignId?: number
+      }
+    ]
     ret: void
   }
   'engine:state': { args: [{ accountId: string }]; ret: EngineState }
@@ -560,15 +585,20 @@ export const API_CHANNELS: ApiChannel[] = [
   'messages:edit',
   'media:get',
   'media:save-as',
+  'media:print',
   'sync:state',
   'avatars:get',
   'transcribe:message',
   'transcribe:status',
+  'transcribe:install',
+  'transcribe:cancel',
   'transcribe:save',
   'transcribe:pick',
   'people:list',
   'people:tags',
   'people:fields',
+  'people:field-definitions',
+  'people:set-field-definitions',
   'people:save',
   'people:delete',
   'people:opt-out',
@@ -622,6 +652,7 @@ export const API_CHANNELS: ApiChannel[] = [
   'campaigns:get',
   'campaigns:save',
   'campaigns:media',
+  'campaigns:media-preview',
   'campaigns:audience-count',
   'campaigns:start',
   'campaigns:pause',

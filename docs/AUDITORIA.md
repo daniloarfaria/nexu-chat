@@ -187,3 +187,24 @@ o console registrou o aviso de CSP `frame-ancestors` ignorada em meta,
 que já existe no HTML e não impede abrir as telas. Capturas locais em
 `/tmp/nexu-retomada-telas/`. Nenhuma mensagem real foi enviada e não houve
 inferência paga: o envio do anexo foi validado com socket simulado.
+
+
+## Validação das funções adicionais — 12/11/2026
+
+- Campanhas: texto e mídia permanecem associados por versão. Prévia mostra imagens, vídeos, áudio ou arquivo; gravação é convertida para Ogg/Opus. Salvamento de versões e anexos é atômico, com rollback em falha; anexos antigos permanecem compatíveis.
+- Voz: instalação guiada com cancelamento, progresso e SHA-256. Mac inclui Whisper e FFmpeg mínimo LGPL, sem depender de Homebrew/Xcode no computador do cliente. Transcrição real em português validada; x64 inspecionado sem execução, Windows não executado e requer VC Runtime quando ausente (erro explícito antes do modelo). Fontes, licenças e hashes em `resources/transcribe/README.md`.
+- Contatos: campos do negócio separados por conta, com valores antigos preservados. Apagar para todos atualiza conteúdo/FTS local somente após envio bem-sucedido; erros mantêm o conteúdo.
+- Impressão: imagens e PDFs das conversas abrem diálogo nativo em janela isolada. Conta/mensagem/caminho e tipo são validados; SVG/HTML e visualização única não são aceitos. Teste Electron confirmou PDF renderizado, impressão não silenciosa interceptada e limpeza ao cancelar; nenhum trabalho físico foi enviado. O teste deve ser repetido ao atualizar Electron, pois a espera do visualizador usa sua API interna.
+- Licenças: o mesmo login pode selecionar uma entre várias licenças efetivas. Plano/cota não são somados. Senha fica somente em memória até escolher/cancelar; renovação não pode trocar o ID da licença assinada. Cota reduzida suspende excedentes por ordem estável, preservando dados e autenticação; conexão e socket usados por envios ficam bloqueados.
+
+Na suíte integrada, 770 testes passaram e um smoke com download real ficou
+fora da execução padrão; esse smoke foi executado separadamente na frente
+de voz. Typecheck e ESLint passaram. E2E em perfil temporário confirmou
+mídias por versão, gravação, reabertura e campos na ficha.
+
+Site de licenças: repositório irmão `nexu-chat-licencas`, com seleção/vínculo
+de sessão por licença e plano de atualização em seus docs. Migração SQL
+validada em PostgreSQL isolado (PGlite), incluindo quota, isolamento de
+cliente, revogação, migração legada e permissão negada ao papel público.
+Concorrência real entre conexões PostgreSQL não foi simulada. Migração e
+publicação do site em produção não foram executadas.
